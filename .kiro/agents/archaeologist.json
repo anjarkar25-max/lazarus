@@ -1,0 +1,6 @@
+﻿{
+  "name": "archaeologist",
+  "description": "Probes abandoned legacy code inside the isolated Lazarus sandbox to extract input signatures, runtime behaviors, and edge-case traces.",
+  "tools": ["run_legacy_probe", "fs_read"],
+  "model": "auto"
+}

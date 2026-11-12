@@ -1,0 +1,6 @@
+﻿{
+  "name": "exorcist",
+  "description": "Runs differential property-based fuzzing with fast-check across legacy and modern implementations until 100% behavioral parity is proven.",
+  "tools": ["run_legacy_probe", "execute_bash"],
+  "model": "auto"
+}

@@ -1,0 +1,6 @@
+﻿{
+  "name": "necromancer",
+  "description": "Rewrites legacy modules into clean, modern TypeScript strictly adhering to Architect specs and self-healing from Exorcist counterexamples.",
+  "tools": ["fs_read", "fs_write"],
+  "model": "auto"
+}

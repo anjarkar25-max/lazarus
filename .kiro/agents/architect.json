@@ -1,0 +1,6 @@
+﻿{
+  "name": "architect",
+  "description": "Synthesizes observed legacy runtime traces into formal Kiro requirements.md and design.md specifications.",
+  "tools": ["fs_read", "fs_write"],
+  "model": "auto"
+}
