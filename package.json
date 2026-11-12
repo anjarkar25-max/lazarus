@@ -5,7 +5,10 @@
     "main":  "index.js",
     "scripts":  {
                     "test":  "vitest --run",
-                    "test:sandbox":  "vitest --run src/sandbox"
+                    "test:sandbox":  "vitest --run src/sandbox",
+                    "start":  "npx tsx src/web/server.ts",
+                    "mcp":  "npx tsx src/mcp/server.ts",
+                    "typecheck":  "tsc --noEmit"
                 },
     "repository":  {
                        "type":  "git",
@@ -27,5 +30,9 @@
                             "typescript":  "^7.0.2",
                             "vitest":  "^5.1.0"
                         },
-    "type":  "module"
+    "type":  "module",
+    "dependencies":  {
+                         "@modelcontextprotocol/sdk":  "^1.32.2",
+                         "zod":  "^4.6.7"
+                     }
 }
