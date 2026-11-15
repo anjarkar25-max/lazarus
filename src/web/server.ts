@@ -1,4 +1,7 @@
-﻿import * as fs from "node:fs";
+﻿import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
+import { generateResurrectionBundle } from "../exporter/bundle.js";
+import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import * as fs from "node:fs";
 import * as http from "node:http";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,7 +107,7 @@ export function createWebServer(): http.Server {
 
       const request: ResurrectionRequest = {
         name: body.name && body.name.trim() ? body.name.trim() : "legacy-specimen",
-        legacyCode: body.legacyCode,
+        legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
         schema: body.schema,
         fuzzRuns: typeof body.fuzzRuns === "number" ? Math.min(Math.max(body.fuzzRuns, 5), 100) : 25,
         ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
@@ -126,6 +129,68 @@ export function createWebServer(): http.Server {
       return;
     }
 
+    const routePath = req.url?.split("?")[0];
+
+    if (req.method === "POST" && routePath === "/api/import-github") {
+      let raw = "";
+      for await (const chunk of req) {
+        raw += chunk;
+      }
+      try {
+        const parsed = JSON.parse(raw || "{}") as { url?: string };
+        if (!parsed.url) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing GitHub URL" }));
+          return;
+        }
+        const imported = await fetchGitHubSpecimen(parsed.url);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(imported));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && routePath === "/api/export-bundle") {
+      let raw = "";
+      for await (const chunk of req) {
+        raw += chunk;
+      }
+      try {
+        const parsed = JSON.parse(raw || "{}") as {
+          specimenName?: string;
+          legacyCode?: string;
+          modernCode?: string;
+          specMarkdown?: string;
+          fuzzRuns?: number;
+          healed?: boolean;
+        };
+        if (!parsed.legacyCode || !parsed.modernCode) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
+          return;
+        }
+        const bundle = generateResurrectionBundle({
+          specimenName: parsed.specimenName ?? "resurrectedSpecimen",
+          legacyCode: parsed.legacyCode,
+          modernCode: parsed.modernCode,
+          specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
+          fuzzRuns: parsed.fuzzRuns ?? 50,
+          healed: Boolean(parsed.healed),
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(bundle));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Not found" }));
   });
@@ -142,3 +207,4 @@ if (isMain) {
     console.log(`Lazarus Operating Table listening on http://localhost:${port}`);
   });
 }
+

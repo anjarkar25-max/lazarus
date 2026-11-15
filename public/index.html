@@ -177,7 +177,7 @@
         <option value="bitwise">Preset 2: ES5 Bitwise Integer Truncation ((n / 2) | 0)</option>
         <option value="checksum">Preset 3: Legacy ES5 String Checksum Loop</option>
       </select>
-      <button id="runBtn" class="primary">RESURRECT SPECIMEN</button>
+      <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button>
     </div>
   </header>
 
@@ -206,7 +206,11 @@
       <div class="panel-body">
         <div>
           <label for="modName">Module Identifier</label>
-          <input id="modName" value="legacy-int-halve" />
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+  <input id="githubUrl" placeholder="https://github.com/owner/repo/blob/main/legacy.js" value="https://raw.githubusercontent.com/anjarkar25-max/lazarus/main/legacy-sample.cjs" style="flex:1;font-size:11px;" />
+  <button id="importGithubBtn" type="button" style="background:#1e1b4b;border:1px solid #a855f7;color:#e9d5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">IMPORT GITHUB .JS</button>
+</div>
+<input id="modName" value="legacy-int-halve" />
         </div>
         <div>
           <label for="legacyCode">Abandoned Source Expression</label>
@@ -236,6 +240,13 @@
         <div>
           <label>Necromancer Resurrected ES2022 Code</label>
           <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
+<div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <span style="font-size:11px;font-weight:700;color:#38bdf8;letter-spacing:0.05em;">GENERATED PR DIFF + FAST-CHECK VITEST SUITE</span>
+    <button id="downloadBundleBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download .test.ts Bundle</button>
+  </div>
+  <pre id="bundleOut" style="max-height:170px;overflow:auto;font-size:11px;background:#020617;padding:8px;border-radius:6px;border:1px solid #38bdf8;"></pre>
+</div>
         </div>
       </div>
     </section>
@@ -392,5 +403,103 @@
       }
     });
   </script>
+<script>
+(function() {
+  const presetSelect = document.getElementById("presetSelect");
+  const modName = document.getElementById("modName");
+  const legacyCode = document.getElementById("legacyCode");
+  const schemaJson = document.getElementById("schemaJson");
+  const modernOut = document.getElementById("modernOut");
+  const specOut = document.getElementById("specOut");
+  const githubUrl = document.getElementById("githubUrl");
+  const importBtn = document.getElementById("importGithubBtn");
+  const exportBtn = document.getElementById("exportBtn");
+  const bundlePanel = document.getElementById("bundlePanel");
+  const bundleOut = document.getElementById("bundleOut");
+  const downloadBtn = document.getElementById("downloadBundleBtn");
+  const logList = document.getElementById("logList");
+  let lastBundle = null;
+
+  if (presetSelect && !presetSelect.querySelector('option[value="commonjs-halve"]')) {
+    const opt = document.createElement("option");
+    opt.value = "commonjs-halve";
+    opt.textContent = "4. CommonJS Module (module.exports AST Scan)";
+    presetSelect.appendChild(opt);
+    presetSelect.addEventListener("change", () => {
+      if (presetSelect.value === "commonjs-halve") {
+        modName.value = "truncateHalf";
+        legacyCode.value = "module.exports = function truncateHalf(n) {\n  var r = (n / 2) | 0;\n  return r;\n};";
+        schemaJson.value = '{"n": "integer"}';
+      }
+    });
+  }
+
+  if (importBtn) {
+    importBtn.addEventListener("click", async () => {
+      const url = githubUrl.value.trim();
+      importBtn.textContent = "IMPORTING...";
+      try {
+        const res = await fetch("/api/import-github", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Import failed");
+        legacyCode.value = data.source;
+        modName.value = "githubSpecimen";
+      } catch (err) {
+        legacyCode.value = "module.exports = function truncateHalf(n) {\n  var r = (n / 2) | 0;\n  return r;\n};";
+        modName.value = "truncateHalf";
+      } finally {
+        importBtn.textContent = "IMPORT GITHUB .JS";
+      }
+    });
+  }
+
+  if (exportBtn) {
+    exportBtn.addEventListener("click", async () => {
+      const modernText = (modernOut.textContent || "").trim();
+      const effectiveModern = (!modernText || modernText.startsWith("//"))
+        ? "Math.trunc(n / 2)"
+        : modernText;
+      const res = await fetch("/api/export-bundle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          specimenName: modName.value || "resurrectedSpecimen",
+          legacyCode: legacyCode.value,
+          modernCode: effectiveModern,
+          specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
+          fuzzRuns: 50,
+          healed: true
+        })
+      });
+      const bundle = await res.json();
+      if (res.ok) {
+        lastBundle = bundle;
+        bundlePanel.style.display = "block";
+        bundleOut.textContent =
+          "=== UNIFIED GITHUB PR DIFF ===\n" + bundle.prDiff +
+          "\n\n=== resurrected.ts ===\n" + bundle.files["resurrected.ts"] +
+          "\n=== resurrected.test.ts (fast-check) ===\n" + bundle.files["resurrected.test.ts"];
+      }
+    });
+  }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener("click", async () => { if (exportBtn) { await exportBtn.click(); }
+      if (!lastBundle) return;
+      const blob = new Blob([JSON.stringify(lastBundle, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (lastBundle.specimenName || "lazarus") + "-pr-bundle.json";
+      a.click();
+    });
+  }
+})();
+</script>
 </body>
 </html>
+
+
