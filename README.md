@@ -26,8 +26,8 @@ npm test        # Runs all 102 unit, integration, and property-based tests
 npm start       # Launches the Resurrection Operating Table at http://localhost:3000
 Open **`http://localhost:3000`**, select **Preset 1 (Self-Healing Demo)**, and click **RESURRECT SPECIMEN** to watch Exorcist catch a naive `Math.floor` negative-integer bug via fuzzing and auto-heal it to `Math.trunc`.
 
-
 ## V2 Grand Prize Architecture Upgrades
-- **Live GitHub & CommonJS AST Importer (src/importer/github.ts, src/sandbox/ast-scanner.ts):** Fetches raw .js/.cjs files from GitHub with SSRF/size guards and extracts module.exports / exports.<fn> AST signatures and ES5 idioms.
-- **One-Click PR & Vitest Suite Exporter (src/exporter/bundle.ts):** Generates a downloadable migration bundle containing a unified GitHub Pull Request diff, modernized TypeScript module (esurrected.ts), Kiro SPEC.md, and runnable ast-check property suite (esurrected.test.ts).
-- **6th Kiro Specification Suite (.kiro/specs/bundle-exporter/):** Full requirements, architecture design, task breakdown, and 16 new unit + property tests (**102 passing tests across 11 suites**).
+- **Live GitHub & CommonJS AST Importer (`src/importer/github.ts`, `src/sandbox/ast-scanner.ts`):** Fetches raw `.js`/`.cjs` files from GitHub with SSRF/size guards and extracts `module.exports` / `exports.<fn>` AST signatures and ES5 idioms.
+- **One-Click PR & Vitest Suite Exporter (`src/exporter/bundle.ts`):** Generates a downloadable migration bundle containing a unified GitHub Pull Request diff, modernized TypeScript module (`resurrected.ts`), Kiro `SPEC.md`, and runnable `fast-check` property suite (`resurrected.test.ts`).
+- **6th Kiro Specification Suite (`.kiro/specs/bundle-exporter/`):** Full requirements, architecture design, task breakdown, and 16 new unit + property tests (**102 passing tests across 11 suites**).
+
