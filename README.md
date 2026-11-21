@@ -33,7 +33,7 @@ Open **`http://localhost:3000`** (or the [live deployment](https://lazarus-yf0a.
 ## System Architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["Legacy ES5 / CommonJS<br/>or GitHub Raw URL"] --> B["Archaeologist Agent<br/>AST Scanner + MCP Sandbox"]
     B --> C["Architect Agent<br/>Kiro Spec Synthesizer"]
     C --> D["Necromancer Agent<br/>ES2022 / TS Generator"]
@@ -57,4 +57,5 @@ flowchart LR
 - **Live GitHub & CommonJS AST Importer (`src/importer/github.ts`, `src/sandbox/ast-scanner.ts`):** Ingests raw `.js`/`.cjs` files from GitHub with strict HTTPS domain allowlisting, 5-second abort timeout, 32 KB size cap, honest UI error banners, and multi-function `module.exports` AST idiom extraction.
 - **Tabbed PR & Vitest Bundle Exporter (`src/exporter/bundle.ts`):** Generates a schema-aware TypeScript module (`resurrected.ts`), unified GitHub Pull Request diff (`.patch`), formal Kiro `SPEC.md`, and runnable `fast-check` Vitest suite (`resurrected.test.ts`) with one-click Copy and direct file downloads.
 - **6th Kiro Specification Suite (`.kiro/specs/bundle-exporter/`):** Full requirements, architecture design, task breakdown, and 22 unit + property tests (**108 passing tests across 11 suites**).
+
 
