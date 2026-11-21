@@ -167,6 +167,7 @@ export function createWebServer(): http.Server {
           specMarkdown?: string;
           fuzzRuns?: number;
           healed?: boolean;
+          schema?: Record<string, string>;
         };
         if (!parsed.legacyCode || !parsed.modernCode) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -180,6 +181,7 @@ export function createWebServer(): http.Server {
           specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
           fuzzRuns: parsed.fuzzRuns ?? 50,
           healed: Boolean(parsed.healed),
+          ...(parsed.schema ? { schema: parsed.schema } : {}),
         });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(bundle));
@@ -207,4 +209,5 @@ if (isMain) {
     console.log(`Lazarus Operating Table listening on http://localhost:${port}`);
   });
 }
+
 

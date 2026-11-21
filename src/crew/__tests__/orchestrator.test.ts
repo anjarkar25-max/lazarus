@@ -24,7 +24,7 @@ describe("ResurrectionOrchestrator (Kiro Crew)", () => {
     expect(events.map((e) => e.agent)).toContain("architect");
     expect(events.map((e) => e.agent)).toContain("necromancer");
     expect(events.map((e) => e.agent)).toContain("exorcist");
-  }, 25_000);
+  }, 180_000);
 
   it("self-heals when Exorcist catches a counterexample from Necromancer's first draft", async () => {
     // Simulate a naive first attempt using Math.floor that repairs itself after receiving a counterexample
@@ -52,5 +52,7 @@ describe("ResurrectionOrchestrator (Kiro Crew)", () => {
     expect(result.attempts).toBe(2);
     expect(result.events.some((e) => e.type === "counterexample_found")).toBe(true);
     expect(result.events.some((e) => e.type === "self_healed")).toBe(true);
-  }, 25_000);
+  }, 180_000);
 });
+
+

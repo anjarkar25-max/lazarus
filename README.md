@@ -26,8 +26,31 @@ npm test        # Runs all 102 unit, integration, and property-based tests
 npm start       # Launches the Resurrection Operating Table at http://localhost:3000
 Open **`http://localhost:3000`**, select **Preset 1 (Self-Healing Demo)**, and click **RESURRECT SPECIMEN** to watch Exorcist catch a naive `Math.floor` negative-integer bug via fuzzing and auto-heal it to `Math.trunc`.
 
-## V2 Grand Prize Architecture Upgrades
-- **Live GitHub & CommonJS AST Importer (`src/importer/github.ts`, `src/sandbox/ast-scanner.ts`):** Fetches raw `.js`/`.cjs` files from GitHub with SSRF/size guards and extracts `module.exports` / `exports.<fn>` AST signatures and ES5 idioms.
-- **One-Click PR & Vitest Suite Exporter (`src/exporter/bundle.ts`):** Generates a downloadable migration bundle containing a unified GitHub Pull Request diff, modernized TypeScript module (`resurrected.ts`), Kiro `SPEC.md`, and runnable `fast-check` property suite (`resurrected.test.ts`).
-- **6th Kiro Specification Suite (`.kiro/specs/bundle-exporter/`):** Full requirements, architecture design, task breakdown, and 16 new unit + property tests (**102 passing tests across 11 suites**).
+## System Architecture
+
+```mermaid
+flowchart LR
+    A[Legacy ES5 / CommonJS<br/>or GitHub Raw URL] --> B[Archaeologist Agent<br/>AST Scanner + MCP Sandbox]
+    B --> C[Architect Agent<br/>Kiro Spec Synthesizer]
+    C --> D[Necromancer Agent<br/>ES2022 / TS Generator]
+    D --> E[Exorcist Agent<br/>fast-check Object.is Fuzzer]
+    E -- Counterexample Found --> D
+    E -- 100% Parity Proven --> F[One-Click PR Bundle<br/>PR Diff, .ts, .test.ts, SPEC.md]
+```
+
+## Real-World Legacy Parity Benchmark
+
+| Specimen | Legacy Pattern | Subtle Edge Case Caught / Verified | Verified Outcome |
+| :--- | :--- | :--- | :--- |
+| `legacy-int-halve` | `var half = (n / 2) \| 0` | `Math.floor` diverges on negative odd integers (`-1` vs `-2`) | Self-healed to `Math.trunc` |
+| `fast-truncate-32` | `(a * 3) \| 0` | 32-bit signed truncation and `-0` vs `+0` (`Object.is`) | 100% Parity |
+| `es5-ascii-checksum` | `for (var i = 0; ...)` `charCodeAt` | Empty strings, Unicode boundaries, loop scoping | 100% Parity |
+| `truncateHalf` (`.cjs`) | `module.exports = function` | Multi-line CommonJS AST unwrapping + `\| 0` semantics | 100% Parity |
+| `legacyLeftPad` | ES5 `while` string padding | Coercion + variable string lengths (`fc.string`) | 100% Parity |
+| `quantizeClamp` (`.cjs`) | CommonJS clamp + `(x / 3) \| 0` | Boundary clamping `[-100, 100]` + negative truncation | 100% Parity |
+
+## V2 / V3 Architecture Upgrades
+- **Live GitHub & CommonJS AST Importer (`src/importer/github.ts`, `src/sandbox/ast-scanner.ts`):** Ingests raw `.js`/`.cjs` files from GitHub with strict HTTPS domain allowlisting, 5-second abort timeout, 32 KB size cap, honest UI error banners, and multi-function `module.exports` AST idiom extraction.
+- **Tabbed PR & Vitest Bundle Exporter (`src/exporter/bundle.ts`):** Generates a schema-aware TypeScript module (`resurrected.ts`), unified GitHub Pull Request diff (`.patch`), formal Kiro `SPEC.md`, and runnable `fast-check` Vitest suite (`resurrected.test.ts`) with one-click Copy and direct file downloads.
+- **6th Kiro Specification Suite (`.kiro/specs/bundle-exporter/`):** Full requirements, architecture design, task breakdown, and 22 unit + property tests (**108 passing tests across 11 suites**).
 

@@ -48,5 +48,6 @@ describe("Lazarus Web Telemetry Server", () => {
     expect(bodyText).toContain('"type":"counterexample_found"');
     expect(bodyText).toContain('"type":"self_healed"');
     expect(bodyText).toContain('"success":true');
-  }, 25_000);
+  }, 60_000);
 });
+

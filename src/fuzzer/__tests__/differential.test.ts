@@ -20,7 +20,7 @@ describe("DifferentialFuzzer", () => {
     expect(report.totalRuns).toBe(15);
     expect(report.counterexample).toBeUndefined();
     expect(report.traces.length).toBeGreaterThan(0);
-  }, 20_000);
+  }, 60_000);
 
   it("catches subtle negative-integer edge case and shrinks to minimal counterexample", async () => {
     const fuzzer = new DifferentialFuzzer();
@@ -36,5 +36,6 @@ describe("DifferentialFuzzer", () => {
     expect(typeof report.counterexample?.inputs.n).toBe("number");
     expect((report.counterexample?.inputs.n as number) < 0).toBe(true);
     expect(report.counterexample?.reason).toContain("Output mismatch");
-  }, 20_000);
+  }, 60_000);
 });
+

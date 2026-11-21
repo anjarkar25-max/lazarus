@@ -210,6 +210,7 @@
   <input id="githubUrl" placeholder="https://github.com/owner/repo/blob/main/legacy.js" value="https://raw.githubusercontent.com/anjarkar25-max/lazarus/main/legacy-sample.cjs" style="flex:1;font-size:11px;" />
   <button id="importGithubBtn" type="button" style="background:#1e1b4b;border:1px solid #a855f7;color:#e9d5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">IMPORT GITHUB .JS</button>
 </div>
+<div id="importStatus" style="display:none;font-size:11px;margin:-4px 0 8px 0;padding:6px 8px;border-radius:5px;"></div>
 <input id="modName" value="legacy-int-halve" />
         </div>
         <div>
@@ -241,11 +242,20 @@
           <label>Necromancer Resurrected ES2022 Code</label>
           <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
 <div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-    <span style="font-size:11px;font-weight:700;color:#38bdf8;letter-spacing:0.05em;">GENERATED PR DIFF + FAST-CHECK VITEST SUITE</span>
-    <button id="downloadBundleBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download .test.ts Bundle</button>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+    <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
+      <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
+      <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
+      <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
+      <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
+      <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
+      <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
+    </div>
   </div>
-  <pre id="bundleOut" style="max-height:170px;overflow:auto;font-size:11px;background:#020617;padding:8px;border-radius:6px;border:1px solid #38bdf8;"></pre>
+  <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
 </div>
         </div>
       </div>
@@ -409,27 +419,105 @@
   const modName = document.getElementById("modName");
   const legacyCode = document.getElementById("legacyCode");
   const schemaJson = document.getElementById("schemaJson");
+  const simulateBug = document.getElementById("simulateBug");
   const modernOut = document.getElementById("modernOut");
   const specOut = document.getElementById("specOut");
   const githubUrl = document.getElementById("githubUrl");
   const importBtn = document.getElementById("importGithubBtn");
+  const importStatus = document.getElementById("importStatus");
   const exportBtn = document.getElementById("exportBtn");
   const bundlePanel = document.getElementById("bundlePanel");
   const bundleOut = document.getElementById("bundleOut");
-  const downloadBtn = document.getElementById("downloadBundleBtn");
-  const logList = document.getElementById("logList");
-  let lastBundle = null;
+  const copyBtn = document.getElementById("copyBundleBtn");
+  const downloadFileBtn = document.getElementById("downloadFileBtn");
+  const downloadJsonBtn = document.getElementById("downloadBundleBtn");
+  const tabButtons = Array.from(document.querySelectorAll(".bundle-tab"));
 
-  if (presetSelect && !presetSelect.querySelector('option[value="commonjs-halve"]')) {
-    const opt = document.createElement("option");
-    opt.value = "commonjs-halve";
-    opt.textContent = "4. CommonJS Module (module.exports AST Scan)";
-    presetSelect.appendChild(opt);
+  let lastBundle = null;
+  let activeTab = "prDiff";
+
+  function showStatus(message, isError) {
+    if (!importStatus) return;
+    importStatus.style.display = "block";
+    importStatus.textContent = message;
+    importStatus.style.background = isError ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)";
+    importStatus.style.border = isError ? "1px solid #ef4444" : "1px solid #22c55e";
+    importStatus.style.color = isError ? "#fca5a5" : "#86efac";
+  }
+
+  function getTabContent(bundle, tab) {
+    if (!bundle) return "";
+    if (tab === "prDiff") return bundle.prDiff;
+    return bundle.files[tab] || "";
+  }
+
+  function renderActiveTab() {
+    if (!lastBundle) return;
+    bundleOut.textContent = getTabContent(lastBundle, activeTab);
+    tabButtons.forEach((btn) => {
+      const selected = btn.dataset.tab === activeTab;
+      btn.style.background = selected ? "#0284c7" : "#0f172a";
+      btn.style.color = selected ? "#ffffff" : "#94a3b8";
+      btn.style.borderColor = selected ? "#38bdf8" : "#334155";
+    });
+    if (downloadFileBtn) {
+      downloadFileBtn.textContent = activeTab === "prDiff"
+        ? "Download .patch"
+        : "Download " + activeTab;
+    }
+  }
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
+      renderActiveTab();
+    });
+  });
+
+  const extraPresets = [
+    {
+      value: "commonjs-halve",
+      label: "Preset 4: CommonJS Module (module.exports AST Scan)",
+      name: "truncateHalf",
+      code: "module.exports = function truncateHalf(n) {\n  var r = (n / 2) | 0;\n  return r;\n};",
+      schema: '{"n": "integer"}',
+      bug: true
+    },
+    {
+      value: "npm-left-pad",
+      label: "Preset 5: Legacy npm Utility (ES5 left-pad Loop)",
+      name: "legacyLeftPad",
+      code: 'var out = String(text); while (out.length < 8) { out = "0" + out; } out;',
+      schema: '{"text": "string"}',
+      bug: false
+    },
+    {
+      value: "commonjs-quantize",
+      label: "Preset 6: CommonJS Quantize & Clamp (module.exports)",
+      name: "quantizeClamp",
+      code: "module.exports = function quantizeClamp(n) {\n  var clamped = n < -100 ? -100 : (n > 100 ? 100 : n);\n  return (clamped / 3) | 0;\n};",
+      schema: '{"n": "integer"}',
+      bug: false
+    }
+  ];
+
+  if (presetSelect) {
+    extraPresets.forEach((p) => {
+      if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
+        const opt = document.createElement("option");
+        opt.value = p.value;
+        opt.textContent = p.label;
+        presetSelect.appendChild(opt);
+      }
+    });
     presetSelect.addEventListener("change", () => {
-      if (presetSelect.value === "commonjs-halve") {
-        modName.value = "truncateHalf";
-        legacyCode.value = "module.exports = function truncateHalf(n) {\n  var r = (n / 2) | 0;\n  return r;\n};";
-        schemaJson.value = '{"n": "integer"}';
+      const picked = extraPresets.find((p) => p.value === presetSelect.value);
+      if (picked) {
+        modName.value = picked.name;
+        legacyCode.value = picked.code;
+        schemaJson.value = picked.schema;
+        if (simulateBug) simulateBug.checked = picked.bug;
+        if (importStatus) importStatus.style.display = "none";
       }
     });
   }
@@ -437,7 +525,12 @@
   if (importBtn) {
     importBtn.addEventListener("click", async () => {
       const url = githubUrl.value.trim();
+      if (!url) {
+        showStatus("Enter a valid https://github.com/... or https://raw.githubusercontent.com/... .js/.cjs URL.", true);
+        return;
+      }
       importBtn.textContent = "IMPORTING...";
+      importBtn.disabled = true;
       try {
         const res = await fetch("/api/import-github", {
           method: "POST",
@@ -445,55 +538,105 @@
           body: JSON.stringify({ url })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Import failed");
+        if (!res.ok) {
+          throw new Error(data.error || "GitHub import failed (HTTP " + res.status + ")");
+        }
         legacyCode.value = data.source;
-        modName.value = "githubSpecimen";
+        const fileName = (data.normalizedUrl || "").split("/").pop() || "githubSpecimen";
+        modName.value = fileName.replace(/\.(c?js)$/i, "");
+        const idioms = Array.isArray(data.detectedIdioms) && data.detectedIdioms.length > 0
+          ? data.detectedIdioms.join(", ")
+          : "Standard ES5";
+        showStatus("Imported " + data.byteLength + " bytes from GitHub | AST idioms: " + idioms, false);
       } catch (err) {
-        legacyCode.value = "module.exports = function truncateHalf(n) {\n  var r = (n / 2) | 0;\n  return r;\n};";
-        modName.value = "truncateHalf";
+        const msg = err instanceof Error ? err.message : String(err);
+        showStatus("Import rejected: " + msg, true);
       } finally {
         importBtn.textContent = "IMPORT GITHUB .JS";
+        importBtn.disabled = false;
       }
     });
+  }
+
+  async function buildBundleFromCurrentUI() {
+    const modernText = (modernOut.textContent || "").trim();
+    if (!modernText || modernText.startsWith("// Modernized code will appear")) {
+      showStatus("Run RESURRECT SPECIMEN first so Lazarus proves 100% parity before exporting a verified PR bundle.", true);
+      return null;
+    }
+
+    let parsedSchema = undefined;
+    try {
+      parsedSchema = JSON.parse(schemaJson.value || "{}");
+    } catch {
+      parsedSchema = undefined;
+    }
+
+    const res = await fetch("/api/export-bundle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        specimenName: modName.value || "resurrectedSpecimen",
+        legacyCode: legacyCode.value,
+        modernCode: modernText,
+        specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
+        fuzzRuns: 50,
+        healed: Boolean(simulateBug && simulateBug.checked),
+        schema: parsedSchema
+      })
+    });
+    const bundle = await res.json();
+    if (!res.ok) {
+      showStatus("Bundle export error: " + (bundle.error || "Unknown error"), true);
+      return null;
+    }
+    lastBundle = bundle;
+    bundlePanel.style.display = "block";
+    renderActiveTab();
+    showStatus("Generated verified PR Diff + TypeScript module + fast-check Vitest suite for " + bundle.specimenName + ".", false);
+    return bundle;
   }
 
   if (exportBtn) {
     exportBtn.addEventListener("click", async () => {
-      const modernText = (modernOut.textContent || "").trim();
-      const effectiveModern = (!modernText || modernText.startsWith("//"))
-        ? "Math.trunc(n / 2)"
-        : modernText;
-      const res = await fetch("/api/export-bundle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          specimenName: modName.value || "resurrectedSpecimen",
-          legacyCode: legacyCode.value,
-          modernCode: effectiveModern,
-          specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
-          fuzzRuns: 50,
-          healed: true
-        })
-      });
-      const bundle = await res.json();
-      if (res.ok) {
-        lastBundle = bundle;
-        bundlePanel.style.display = "block";
-        bundleOut.textContent =
-          "=== UNIFIED GITHUB PR DIFF ===\n" + bundle.prDiff +
-          "\n\n=== resurrected.ts ===\n" + bundle.files["resurrected.ts"] +
-          "\n=== resurrected.test.ts (fast-check) ===\n" + bundle.files["resurrected.test.ts"];
-      }
+      await buildBundleFromCurrentUI();
     });
   }
 
-  if (downloadBtn) {
-    downloadBtn.addEventListener("click", async () => { if (exportBtn) { await exportBtn.click(); }
-      if (!lastBundle) return;
-      const blob = new Blob([JSON.stringify(lastBundle, null, 2)], { type: "application/json" });
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      const content = getTabContent(lastBundle, activeTab);
+      if (!content) return;
+      await navigator.clipboard.writeText(content);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => { copyBtn.textContent = "Copy File"; }, 1400);
+    });
+  }
+
+  if (downloadFileBtn) {
+    downloadFileBtn.addEventListener("click", async () => {
+      const bundle = await buildBundleFromCurrentUI();
+      if (!bundle) return;
+      const content = getTabContent(bundle, activeTab);
+      const filename = activeTab === "prDiff"
+        ? bundle.specimenName + ".patch"
+        : activeTab;
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = (lastBundle.specimenName || "lazarus") + "-pr-bundle.json";
+      a.download = filename;
+      a.click();
+    });
+  }
+
+  if (downloadJsonBtn) {
+    downloadJsonBtn.addEventListener("click", async () => {
+      const bundle = await buildBundleFromCurrentUI();
+      if (!bundle) return;
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (bundle.specimenName || "lazarus") + "-pr-bundle.json";
       a.click();
     });
   }
@@ -501,5 +644,6 @@
 </script>
 </body>
 </html>
+
 
 
