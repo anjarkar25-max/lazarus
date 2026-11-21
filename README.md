@@ -1,19 +1,21 @@
 ﻿# LAZARUS — Autonomous Legacy & Dead-Dependency Resurrection Engine
 
-> **Kiroween 2026 Submission — Frankenstein Category**  
+> **Kiroween 2026 Submission — Frankenstein Category**
 > Stitching isolated legacy execution sandboxes together with a 4-agent Kiro Crew, custom MCP tooling, and `fast-check` differential property-based fuzzing.
+>
+> **Live App:** https://lazarus-yf0a.onrender.com | **Tests:** 108 passing across 11 Vitest suites | **License:** MIT
 
 ## What Lazarus Does
-Engineering teams sit on unmaintained, untested legacy modules they are afraid to touch. **Lazarus** resurrects abandoned JavaScript/CommonJS logic into modern ES2022+ code with mathematical proof of behavioral parity:
+Engineering teams sit on unmaintained, untested legacy modules they are afraid to touch. **Lazarus** resurrects abandoned JavaScript/CommonJS logic into modern ES2022+ TypeScript with mathematical proof of behavioral parity:
 
-1. **Archaeologist Agent (`.kiro/agents/archaeologist.json`):** Executes the legacy module inside an isolated child-process sandbox (`src/sandbox/`) with strict memory, timeout, filesystem, and network restrictions to capture baseline I/O traces.
+1. **Archaeologist Agent (`.kiro/agents/archaeologist.json`):** Executes the legacy module inside an isolated child-process sandbox (`src/sandbox/`) with strict memory, timeout, filesystem, and network restrictions to capture baseline I/O traces and AST idioms.
 2. **Architect Agent (`.kiro/agents/architect.json`):** Synthesizes observed runtime behavior into formal Kiro specifications (`requirements.md` + behavioral invariants).
 3. **Necromancer Agent (`.kiro/agents/necromancer.json`):** Rewrites the legacy code into clean ES2022+ while preserving subtle JavaScript edge cases.
 4. **Exorcist Agent (`.kiro/agents/exorcist.json`):** Runs **differential property-based fuzzing** (`src/fuzzer/`) using `fast-check` across both the legacy sandbox and the modernized build (`Object.is` parity checks for `-0` vs `+0`, `NaN`, and integer truncation). If a mismatch occurs, Exorcist shrinks it to a minimal counterexample and feeds it back to Necromancer to self-heal automatically.
 
 ## Architecture & `.kiro/` Artifacts
 - **Steering Docs (`.kiro/steering/`):** `architecture.md`, `sandbox-security.md`, and `ui-aesthetics.md`.
-- **Spec-Driven Development (`.kiro/specs/`):** Full `requirements.md`, `design.md`, and `tasks.md` specs for `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, and `web-ui`.
+- **Spec-Driven Development (`.kiro/specs/`):** Full `requirements.md`, `design.md`, and `tasks.md` specs across **6 suites**: `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, and `bundle-exporter`.
 - **Custom MCP Server (`.kiro/settings/mcp.json` & `src/mcp/server.ts`):** Exposes `run_legacy_probe` over stdio so Kiro agents can safely execute legacy snippets.
 - **Agent Hooks (`.kiro/hooks/run-tests-on-save.json`):** Automatically runs `npx vitest run` whenever TypeScript files in `src/` are modified.
 - **Custom Kiro Crew Agents (`.kiro/agents/`):** Specialized definitions for `archaeologist`, `architect`, `necromancer`, and `exorcist`.
@@ -22,20 +24,22 @@ Engineering teams sit on unmaintained, untested legacy modules they are afraid t
 
 ```bash
 npm install
-npm test        # Runs all 102 unit, integration, and property-based tests
+npm test        # Runs all 108 unit, integration, and property-based tests across 11 suites
 npm start       # Launches the Resurrection Operating Table at http://localhost:3000
-Open **`http://localhost:3000`**, select **Preset 1 (Self-Healing Demo)**, and click **RESURRECT SPECIMEN** to watch Exorcist catch a naive `Math.floor` negative-integer bug via fuzzing and auto-heal it to `Math.trunc`.
+```
+
+Open **`http://localhost:3000`** (or the [live deployment](https://lazarus-yf0a.onrender.com)), select **Preset 1 (Self-Healing Demo)**, and click **RESURRECT SPECIMEN** to watch Exorcist catch a naive `Math.floor` negative-integer bug via fuzzing and auto-heal it to `Math.trunc`.
 
 ## System Architecture
 
 ```mermaid
 flowchart LR
-    A[Legacy ES5 / CommonJS<br/>or GitHub Raw URL] --> B[Archaeologist Agent<br/>AST Scanner + MCP Sandbox]
-    B --> C[Architect Agent<br/>Kiro Spec Synthesizer]
-    C --> D[Necromancer Agent<br/>ES2022 / TS Generator]
-    D --> E[Exorcist Agent<br/>fast-check Object.is Fuzzer]
-    E -- Counterexample Found --> D
-    E -- 100% Parity Proven --> F[One-Click PR Bundle<br/>PR Diff, .ts, .test.ts, SPEC.md]
+    A["Legacy ES5 / CommonJS<br/>or GitHub Raw URL"] --> B["Archaeologist Agent<br/>AST Scanner + MCP Sandbox"]
+    B --> C["Architect Agent<br/>Kiro Spec Synthesizer"]
+    C --> D["Necromancer Agent<br/>ES2022 / TS Generator"]
+    D --> E["Exorcist Agent<br/>fast-check Object.is Fuzzer"]
+    E -- "Counterexample Found" --> D
+    E -- "100% Parity Proven" --> F["One-Click PR Bundle<br/>PR Diff, .ts, .test.ts, SPEC.md"]
 ```
 
 ## Real-World Legacy Parity Benchmark
