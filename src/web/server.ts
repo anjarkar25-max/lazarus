@@ -1,6 +1,9 @@
 import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
 import { generateResurrectionBundle } from "../exporter/bundle.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
+import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
+import type { ResurrectionResult } from "../crew/types.js";
 import { readHeaderLevels } from "../crew/ast-modernizer.js";
 import { listModuleFunctions, mergeLevels, resurrectModule } from "../crew/module-resurrection.js";
 import { SandboxError } from "../sandbox/errors.js";
@@ -150,6 +153,8 @@ interface ResurrectBody {
   legacyCode?: string;
   /** Flat `{ param: kind }`, or nested `{ functionName: { param: kind } }` for multi-export modules. */
   schema?: InputSchema | Record<string, InputSchema>;
+  /** Where the specimen came from (preset, GitHub, npm...); shown on the Resurrection Certificate. */
+  provenance?: unknown;
   fuzzRuns?: number;
   seed?: number;
   simulateBuggyFirstDraft?: boolean;
@@ -185,7 +190,12 @@ function flatSchemaOf(schema: InputSchema | Record<string, InputSchema>, preferr
   if (!isNestedSchema(schema)) return schema as InputSchema;
   return (preferred !== undefined ? schema[preferred] : undefined) ?? Object.values(schema)[0] ?? {};
 }
-export function createWebServer(): http.Server {
+export interface WebServerOptions {
+  /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
+  npmFetch?: FetchLike;
+}
+const NpmImportBody = z.object({ packageSpec: z.string().max(300) }).strict();
+export function createWebServer(options: WebServerOptions = {}): http.Server {
   // Two warm sandbox workers for interactive probing. Created on first use, closed with the server.
   let probeLegacy: PooledProbeRunner | undefined;
   let probeModern: PooledProbeRunner | undefined;
@@ -272,6 +282,22 @@ export function createWebServer(): http.Server {
         },
       };
 
+      const legacySource = body.legacyCode;
+      const provenance = sanitizeProvenance(body.provenance);
+      /** The certificate exists only for a verified resurrection. */
+      const certificateFor = (r: ResurrectionResult, esmComplete: boolean): { certificate?: ReturnType<typeof generateCertificate> } =>
+        r.success
+          ? {
+              certificate: generateCertificate({
+                provenance,
+                legacySource,
+                modernCode: r.modernCode,
+                fuzz: { totalRuns: r.fuzzReport.totalRuns, exact: r.fuzzReport.exact === true, ...(r.fuzzReport.boundaryRuns !== undefined ? { boundaryRuns: r.fuzzReport.boundaryRuns } : {}) },
+                attempts: r.attempts,
+                esmComplete,
+              }),
+            }
+          : {};
       try {
         const moduleFunctions = listModuleFunctions(body.legacyCode).functions;
         if (moduleFunctions.length >= 2) {
@@ -297,6 +323,7 @@ export function createWebServer(): http.Server {
           const { functions, skipped, esm, levels: _levels, ...aggregate } = merged;
           const result = {
             ...aggregate,
+            ...certificateFor(merged, esm.complete),
             module: {
               functions: functions.map((f) => ({
                 name: f.name,
@@ -313,7 +340,8 @@ export function createWebServer(): http.Server {
           };
           res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
         } else {
-          const result = await orchestrator.resurrect(request);
+          const resurrected = await orchestrator.resurrect(request);
+          const result = { ...resurrected, ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete) };
           res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
         }
       } catch (err: unknown) {
@@ -365,6 +393,8 @@ export function createWebServer(): http.Server {
           healed?: boolean;
           schema?: Record<string, string> | Record<string, Record<string, string>>;
           functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
+          provenance?: unknown;
+          attempts?: number;
         };
         if (!parsed.legacyCode || !parsed.modernCode) {
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -402,6 +432,14 @@ export function createWebServer(): http.Server {
           ...(schema ? { schema } : {}),
           ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
           ...(moduleFunctions.length > 0 ? { functions: moduleFunctions } : {}),
+          certificateMarkdown: generateCertificate({
+            provenance: sanitizeProvenance(parsed.provenance),
+            legacySource: parsed.legacyCode,
+            modernCode: parsed.modernCode,
+            fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
+            attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
+            esmComplete: esm.complete,
+          }).markdown,
         });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(bundle));
@@ -413,6 +451,37 @@ export function createWebServer(): http.Server {
       return;
     }
 
+    if (req.method === "POST" && routePath === "/api/import/npm") {
+      const fail = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        fail(tooLarge ? 413 : 400, { error: tooLarge ? "Payload too large" : "Invalid JSON body", code: tooLarge ? "TOO_LARGE" : "INVALID_SPEC" });
+        return;
+      }
+      const checked = NpmImportBody.safeParse(rawBody);
+      if (!checked.success) {
+        fail(400, { error: "Body must be exactly { packageSpec: string }", code: "INVALID_SPEC" });
+        return;
+      }
+      try {
+        const imported = await importNpmPackage(checked.data.packageSpec, options.npmFetch === undefined ? {} : { fetch: options.npmFetch });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(imported));
+      } catch (err: unknown) {
+        if (err instanceof NpmImportError) {
+          fail(statusFor(err.code), { error: err.message, code: err.code, ...(err.details !== undefined ? { details: err.details } : {}) });
+        } else {
+          fail(500, { error: "Unexpected importer failure", code: "UPSTREAM_ERROR" });
+        }
+      }
+      return;
+    }
     if (req.method === "POST" && routePath === "/api/probe") {
       let raw: unknown;
       try {

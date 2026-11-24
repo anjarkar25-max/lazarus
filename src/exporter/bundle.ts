@@ -22,6 +22,8 @@ export interface ResurrectionBundleInput {
    * When absent, the single-function layout is produced unchanged.
    */
   functions?: ModuleFunctionInput[];
+  /** Resurrection Certificate block (see certificate.ts), embedded in SPEC.md under the status list. */
+  certificateMarkdown?: string;
 }
 export interface ModuleFunctionInput {
   /** Export name (the TypeScript function name). */
@@ -233,6 +235,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
     `- **Self-Healed by Necromancer:** ${input.healed ? 'Yes' : 'No (Zero Divergences)'}`,
     `- **Input Contract:** \`${signature}\``,
     ``,
+    ...(input.certificateMarkdown !== undefined ? [input.certificateMarkdown.trim(), ``] : []),
     `## Legacy Source`,
     '```javascript',
     sourceClean,

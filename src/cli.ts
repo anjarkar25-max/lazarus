@@ -12,6 +12,7 @@ import type { CrewEvent } from "./crew/types.js";
 import { generateResurrectionBundle, sanitizeIdentifier } from "./exporter/bundle.js";
 import type { InputSchema } from "./fuzzer/types.js";
 import { scanLegacyAst } from "./sandbox/ast-scanner.js";
+import { generateCertificate } from "./exporter/certificate.js";
 import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
 
@@ -227,6 +228,7 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
     fuzzRuns: result.fuzzReport.totalRuns,
     healed: result.attempts > 1,
     schema,
+    certificateMarkdown: generateCertificate({ provenance: { kind: "file", label: nodePath.basename(inputPath) }, legacySource: source, modernCode: result.modernCode, fuzz: { totalRuns: result.fuzzReport.totalRuns, exact: result.fuzzReport.exact === true, ...(result.fuzzReport.boundaryRuns !== undefined ? { boundaryRuns: result.fuzzReport.boundaryRuns } : {}) }, attempts: result.attempts, esmComplete: esm.complete }).markdown,
     ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
   });
 
@@ -282,6 +284,7 @@ async function runModule(source: string, idioms: string[], args: ParsedArgs, inp
     specMarkdown: result.specMarkdown,
     fuzzRuns: Math.max(...result.functions.map((f) => f.fuzzReport.totalRuns)),
     healed: result.attempts > 1,
+    certificateMarkdown: generateCertificate({ provenance: { kind: "file", label: nodePath.basename(inputPath) }, legacySource: source, modernCode: result.modernCode, fuzz: { totalRuns: result.fuzzReport.totalRuns, exact: result.fuzzReport.exact === true }, attempts: result.attempts, esmComplete: result.esm.complete }).markdown,
     ...(result.esm.complete ? { esmModule: { code: result.esm.code, exports: result.esm.exports } } : {}),
     functions: result.functions.map((f) => ({ name: f.exportedAs, schema: f.schema, legacyCode: f.legacyCode, modernCode: f.modernCode })),
   });
