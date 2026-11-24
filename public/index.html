@@ -352,139 +352,348 @@
 .mut-pill.killed { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.12); }
 .mut-pill.survived { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.15); }
 .mut-note { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
+/* ---- Lazarus Studio shell ------------------------------------------------ */
+:root { color-scheme: dark; }
+html, body { max-width: 100%; overflow-x: hidden; }
+.studio-header { flex-wrap: wrap; gap: 12px; padding: 12px 24px; position: sticky; top: 0; z-index: 30; }
+.studio-header .brand h1 { letter-spacing: 3px; }
+.proof-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.proof-badge { font-size: 11px; font-weight: 700; letter-spacing: .5px; padding: 4px 9px; border-radius: 999px; border: 1px solid #334155; background: #111827; color: #cbd5e1; white-space: nowrap; }
+.proof-badge.emerald { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.10); }
+.proof-badge.violet { color: #c4b5fd; border-color: var(--violet); background: rgba(139, 92, 246, 0.12); }
+.tour-controls { display: flex; gap: 8px; }
+.tour-btn { background: linear-gradient(135deg, #6d28d9, #8b5cf6); color: #f5f3ff; border: none; font-weight: 800; letter-spacing: .5px; }
+.tour-btn:disabled { opacity: .5; cursor: wait; }
+.tour-cancel { border-color: var(--crimson); color: #fecaca; background: #111827; }
+.studio-tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); background: #090d16; overflow-x: auto; }
+.studio-tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); padding: 11px 14px; font-size: 12px; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+.studio-tab:hover { color: var(--text); }
+.studio-tab[aria-selected="true"] { color: #f1f5f9; border-bottom-color: var(--emerald); background: linear-gradient(180deg, transparent, rgba(16, 185, 129, 0.08)); }
+.studio-tab:focus-visible { outline: 2px solid var(--violet); outline-offset: -2px; }
+.studio-pane { min-width: 0; }
+.studio-pane > * { min-width: 0; }
+.pane-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 24px; border-bottom: 1px solid var(--border); background: #0a101f; }
+.pane-title { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: #e2e8f0; }
+.pane-title small { display: block; font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--muted); margin-top: 2px; }
+#pane-graph { padding-top: 16px; }
+.pane-toolbar .controls { min-width: 0; }
+.pane-toolbar select { max-width: 100%; }
+pre { max-width: 100%; }
+
+/* ---- Line diff ----------------------------------------------------------- */
+.diff-block { margin-top: 10px; border: 1px solid #1e293b; border-radius: 8px; background: #090d16; overflow: hidden; }
+.diff-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 6px 10px; font-size: 11px; color: #cbd5e1; border-bottom: 1px solid #1e293b; background: #111827; }
+.diff-stats { color: var(--muted); }
+.diff-stats .p { color: var(--emerald); font-weight: 700; }
+.diff-stats .m { color: #fca5a5; font-weight: 700; }
+.diff-view { max-height: 320px; overflow: auto; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.d-row { display: grid; grid-template-columns: 3.2em 3.2em 1.6em minmax(0, 1fr); min-width: max-content; }
+.d-row > span { padding: 0 6px; white-space: pre; }
+.d-no { color: #475569; text-align: right; user-select: none; border-right: 1px solid #1e293b; }
+.d-sign { text-align: center; user-select: none; }
+.d-del { background: rgba(239, 68, 68, 0.14); }
+.d-del .d-text, .d-del .d-sign { color: #fecaca; }
+.d-add { background: rgba(16, 185, 129, 0.14); }
+.d-add .d-text, .d-add .d-sign { color: #bbf7d0; }
+.d-same .d-text { color: #94a3b8; }
+.d-gap { padding: 2px 10px; color: #64748b; font-style: italic; background: #0b1220; border-top: 1px dashed #1e293b; border-bottom: 1px dashed #1e293b; }
+.out-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.tsc-badge { font-size: 11px; font-weight: 800; letter-spacing: .5px; padding: 4px 9px; border-radius: 999px; border: 1px solid; }
+.tsc-badge.pass { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.10); }
+.tsc-badge.fail { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.12); }
+.diff-toggle { font-size: 11px; font-weight: 700; padding: 5px 10px; border-color: var(--violet); color: #ddd6fe; background: #1e1b4b; }
+.diff-toggle[aria-pressed="true"] { background: var(--violet); color: #fff; }
+.diff-toggle:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- Red-Team Lab -------------------------------------------------------- */
+.lab { padding: 16px 24px 24px; }
+.lab-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .lab-grid { grid-template-columns: 1fr; } }
+.lab-card { margin-top: 0; padding: 14px; background: #111827; border: 1px solid #1e293b; border-radius: 10px; }
+.lab-title { margin: 0 0 8px 0; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--crimson); }
+.lab-card .rt-body { padding: 0; }
+.lab-card .rt-btn { font-size: 12px; padding: 8px 12px; }
+.lab-card .rt-log { max-height: 420px; overflow: auto; }
+.lab-timeline-note { margin-top: 10px; font-size: 11px; color: var(--muted); }
+.lab-spec { padding: 14px; background: #090d16; border: 1px solid #1e293b; border-radius: 10px; font-size: 12px; color: #cbd5e1; }
+.lab-spec h3 { margin: 0 0 8px 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--violet); }
+.lab-spec ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+.lab-spec code, .lab-timeline-note code { color: #e2e8f0; }
+
+/* ---- Guided Judge Tour --------------------------------------------------- */
+.tour-hud { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 50; width: min(720px, calc(100vw - 32px)); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--violet); background: rgba(9, 13, 22, 0.96); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55); }
+.tour-step { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #c4b5fd; font-weight: 800; }
+.tour-text { margin-top: 4px; font-size: 13px; color: #e2e8f0; }
+.tour-text.error { color: #fecaca; }
+.tour-progress { margin-top: 8px; height: 4px; border-radius: 2px; background: #1e293b; overflow: hidden; }
+.tour-progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--emerald)); transition: width .4s ease; }
+.tour-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tour-actions:empty { display: none; }
+.tour-actions button { font-size: 12px; padding: 6px 12px; }
+.tour-focus { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 8px; animation: tourPulse 1.2s ease-in-out infinite; }
+@keyframes tourPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.0); } 50% { box-shadow: 0 0 18px 2px rgba(139, 92, 246, 0.45); } }
+@media (prefers-reduced-motion: reduce) { .tour-focus { animation: none; } .tour-progress i { transition: none; } }
 </style>
 </head>
 <body>
-  <header>
+  <header class="studio-header">
     <div class="brand">
       <div class="pulse"></div>
       <div>
-        <h1>LAZARUS // OPERATING TABLE</h1>
+        <h1>LAZARUS STUDIO</h1>
         <span>Autonomous Legacy Resurrection &amp; Differential Fuzzing Engine</span>
       </div>
     </div>
-    <div class="controls">
-      <select id="presetSelect">
-        <option value="selfHeal">Preset 1: Self-Healing Demo (Buggy Draft &rarr; Counterexample &rarr; Auto-Patch)</option>
-        <option value="bitwise">Preset 2: ES5 Bitwise Integer Truncation ((n / 2) | 0)</option>
-        <option value="checksum">Preset 3: Legacy ES5 String Checksum Loop</option>
-      </select>
-      <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button>
+    <div class="proof-badges" aria-label="Live proof badges">
+      <span class="proof-badge" id="badgeTests">638 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">16 Kiro Specs</span>
+      <span class="proof-badge emerald">Exact Object.is</span>
+      <span class="proof-badge violet">tsc --strict</span>
+    </div>
+    <div class="tour-controls">
+      <button type="button" class="tour-btn" id="tourBtn">&#9654; Run 20s Guided Judge Tour</button>
+      <button type="button" class="tour-cancel" id="tourCancel" hidden>Cancel Tour</button>
     </div>
   </header>
-
-  <section class="crew-bar">
-    <div class="agent-card" id="card-archaeologist">
-      <div class="agent-title"><span>1. Archaeologist</span><span id="status-archaeologist">IDLE</span></div>
-      <div class="agent-sub">Sandbox boundary probing</div>
-    </div>
-    <div class="agent-card" id="card-architect">
-      <div class="agent-title"><span>2. Architect</span><span id="status-architect">IDLE</span></div>
-      <div class="agent-sub">Kiro spec synthesis</div>
-    </div>
-    <div class="agent-card" id="card-necromancer">
-      <div class="agent-title"><span>3. Necromancer</span><span id="status-necromancer">IDLE</span></div>
-      <div class="agent-sub">ES2022 code resurrection</div>
-    </div>
-    <div class="agent-card" id="card-exorcist">
-      <div class="agent-title"><span>4. Exorcist</span><span id="status-exorcist">IDLE</span></div>
-      <div class="agent-sub">fast-check differential fuzzing</div>
-    </div>
-  </section>
-
-  <main>
-    <section class="panel">
-      <div class="panel-header"><span>Legacy Specimen (Isolated Sandbox)</span><span>ES5 / CommonJS</span></div>
-      <div class="panel-body">
-        <div>
-          <label for="modName">Module Identifier</label>
-          <div style="display:flex;gap:6px;margin-bottom:8px;">
-  <input id="githubUrl" placeholder="https://github.com/owner/repo/blob/main/legacy.js" value="https://raw.githubusercontent.com/anjarkar25-max/lazarus/main/legacy-sample.cjs" style="flex:1;font-size:11px;" />
-  <button id="importGithubBtn" type="button" style="background:#1e1b4b;border:1px solid #a855f7;color:#e9d5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">IMPORT GITHUB .JS</button>
-</div>
-<div id="importStatus" style="display:none;font-size:11px;margin:-4px 0 8px 0;padding:6px 8px;border-radius:5px;"></div>
-<div class="graveyard" id="npmGraveyard">
-  <div class="gy-title">Import from npm Graveyard</div>
-  <div class="gy-row">
-    <input id="npmSpec" placeholder="name@1.2.3 or @scope/name@1.2.3" value="left-pad@1.3.0" spellcheck="false" autocomplete="off" />
-    <button id="npmImportBtn" class="gy-go" type="button">IMPORT NPM</button>
+  <nav class="studio-tabs" role="tablist" aria-label="Lazarus Studio workspaces">
+    <button type="button" role="tab" class="studio-tab" id="tab-single" data-studio-tab="single" aria-controls="pane-single" aria-selected="true" tabindex="0">1 &middot; Single File &amp; npm Graveyard</button>
+    <button type="button" role="tab" class="studio-tab" id="tab-graph" data-studio-tab="graph" aria-controls="pane-graph" aria-selected="false" tabindex="-1">2 &middot; Multi-File Project (Stitch Graph)</button>
+    <button type="button" role="tab" class="studio-tab" id="tab-redteam" data-studio-tab="redteam" aria-controls="pane-redteam" aria-selected="false" tabindex="-1">3 &middot; Sandbox Red-Team Lab</button>
+  </nav>
+  <div class="tour-hud" id="tourHud" role="status" aria-live="polite" hidden>
+    <div class="tour-step" id="tourStep"></div>
+    <div class="tour-text" id="tourText"></div>
+    <div class="tour-progress"><i id="tourBar"></i></div>
+    <div class="tour-actions" id="tourActions"></div>
   </div>
-  <div class="gy-chips" id="npmChips">
-    <button type="button" class="gy-chip" data-spec="left-pad@1.3.0">left-pad@1.3.0</button>
-    <button type="button" class="gy-chip" data-spec="is-number@3.0.0">is-number@3.0.0</button>
-    <button type="button" class="gy-chip" data-spec="decamelize@1.2.0">decamelize@1.2.0</button>
-    <button type="button" class="gy-chip" data-spec="escape-string-regexp@1.0.5">escape-string-regexp@1.0.5</button>
-  </div>
-  <div class="gy-pill" id="npmPill" role="status"></div>
-  <div class="gy-error" id="npmError" role="alert"></div>
-</div>
-<input id="modName" value="legacy-int-halve" />
-        </div>
-        <div>
-          <label for="legacyCode">Abandoned Source Expression</label>
-          <textarea id="legacyCode">var half = (n / 2) | 0; half;</textarea>
-        </div>
-        <div>
-          <label for="schemaJson">Input Fuzz Schema (JSON)</label>
-          <input id="schemaJson" value='{"n": "integer"}' />
-        </div>
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color: var(--text);">
-          <input type="checkbox" id="simulateBug" checked style="width:auto;" />
-          Simulate naive 1st-draft bug (demonstrates live counterexample self-healing)
-        </label>
+  <div class="studio-pane" id="pane-single" role="tabpanel" aria-labelledby="tab-single">
+    <div class="pane-toolbar">
+      <div class="pane-title">LAZARUS // OPERATING TABLE<small>Single file &middot; presets, paste, GitHub &amp; npm Graveyard</small></div>
+      <div class="controls">
+        <select id="presetSelect">
+          <option value="selfHeal">Preset 1: Self-Healing Demo (Buggy Draft &rarr; Counterexample &rarr; Auto-Patch)</option>
+          <option value="bitwise">Preset 2: ES5 Bitwise Integer Truncation ((n / 2) | 0)</option>
+          <option value="checksum">Preset 3: Legacy ES5 String Checksum Loop</option>
+        </select>
+        <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button>
+      </div>
+      </div>
+    <section class="crew-bar">
+      <div class="agent-card" id="card-archaeologist">
+        <div class="agent-title"><span>1. Archaeologist</span><span id="status-archaeologist">IDLE</span></div>
+        <div class="agent-sub">Sandbox boundary probing</div>
+      </div>
+      <div class="agent-card" id="card-architect">
+        <div class="agent-title"><span>2. Architect</span><span id="status-architect">IDLE</span></div>
+        <div class="agent-sub">Kiro spec synthesis</div>
+      </div>
+      <div class="agent-card" id="card-necromancer">
+        <div class="agent-title"><span>3. Necromancer</span><span id="status-necromancer">IDLE</span></div>
+        <div class="agent-sub">ES2022 code resurrection</div>
+      </div>
+      <div class="agent-card" id="card-exorcist">
+        <div class="agent-title"><span>4. Exorcist</span><span id="status-exorcist">IDLE</span></div>
+        <div class="agent-sub">fast-check differential fuzzing</div>
       </div>
     </section>
-
-    <section class="panel">
-      <div class="panel-header">
-        <span>Synthesized Spec &amp; Modern Output</span>
-        <span id="parityBadge" class="badge badge-idle">AWAITING RUN</span>
+      <main>
+      <section class="panel">
+        <div class="panel-header"><span>Legacy Specimen (Isolated Sandbox)</span><span>ES5 / CommonJS</span></div>
+        <div class="panel-body">
+          <div>
+            <label for="modName">Module Identifier</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+    <input id="githubUrl" placeholder="https://github.com/owner/repo/blob/main/legacy.js" value="https://raw.githubusercontent.com/anjarkar25-max/lazarus/main/legacy-sample.cjs" style="flex:1;font-size:11px;" />
+    <button id="importGithubBtn" type="button" style="background:#1e1b4b;border:1px solid #a855f7;color:#e9d5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">IMPORT GITHUB .JS</button>
+  </div>
+  <div id="importStatus" style="display:none;font-size:11px;margin:-4px 0 8px 0;padding:6px 8px;border-radius:5px;"></div>
+  <div class="graveyard" id="npmGraveyard">
+    <div class="gy-title">Import from npm Graveyard</div>
+    <div class="gy-row">
+      <input id="npmSpec" placeholder="name@1.2.3 or @scope/name@1.2.3" value="left-pad@1.3.0" spellcheck="false" autocomplete="off" />
+      <button id="npmImportBtn" class="gy-go" type="button">IMPORT NPM</button>
+    </div>
+    <div class="gy-chips" id="npmChips">
+      <button type="button" class="gy-chip" data-spec="left-pad@1.3.0">left-pad@1.3.0</button>
+      <button type="button" class="gy-chip" data-spec="is-number@3.0.0">is-number@3.0.0</button>
+      <button type="button" class="gy-chip" data-spec="decamelize@1.2.0">decamelize@1.2.0</button>
+      <button type="button" class="gy-chip" data-spec="escape-string-regexp@1.0.5">escape-string-regexp@1.0.5</button>
+    </div>
+    <div class="gy-pill" id="npmPill" role="status"></div>
+    <div class="gy-error" id="npmError" role="alert"></div>
+  </div>
+  <input id="modName" value="legacy-int-halve" />
+          </div>
+          <div>
+            <label for="legacyCode">Abandoned Source Expression</label>
+            <textarea id="legacyCode">var half = (n / 2) | 0; half;</textarea>
+          </div>
+          <div>
+            <label for="schemaJson">Input Fuzz Schema (JSON)</label>
+            <input id="schemaJson" value='{"n": "integer"}' />
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color: var(--text);">
+            <input type="checkbox" id="simulateBug" checked style="width:auto;" />
+            Simulate naive 1st-draft bug (demonstrates live counterexample self-healing)
+          </label>
+        </div>
+      </section>
+  
+      <section class="panel">
+        <div class="panel-header">
+          <span>Synthesized Spec &amp; Modern Output</span>
+          <span id="parityBadge" class="badge badge-idle">AWAITING RUN</span>
+        </div>
+        <div class="panel-body">
+          <div>
+            <label>Architect Generated Kiro Specification</label>
+            <pre id="specOut">Click "RESURRECT SPECIMEN" to extract formal behavioral specs...</pre>
+          </div>
+          <div>
+            <label>Necromancer Resurrected ES2022 Code</label>
+            <div class="sig-pill" id="sigPill" hidden></div>
+            <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
+            <div class="out-actions">
+              <span class="tsc-badge" id="tscBadge" hidden></span>
+              <button type="button" class="diff-toggle" id="legacyDiffToggle" aria-pressed="false" aria-controls="legacyDiff" disabled>Legacy vs. Resurrected Diff</button>
+            </div>
+            <div class="diff-block" id="legacyDiffBlock" hidden>
+              <div class="diff-head"><span>Legacy specimen (&minus;) vs resurrected code (+)</span><span class="diff-stats" id="legacyDiffStats"></span></div>
+              <div class="diff-view" id="legacyDiff" role="table" aria-label="Line diff from the legacy specimen to the resurrected code"></div>
+            </div>
+  <div class="cert" id="certCard" aria-live="polite"></div>
+  <div class="mut-card" id="mutCard" hidden>
+    <div class="mut-head">
+      <div class="mut-title">Prove the Proof &mdash; Live Mutation Audit</div>
+      <button type="button" class="mut-btn" id="mutBtn">ATTACK MY OWN PROOF (RUN MUTATION AUDIT)</button>
+    </div>
+    <div class="mut-score" id="mutScore" role="status"></div>
+    <table class="mut-table" id="mutTable" hidden>
+      <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
+      <tbody id="mutRows"></tbody>
+    </table>
+    <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
+  </div>
+  <div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+      <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
+        <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
+        <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
+        <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
+        <button type="button" class="bundle-tab" data-tab=".github/workflows/lazarus-parity.yml" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">lazarus-parity.yml (CI)</button>
+        <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
       </div>
-      <div class="panel-body">
+      <div style="display:flex;gap:6px;">
+        <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
+        <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
+        <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
+        <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
+      </div>
+    </div>
+    <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
+  </div>
+          </div>
+  
+          <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
+          <div id="healingMatrix" class="matrix" hidden>
+            <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
+            <div class="matrix-grid">
+              <section class="matrix-col rejected">
+                <div class="matrix-title">Attempt 1 &middot; Rejected draft</div>
+                <pre id="matrixDraft"></pre>
+                <dl class="cx">
+                  <dt>shrunk input</dt><dd id="cxInput"></dd>
+                  <dt>legacy output</dt><dd id="cxLegacy" class="ok"></dd>
+                  <dt>draft output</dt><dd id="cxDraft" class="bad"></dd>
+                </dl>
+                <div id="cxReason" class="reason"></div>
+              </section>
+              <section class="matrix-col verified">
+                <div class="matrix-title" id="matrixFinalTitle">Final &middot; Verified code</div>
+                <pre id="matrixFinal"></pre>
+                <div id="matrixRules" class="rule-chips"></div>
+              </section>
+            </div>
+            <div class="diff-block" id="matrixDiffBlock">
+              <div class="diff-head"><span>Self-Healing Diff &middot; rejected draft (&minus;) vs verified code (+)</span><span class="diff-stats" id="matrixDiffStats"></span></div>
+              <div class="diff-view" id="matrixDiff" role="table" aria-label="Line diff from the rejected draft to the verified code"></div>
+            </div>
+          </div>
+  
+          <!-- Probe Custom Edge Case: judge-driven Object.is parity against the sandbox -->
+          <div id="probeCard" class="probe-card">
+            <div class="probe-head"><span>Probe Custom Edge Case</span><small>Object.is parity &middot; sandboxed &middot; 3 s limit</small></div>
+            <div id="probeInputs" class="probe-inputs"></div>
+            <div class="probe-chips" id="probeChips">
+              <span class="lead">Quick inputs:</span>
+              <button type="button" class="probe-chip" data-value="-1">-1</button>
+              <button type="button" class="probe-chip" data-value="-0">-0</button>
+              <button type="button" class="probe-chip" data-value="0">0</button>
+              <button type="button" class="probe-chip" data-value="2147483648">2147483648</button>
+              <button type="button" class="probe-chip" data-value="NaN">NaN</button>
+              <button type="button" class="probe-chip" data-value='""'>&quot;&quot;</button>
+            </div>
+            <div class="probe-actions">
+              <button id="probeBtn" type="button" class="primary">PROBE BOTH</button>
+              <span id="probeStatus" class="muted">Run RESURRECT SPECIMEN, then try your own adversarial input. Fields accept JSON plus NaN, -0, Infinity and undefined.</span>
+            </div>
+            <div id="probeResults" class="probe-results" hidden>
+              <div class="probe-side" id="probeLegacySide"><h4>Legacy</h4><code class="val" id="probeLegacyVal"></code><span class="meta" id="probeLegacyMeta"></span></div>
+              <div class="probe-side" id="probeModernSide"><h4>Resurrected</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
+            </div>
+            <div id="probeVerdict" class="verdict" hidden></div>
+          </div>
+        </div>
+      </section>
+  
+      <section class="panel">
+        <div class="panel-header"><span>Live Kiro Crew &amp; Fuzzer Telemetry</span><span id="runStats">0 runs</span></div>
+        <div class="panel-body">
+          <div class="log-list" id="logList">
+            <div class="log-item">
+              <div class="log-meta">SYSTEM READY</div>
+              <div>Isolated Node VM sandbox, custom MCP server, and fast-check differential oracle armed.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    </div>
+  <div class="studio-pane" id="pane-graph" role="tabpanel" aria-labelledby="tab-graph" hidden>
+    <section class="graph-panel" id="graphPanel" aria-labelledby="graphTitle">
+      <div class="graph-head">
+        <div class="graph-title" id="graphTitle">Multi-File Project (Stitch Graph)<small>CommonJS dependency graph &rarr; stitched ES2022 modules, whole-graph exact Object.is parity</small></div>
+        <div class="graph-controls">
+          <select id="graphPreset" aria-label="Multi-file project">
+            <option value="invoice">legacy-invoice-engine (money &rarr; tax &rarr; invoice)</option>
+            <option value="text">legacy-text-pipeline (trim &rarr; pad &rarr; slug)</option>
+          </select>
+          <button type="button" class="graph-btn go" id="graphRunBtn">Resurrect Project Graph</button>
+          <button type="button" class="graph-btn" id="graphZipBtn" disabled>Download Whole-Project .zip</button>
+        </div>
+      </div>
+      <div class="graph-body">
         <div>
-          <label>Architect Generated Kiro Specification</label>
-          <pre id="specOut">Click "RESURRECT SPECIMEN" to extract formal behavioral specs...</pre>
+          <div class="gf-tabs" id="graphTabs" role="tablist"></div>
+          <textarea id="graphEditor" spellcheck="false" aria-label="Legacy file source"></textarea>
+          <div class="gf-note" id="graphNote">Edit any legacy file, then resurrect. Relative require() calls are resolved inside the sandbox's in-memory module map only.</div>
         </div>
         <div>
-          <label>Necromancer Resurrected ES2022 Code</label>
-          <div class="sig-pill" id="sigPill" hidden></div>
-          <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
-<div class="cert" id="certCard" aria-live="polite"></div>
-<div class="mut-card" id="mutCard" hidden>
-  <div class="mut-head">
-    <div class="mut-title">Prove the Proof &mdash; Live Mutation Audit</div>
-    <button type="button" class="mut-btn" id="mutBtn">ATTACK MY OWN PROOF (RUN MUTATION AUDIT)</button>
-  </div>
-  <div class="mut-score" id="mutScore" role="status"></div>
-  <table class="mut-table" id="mutTable" hidden>
-    <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
-    <tbody id="mutRows"></tbody>
-  </table>
-  <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
-</div>
-<div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-    <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
-      <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
-      <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
-      <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
-      <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
-      <button type="button" class="bundle-tab" data-tab=".github/workflows/lazarus-parity.yml" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">lazarus-parity.yml (CI)</button>
-      <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
-    </div>
-    <div style="display:flex;gap:6px;">
-      <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
-      <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
-      <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
-      <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
-    </div>
-  </div>
-  <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
-</div>
+          <div class="graph-svg-wrap"><svg id="graphSvg" role="img" aria-label="Dependency graph"></svg></div>
+          <div class="graph-verdict" id="graphVerdict" role="status"></div>
+          <div class="graph-log" id="graphLog" aria-live="polite"></div>
+          <pre id="graphEsmOut"></pre>
         </div>
-
-        <details class="redteam" id="redteamCard">
-          <summary>Red-Team the Sandbox</summary>
+      </div>
+    </section>
+      </div>
+  <div class="studio-pane" id="pane-redteam" role="tabpanel" aria-labelledby="tab-redteam" hidden>
+    <section class="lab" aria-labelledby="labTitle">
+      <div class="lab-grid">
+        <div class="redteam lab-card" id="redteamCard">
+          <h2 class="lab-title" id="labTitle">Red-Team the Sandbox</h2>
           <div class="rt-body">
             <div class="rt-note">Real attacks run inside the pooled sandbox worker. Each one is followed by a canary probe (1 + 1) on the same pool.</div>
             <div class="rt-buttons" id="rtButtons">
@@ -495,93 +704,25 @@
             </div>
             <div class="rt-log" id="rtLog" aria-live="polite"></div>
           </div>
-        </details>
-        <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
-        <div id="healingMatrix" class="matrix" hidden>
-          <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
-          <div class="matrix-grid">
-            <section class="matrix-col rejected">
-              <div class="matrix-title">Attempt 1 &middot; Rejected draft</div>
-              <pre id="matrixDraft"></pre>
-              <dl class="cx">
-                <dt>shrunk input</dt><dd id="cxInput"></dd>
-                <dt>legacy output</dt><dd id="cxLegacy" class="ok"></dd>
-                <dt>draft output</dt><dd id="cxDraft" class="bad"></dd>
-              </dl>
-              <div id="cxReason" class="reason"></div>
-            </section>
-            <section class="matrix-col verified">
-              <div class="matrix-title" id="matrixFinalTitle">Final &middot; Verified code</div>
-              <pre id="matrixFinal"></pre>
-              <div id="matrixRules" class="rule-chips"></div>
-            </section>
-          </div>
+          <div class="lab-timeline-note">Containment &amp; recovery timeline: each attack, its real sandbox error code, then the canary <code>1 + 1 === 2</code> on the same pool.</div>
         </div>
-
-        <!-- Probe Custom Edge Case: judge-driven Object.is parity against the sandbox -->
-        <div id="probeCard" class="probe-card">
-          <div class="probe-head"><span>Probe Custom Edge Case</span><small>Object.is parity &middot; sandboxed &middot; 3 s limit</small></div>
-          <div id="probeInputs" class="probe-inputs"></div>
-          <div class="probe-chips" id="probeChips">
-            <span class="lead">Quick inputs:</span>
-            <button type="button" class="probe-chip" data-value="-1">-1</button>
-            <button type="button" class="probe-chip" data-value="-0">-0</button>
-            <button type="button" class="probe-chip" data-value="0">0</button>
-            <button type="button" class="probe-chip" data-value="2147483648">2147483648</button>
-            <button type="button" class="probe-chip" data-value="NaN">NaN</button>
-            <button type="button" class="probe-chip" data-value='""'>&quot;&quot;</button>
-          </div>
-          <div class="probe-actions">
-            <button id="probeBtn" type="button" class="primary">PROBE BOTH</button>
-            <span id="probeStatus" class="muted">Run RESURRECT SPECIMEN, then try your own adversarial input. Fields accept JSON plus NaN, -0, Infinity and undefined.</span>
-          </div>
-          <div id="probeResults" class="probe-results" hidden>
-            <div class="probe-side" id="probeLegacySide"><h4>Legacy</h4><code class="val" id="probeLegacyVal"></code><span class="meta" id="probeLegacyMeta"></span></div>
-            <div class="probe-side" id="probeModernSide"><h4>Resurrected</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
-          </div>
-          <div id="probeVerdict" class="verdict" hidden></div>
-        </div>
+        <aside class="lab-spec" aria-label="Sandbox isolation spec">
+          <h3>Sandbox isolation spec</h3>
+          <ul>
+            <li><b>Process boundary:</b> legacy code never runs in the server process, only in pooled worker processes.</li>
+            <li><b>Memory:</b> 256 MB heap cap per worker (<code>--max-old-space-size=256</code>); an overrun is <code>MEMORY_EXCEEDED</code>.</li>
+            <li><b>Time:</b> 3000 ms watchdog per probe; the worker is killed and respawned on <code>TIMEOUT</code>.</li>
+            <li><b>Realm:</b> a fresh <code>node:vm</code> context per probe, null-prototype globals, no <code>require</code>, <code>process</code> reduced to <code>{ env: {} }</code>.</li>
+            <li><b>Network &amp; disk:</b> outbound network blocked; host file system writes blocked outside <code>/tmp/lazarus-sandbox</code>.</li>
+            <li><b>Modules:</b> multi-file probes resolve only relative paths inside an in-memory module map.</li>
+            <li><b>Protocol:</b> typed JSON-RPC 2.0 between the server and each worker, validated at runtime.</li>
+          </ul>
+        </aside>
       </div>
     </section>
+  </div>
 
-    <section class="panel">
-      <div class="panel-header"><span>Live Kiro Crew &amp; Fuzzer Telemetry</span><span id="runStats">0 runs</span></div>
-      <div class="panel-body">
-        <div class="log-list" id="logList">
-          <div class="log-item">
-            <div class="log-meta">SYSTEM READY</div>
-            <div>Isolated Node VM sandbox, custom MCP server, and fast-check differential oracle armed.</div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-<section class="graph-panel" id="graphPanel" aria-labelledby="graphTitle">
-  <div class="graph-head">
-    <div class="graph-title" id="graphTitle">Multi-File Project (Stitch Graph)<small>CommonJS dependency graph &rarr; stitched ES2022 modules, whole-graph exact Object.is parity</small></div>
-    <div class="graph-controls">
-      <select id="graphPreset" aria-label="Multi-file project">
-        <option value="invoice">legacy-invoice-engine (money &rarr; tax &rarr; invoice)</option>
-        <option value="text">legacy-text-pipeline (trim &rarr; pad &rarr; slug)</option>
-      </select>
-      <button type="button" class="graph-btn go" id="graphRunBtn">Resurrect Project Graph</button>
-      <button type="button" class="graph-btn" id="graphZipBtn" disabled>Download Whole-Project .zip</button>
-    </div>
-  </div>
-  <div class="graph-body">
-    <div>
-      <div class="gf-tabs" id="graphTabs" role="tablist"></div>
-      <textarea id="graphEditor" spellcheck="false" aria-label="Legacy file source"></textarea>
-      <div class="gf-note" id="graphNote">Edit any legacy file, then resurrect. Relative require() calls are resolved inside the sandbox's in-memory module map only.</div>
-    </div>
-    <div>
-      <div class="graph-svg-wrap"><svg id="graphSvg" role="img" aria-label="Dependency graph"></svg></div>
-      <div class="graph-verdict" id="graphVerdict" role="status"></div>
-      <div class="graph-log" id="graphLog" aria-live="polite"></div>
-      <pre id="graphEsmOut"></pre>
-    </div>
-  </div>
-</section>
+
 
   <script>
     const presets = {
@@ -714,6 +855,7 @@
               window.lastAttempts = r.attempts;
               if (window.LazarusCertificate) window.LazarusCertificate.render(r.certificate);
               if (window.LazarusMutation) window.LazarusMutation.onResult(r);
+              document.dispatchEvent(new CustomEvent("lazarus:result", { detail: r }));
               if (window.LazarusUI) window.LazarusUI.onResult(r);
               if (r.success) {
                 parityBadge.className = "badge badge-pass";
@@ -727,6 +869,7 @@
         }
       } finally {
         runBtn.disabled = false;
+        document.dispatchEvent(new CustomEvent("lazarus:run-end"));
       }
     });
   </script>
@@ -1109,6 +1252,7 @@
 
     $("matrixDraft").textContent = String(draft).trim();
     $("matrixFinal").textContent = String(r.modernCode || "").trim();
+    if (window.LazarusDiff) window.LazarusDiff.render($("matrixDiff"), String(draft).trim(), String(r.modernCode || "").trim(), $("matrixDiffStats"));
     $("cxInput").textContent = cx ? Object.entries(cx.inputs).map((kv) => kv[0] + " = " + show(kv[1])).join(", ") : "n/a";
     $("cxLegacy").textContent = cx ? outcomeText(cx.legacy) : "n/a";
     $("cxDraft").textContent = cx ? outcomeText(cx.modern) : "n/a";
@@ -1255,12 +1399,14 @@
         return;
       }
       renderProbe(data, context);
+      document.dispatchEvent(new CustomEvent("lazarus:probe", { detail: data }));
     } catch (err) {
       setStatus(err && err.name === "AbortError" ? "Probe timed out." : "Probe failed: " + (err && err.message ? err.message : err), true);
     } finally {
       clearTimeout(timer);
       busy = false;
       probeBtn.disabled = false;
+      document.dispatchEvent(new CustomEvent("lazarus:probe-end"));
     }
   }
 
@@ -1830,12 +1976,14 @@
       const data = await res.json();
       if (!res.ok) { scoreEl.className = "mut-score weak"; scoreEl.textContent = (data.code === "BUSY" ? "BUSY: " : "") + (data.error || "HTTP " + res.status); return; }
       renderAudit(data);
+      document.dispatchEvent(new CustomEvent("lazarus:mutation", { detail: data }));
       window.lastMutationScore = data.baselineVerified && data.totalMutants > 0 ? { killed: data.killed, total: data.totalMutants } : null;
       if (window.LazarusCertificate && window.lastCertificate) window.LazarusCertificate.render(window.lastCertificate);
     } catch (err) {
       scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit failed: " + (err && err.message ? err.message : err);
     } finally {
       busy = false; btn.disabled = false; btn.textContent = "ATTACK MY OWN PROOF (RUN MUTATION AUDIT)";
+      document.dispatchEvent(new CustomEvent("lazarus:mutation-end"));
     }
   }
   btn.addEventListener("click", audit);
@@ -1856,6 +2004,275 @@
       return markdown.replace(/(\| Attempts \|[^\n]*\n)/, "$1" + line + "\n");
     }
   };
+})();
+</script>
+<script>
+/* Lazarus Studio: workspace tabs, LCS line diff, tsc badge, Legacy vs. Resurrected diff, Guided Judge Tour. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+
+  // ---- LCS line diff (identical to src/web/line-diff.ts; studio-ui.test.ts checks the two agree) ----
+  /* lz-diff:start */
+  var LZ_MAX_LCS_CELLS = 250000;
+  function lzSplitLines(text) {
+    if (text === "") return [];
+    var lines = text.replace(/\r\n?/g, "\n").split("\n");
+    if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+    return lines;
+  }
+  function lzDiffLines(oldText, newText) {
+    var a = lzSplitLines(oldText), b = lzSplitLines(newText), out = [];
+    var start = 0;
+    while (start < a.length && start < b.length && a[start] === b[start]) start++;
+    var endA = a.length, endB = b.length;
+    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+    for (var p = 0; p < start; p++) out.push({ kind: "same", text: a[p], oldLine: p + 1, newLine: p + 1 });
+    var n = endA - start, m = endB - start, i, j;
+    if (n * m > LZ_MAX_LCS_CELLS) {
+      for (i = start; i < endA; i++) out.push({ kind: "del", text: a[i], oldLine: i + 1 });
+      for (j = start; j < endB; j++) out.push({ kind: "add", text: b[j], newLine: j + 1 });
+    } else {
+      var w = m + 1, lcs = new Uint32Array((n + 1) * w);
+      for (i = n - 1; i >= 0; i--) {
+        for (j = m - 1; j >= 0; j--) {
+          lcs[i * w + j] = a[start + i] === b[start + j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+        }
+      }
+      i = 0; j = 0;
+      while (i < n && j < m) {
+        if (a[start + i] === b[start + j]) { out.push({ kind: "same", text: a[start + i], oldLine: start + i + 1, newLine: start + j + 1 }); i++; j++; }
+        else if (lcs[(i + 1) * w + j] >= lcs[i * w + j + 1]) { out.push({ kind: "del", text: a[start + i], oldLine: start + i + 1 }); i++; }
+        else { out.push({ kind: "add", text: b[start + j], newLine: start + j + 1 }); j++; }
+      }
+      for (; i < n; i++) out.push({ kind: "del", text: a[start + i], oldLine: start + i + 1 });
+      for (; j < m; j++) out.push({ kind: "add", text: b[start + j], newLine: start + j + 1 });
+    }
+    for (var k = 0; k < a.length - endA; k++) out.push({ kind: "same", text: a[endA + k], oldLine: endA + k + 1, newLine: endB + k + 1 });
+    return out;
+  }
+  /* lz-diff:end */
+
+  /** Renders a diff with line numbers; long unchanged runs collapse to 2 lines of context on each side. */
+  function renderDiff(container, oldText, newText, statsEl) {
+    const lines = lzDiffLines(oldText, newText);
+    container.textContent = "";
+    const keep = new Array(lines.length).fill(false);
+    lines.forEach((l, idx) => {
+      if (l.kind === "same") return;
+      for (let x = Math.max(0, idx - 2); x <= Math.min(lines.length - 1, idx + 2); x++) keep[x] = true;
+    });
+    const anyChange = lines.some((l) => l.kind !== "same");
+    let hidden = 0;
+    const flushGap = () => {
+      if (hidden === 0) return;
+      const gap = document.createElement("div");
+      gap.className = "d-gap";
+      gap.textContent = "\u22ef " + hidden + " unchanged line" + (hidden === 1 ? "" : "s");
+      container.append(gap);
+      hidden = 0;
+    };
+    lines.forEach((l, idx) => {
+      if (anyChange && !keep[idx]) { hidden++; return; }
+      flushGap();
+      const row = document.createElement("div");
+      row.className = "d-row d-" + l.kind;
+      row.setAttribute("role", "row");
+      const cell = (cls, text) => { const s = document.createElement("span"); s.className = cls; s.textContent = text; s.setAttribute("role", "cell"); return s; };
+      row.append(
+        cell("d-no", l.oldLine === undefined ? "" : String(l.oldLine)),
+        cell("d-no", l.newLine === undefined ? "" : String(l.newLine)),
+        cell("d-sign", l.kind === "del" ? "-" : l.kind === "add" ? "+" : " "),
+        cell("d-text", l.text)
+      );
+      container.append(row);
+    });
+    flushGap();
+    if (statsEl) {
+      const added = lines.filter((l) => l.kind === "add").length;
+      const removed = lines.filter((l) => l.kind === "del").length;
+      statsEl.textContent = "";
+      const m = document.createElement("span"); m.className = "m"; m.textContent = "\u2212" + removed;
+      const p = document.createElement("span"); p.className = "p"; p.textContent = "+" + added;
+      statsEl.append(m, " / ", p, " lines");
+    }
+    return lines;
+  }
+  window.LazarusDiff = { diffLines: lzDiffLines, render: renderDiff };
+
+  // ---- Workspace tabs (panes stay in the DOM, so results survive switching) ----
+  const tabs = Array.from(document.querySelectorAll(".studio-tab"));
+  function switchTab(name, focus) {
+    tabs.forEach((tab) => {
+      const on = tab.dataset.studioTab === name;
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.tabIndex = on ? 0 : -1;
+      const pane = $(tab.getAttribute("aria-controls"));
+      if (pane) pane.hidden = !on;
+      if (on && focus) tab.focus();
+    });
+    if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+  }
+  tabs.forEach((tab, idx) => {
+    tab.addEventListener("click", () => switchTab(tab.dataset.studioTab, false));
+    tab.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      const next = tabs[(idx + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+      switchTab(next.dataset.studioTab, true);
+    });
+  });
+  const fromHash = location.hash.replace("#", "");
+  if (tabs.some((t) => t.dataset.studioTab === fromHash)) switchTab(fromHash, false);
+  window.LazarusStudio = { switchTab: (name) => switchTab(name, false) };
+
+  // ---- tsc badge + Legacy vs. Resurrected diff ----
+  const tscBadge = $("tscBadge"), toggle = $("legacyDiffToggle"), legacyBlock = $("legacyDiffBlock");
+  const legacyCode = $("legacyCode"), modernOut = $("modernOut");
+  function refreshLegacyDiff() {
+    if (legacyBlock.hidden) return;
+    renderDiff($("legacyDiff"), legacyCode.value.trim(), (modernOut.textContent || "").trim(), $("legacyDiffStats"));
+  }
+  document.addEventListener("lazarus:result", (e) => {
+    const r = e.detail || {};
+    const tc = r.typecheck;
+    if (tc) {
+      tscBadge.hidden = false;
+      tscBadge.className = "tsc-badge " + (tc.passed ? "pass" : "fail");
+      tscBadge.textContent = "tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s");
+      tscBadge.title = tc.filesChecked + " file(s) checked with TypeScript " + tc.tsVersion + (tc.adjustments && tc.adjustments.length ? "; migration boundary: " + tc.adjustments.join("; ") : "");
+    } else {
+      tscBadge.hidden = true;
+    }
+    toggle.disabled = !r.success;
+    refreshLegacyDiff();
+  });
+  toggle.addEventListener("click", () => {
+    const on = legacyBlock.hidden;
+    legacyBlock.hidden = !on;
+    toggle.setAttribute("aria-pressed", on ? "true" : "false");
+    refreshLegacyDiff();
+  });
+  $("runBtn").addEventListener("click", () => { tscBadge.hidden = true; });
+
+  // ---- Guided Judge Tour: real live API calls only ----
+  const tourBtn = $("tourBtn"), tourCancel = $("tourCancel"), hud = $("tourHud");
+  const stepEl = $("tourStep"), textEl = $("tourText"), bar = $("tourBar"), actions = $("tourActions");
+  const STEPS = 4;
+  let tour = null;
+  class TourCancelled extends Error {}
+  function say(step, text, isError) {
+    hud.hidden = false;
+    stepEl.textContent = step > 0 ? "Guided Judge Tour \u00b7 step " + step + " of " + STEPS : "Guided Judge Tour";
+    textEl.textContent = text;
+    textEl.className = "tour-text" + (isError ? " error" : "");
+    bar.style.width = Math.round((Math.max(0, step) / STEPS) * 100) + "%";
+  }
+  function focusOn(el) {
+    document.querySelectorAll(".tour-focus").forEach((x) => x.classList.remove("tour-focus"));
+    if (!el) return;
+    el.classList.add("tour-focus");
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function check() { if (!tour || tour.cancelled) throw new TourCancelled("cancelled"); }
+  function sleep(ms) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => (tour && !tour.cancelled ? resolve() : reject(new TourCancelled("cancelled"))), ms);
+      tour.cleanups.push(() => { clearTimeout(timer); reject(new TourCancelled("cancelled")); });
+    });
+  }
+  /** Resolves with the detail of `okEvent` once `endEvent` fires (or rejects on timeout / cancel). */
+  function waitFor(okEvent, endEvent, timeoutMs, start) {
+    return new Promise((resolve, reject) => {
+      let detail = null;
+      const onOk = (e) => { detail = e.detail; };
+      const onEnd = () => { done(); detail ? resolve(detail) : reject(new Error("the live request finished without a result")); };
+      const timer = setTimeout(() => { done(); reject(new Error("no answer within " + Math.round(timeoutMs / 1000) + " s")); }, timeoutMs);
+      function done() { clearTimeout(timer); document.removeEventListener(okEvent, onOk); document.removeEventListener(endEvent, onEnd); }
+      document.addEventListener(okEvent, onOk);
+      document.addEventListener(endEvent, onEnd);
+      tour.cleanups.push(() => { done(); reject(new TourCancelled("cancelled")); });
+      start();
+    });
+  }
+  function finishControls() {
+    tourBtn.disabled = false;
+    tourCancel.hidden = true;
+  }
+  async function runTour() {
+    if (tour) return;
+    tour = { cancelled: false, cleanups: [] };
+    tourBtn.disabled = true;
+    tourCancel.hidden = false;
+    actions.textContent = "";
+    try {
+      // 1. Live self-healing resurrection of the 32-bit string hash.
+      switchTab("single", false);
+      say(1, "Loading stringHash32 and resurrecting it live (POST /api/resurrect). Watch the Exorcist find a 32-bit overflow and the Necromancer roll the culprit AST rule back.");
+      const preset = $("presetSelect");
+      preset.value = "es5-string-hash";
+      preset.dispatchEvent(new Event("change"));
+      focusOn($("legacyCode"));
+      await sleep(900);
+      check();
+      const result = await waitFor("lazarus:result", "lazarus:run-end", 30000, () => $("runBtn").click());
+      check();
+      if (!result.success) throw new Error("the resurrection did not prove parity: " + (result.fuzzReport && result.fuzzReport.counterexample ? result.fuzzReport.counterexample.reason : "see the telemetry log"));
+      const healed = !$("healingMatrix").hidden;
+      focusOn(healed ? $("matrixDiffBlock") : modernOut);
+      const tc = result.typecheck;
+      say(1, (healed ? "Self-healed in " + result.attempts + " attempts. Red lines: the rejected draft; green lines: the verified code. " : "Parity proven on the first draft. ") + (tc ? "tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s") + "." : ""));
+      await sleep(3500);
+      if (tc) { focusOn(tscBadge); await sleep(1200); }
+
+      // 2. Live mutation audit.
+      say(2, "Attacking its own proof: injecting realistic rewrite bugs and fuzzing each one (POST /api/mutation-audit).");
+      focusOn($("mutCard"));
+      const audit = await waitFor("lazarus:mutation", "lazarus:mutation-end", 20000, () => $("mutBtn").click());
+      check();
+      say(2, audit.killed + "/" + audit.totalMutants + " mutants killed \u00b7 " + audit.killRatePercent + "% proof strength" + (audit.survived > 0 ? " (survivors are shown as they are)" : "") + ".");
+      await sleep(3200);
+
+      // 3. Live exact Object.is edge-case probe.
+      say(3, "Probing an edge case live: NaN through both implementations (POST /api/probe).");
+      const probeCard = $("probeCard");
+      focusOn(probeCard);
+      await sleep(700);
+      const chip = Array.from(document.querySelectorAll("#probeChips .probe-chip")).find((c) => c.dataset.value === "NaN");
+      const first = document.querySelector("#probeInputs input");
+      if (!chip || !first) throw new Error("the probe card has no input to try");
+      first.focus();
+      const probe = await waitFor("lazarus:probe", "lazarus:probe-end", 15000, () => chip.click());
+      check();
+      say(3, probe.reason + " (legacy " + probe.legacy.display + ", resurrected " + probe.modern.display + ").", !probe.exactParity);
+      await sleep(3000);
+
+      // 4. Done.
+      focusOn(null);
+      say(4, "Tour complete. Everything you just saw was a real sandboxed run. Next: stitch a whole multi-file CommonJS project, or attack the sandbox yourself.");
+      const go = (label, tab) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.addEventListener("click", () => { switchTab(tab, false); hud.hidden = true; }); return b; };
+      const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });
+      actions.append(go("Open Tab 2 \u00b7 Multi-File Stitch Graph", "graph"), go("Open Tab 3 \u00b7 Sandbox Red-Team Lab", "redteam"), close);
+    } catch (err) {
+      focusOn(null);
+      if (err instanceof TourCancelled) {
+        say(0, "Tour cancelled. Requests already sent finish on their own; nothing else will be triggered.");
+      } else {
+        say(0, "Tour stopped: " + (err && err.message ? err.message : String(err)), true);
+      }
+      const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });
+      actions.append(close);
+    } finally {
+      tour = null;
+      finishControls();
+    }
+  }
+  tourBtn.addEventListener("click", runTour);
+  tourCancel.addEventListener("click", () => {
+    if (!tour) return;
+    tour.cancelled = true;
+    tour.cleanups.splice(0).forEach((fn) => fn());
+  });
 })();
 </script>
 </body>
