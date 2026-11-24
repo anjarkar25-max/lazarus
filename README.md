@@ -1,45 +1,31 @@
-﻿# LAZARUS — Autonomous Legacy & Dead-Dependency Resurrection Engine
+﻿# Lazarus — Autonomous Legacy & Dead-Dependency Resurrection Engine
 
-> **Kiroween 2026 Submission — Frankenstein Category**
-> Stitching isolated legacy execution sandboxes together with a 4-agent Kiro Crew, custom MCP tooling, and `fast-check` differential property-based fuzzing.
+> **Kiroween 2026 (Frankenstein Category)** | **Live Operating Table:** [lazarus-yf0a.onrender.com](https://lazarus-yf0a.onrender.com) | **MIT License**
 >
-> **Live App:** https://lazarus-yf0a.onrender.com | **Tests:** 108 passing across 11 Vitest suites | **License:** MIT
+> **284 passing tests across 17 Vitest suites** · **9 `.kiro/specs/` suites** · **4-Agent Kiro Crew** · **Custom `lazarus-sandbox` MCP Server**
 
-## What Lazarus Does
-Engineering teams sit on unmaintained, untested legacy modules they are afraid to touch. **Lazarus** resurrects abandoned JavaScript/CommonJS logic into modern ES2022+ TypeScript with mathematical proof of behavioral parity:
-
-1. **Archaeologist Agent (`.kiro/agents/archaeologist.json`):** Executes the legacy module inside an isolated child-process sandbox (`src/sandbox/`) with strict memory, timeout, filesystem, and network restrictions to capture baseline I/O traces and AST idioms.
-2. **Architect Agent (`.kiro/agents/architect.json`):** Synthesizes observed runtime behavior into formal Kiro specifications (`requirements.md` + behavioral invariants).
-3. **Necromancer Agent (`.kiro/agents/necromancer.json`):** Rewrites the legacy code into clean ES2022+ while preserving subtle JavaScript edge cases.
-4. **Exorcist Agent (`.kiro/agents/exorcist.json`):** Runs **differential property-based fuzzing** (`src/fuzzer/`) using `fast-check` across both the legacy sandbox and the modernized build (`Object.is` parity checks for `-0` vs `+0`, `NaN`, and integer truncation). If a mismatch occurs, Exorcist shrinks it to a minimal counterexample and feeds it back to Necromancer to self-heal automatically.
-
-## Architecture & `.kiro/` Artifacts
-- **Steering Docs (`.kiro/steering/`):** `architecture.md`, `sandbox-security.md`, and `ui-aesthetics.md`.
-- **Spec-Driven Development (`.kiro/specs/`):** Full `requirements.md`, `design.md`, and `tasks.md` specs across **6 suites**: `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, and `bundle-exporter`.
-- **Custom MCP Server (`.kiro/settings/mcp.json` & `src/mcp/server.ts`):** Exposes `run_legacy_probe` over stdio so Kiro agents can safely execute legacy snippets.
-- **Agent Hooks (`.kiro/hooks/run-tests-on-save.json`):** Automatically runs `npx vitest run` whenever TypeScript files in `src/` are modified.
-- **Custom Kiro Crew Agents (`.kiro/agents/`):** Specialized definitions for `archaeologist`, `architect`, `necromancer`, and `exorcist`.
-
-## Quick Start
-
-```bash
-npm install
-npm test        # Runs all 108 unit, integration, and property-based tests across 11 suites
-npm start       # Launches the Resurrection Operating Table at http://localhost:3000
-```
-
-Open **`http://localhost:3000`** (or the [live deployment](https://lazarus-yf0a.onrender.com)), select **Preset 1 (Self-Healing Demo)**, and click **RESURRECT SPECIMEN** to watch Exorcist catch a naive `Math.floor` negative-integer bug via fuzzing and auto-heal it to `Math.trunc`.
+Lazarus ingests unmaintained legacy ES5/CommonJS JavaScript (pasted directly, imported from GitHub, or passed via CLI) and autonomously resurrects it into modern ES2022/TypeScript with **mathematical proof of 100% behavioral parity** via `fast-check` differential property-based fuzzing.
 
 ## System Architecture
 
 ```mermaid
 flowchart TD
-    A["Legacy ES5 / CommonJS<br/>or GitHub Raw URL"] --> B["Archaeologist Agent<br/>AST Scanner + MCP Sandbox"]
-    B --> C["Architect Agent<br/>Kiro Spec Synthesizer"]
-    C --> D["Necromancer Agent<br/>ES2022 / TS Generator"]
-    D --> E["Exorcist Agent<br/>fast-check Object.is Fuzzer"]
-    E -- "Counterexample Found" --> D
-    E -- "100% Parity Proven" --> F["One-Click PR Bundle<br/>PR Diff, .ts, .test.ts, SPEC.md"]
+    A["Legacy ES5 / CommonJS<br/>Paste, GitHub URL, or CLI"] --> B["Archaeologist Agent<br/>Acorn AST Scanner + Pooled Sandbox MCP"]
+    B --> C["Architect Agent<br/>Formal Kiro SPEC & Invariants"]
+    C --> D["Necromancer Agent<br/>Acorn + Astring AST Modernizer"]
+    D --> E["Exorcist Agent<br/>fast-check Differential Fuzzer"]
+    E -- "Counterexample Found<br/>Speculative Rule Rollback" --> D
+    E -- "100% Parity Proven" --> F["PR & ESM Bundle + Live Probe<br/>git-apply Patch, .ts, .test.ts, SPEC.md"]
+```
+
+## Quick Start
+
+```bash
+npm install
+npm test                                                           # 284 tests across 17 suites
+npm start                                                          # Launch Operating Table on http://localhost:3000
+npm run mcp                                                        # Start stdio MCP server (lazarus-sandbox)
+npm run resurrect -- ./examples/legacy-quantize.cjs --out ./out    # Resurrect a local file via CLI
 ```
 
 ## Real-World Legacy Parity Benchmark
@@ -47,15 +33,19 @@ flowchart TD
 | Specimen | Legacy Pattern | Subtle Edge Case Caught / Verified | Verified Outcome |
 | :--- | :--- | :--- | :--- |
 | `legacy-int-halve` | `var half = (n / 2) \| 0` | `Math.floor` diverges on negative odd integers (`-1` vs `-2`) | Self-healed to `Math.trunc` |
+| `stringHash32` | ES5 hash loop with `\| 0` | 32-bit signed overflow (`-2147483648` vs `2147483648`) | Speculative rule rolled back automatically |
 | `fast-truncate-32` | `(a * 3) \| 0` | 32-bit signed truncation and `-0` vs `+0` (`Object.is`) | 100% Parity |
 | `es5-ascii-checksum` | `for (var i = 0; ...)` `charCodeAt` | Empty strings, Unicode boundaries, loop scoping | 100% Parity |
 | `truncateHalf` (`.cjs`) | `module.exports = function` | Multi-line CommonJS AST unwrapping + `\| 0` semantics | 100% Parity |
 | `legacyLeftPad` | ES5 `while` string padding | Coercion + variable string lengths (`fc.string`) | 100% Parity |
+| `mixAB` | Multi-parameter ES5 bitwise mix | Multi-parameter Acorn extraction + integer boundaries | 100% Parity |
 | `quantizeClamp` (`.cjs`) | CommonJS clamp + `(x / 3) \| 0` | Boundary clamping `[-100, 100]` + negative truncation | 100% Parity |
 
-## V2 / V3 Architecture Upgrades
-- **Live GitHub & CommonJS AST Importer (`src/importer/github.ts`, `src/sandbox/ast-scanner.ts`):** Ingests raw `.js`/`.cjs` files from GitHub with strict HTTPS domain allowlisting, 5-second abort timeout, 32 KB size cap, honest UI error banners, and multi-function `module.exports` AST idiom extraction.
-- **Tabbed PR & Vitest Bundle Exporter (`src/exporter/bundle.ts`):** Generates a schema-aware TypeScript module (`resurrected.ts`), unified GitHub Pull Request diff (`.patch`), formal Kiro `SPEC.md`, and runnable `fast-check` Vitest suite (`resurrected.test.ts`) with one-click Copy and direct file downloads.
-- **6th Kiro Specification Suite (`.kiro/specs/bundle-exporter/`):** Full requirements, architecture design, task breakdown, and 22 unit + property tests (**108 passing tests across 11 suites**).
+## V4 Architecture Upgrades
 
+- **Persistent Sandbox Pooling (`src/sandbox/pool.ts`, `src/sandbox/vm-executor.ts`):** Reuses isolated worker processes with fresh VM contexts per probe, automatic respawn on `TIMEOUT`/OOM/worker crash, **0 leaked Node processes**, and **sub-second live 100-run fuzzing** (~10x suite speedup).
+- **Real AST-to-AST ES5 → ES2022 Engine (`src/crew/ast-modernizer.ts`, `src/crew/ast-scope.ts`, `src/crew/esm-export.ts`):** Uses `acorn` + `astring` to modernize `var` scoping, callbacks, `arguments`/`.apply`, `| 0` truncation, and CommonJS exports—with **counterexample-guided speculative rollback** whenever Exorcist catches a divergence.
+- **Judge Playground & Live Edge-Case Probe (`POST /api/probe`, `src/sandbox/tagged.ts`, `src/sandbox/ast-scanner.ts`):** Multi-parameter Acorn extraction, visual **Self-Healing Attempt Matrix** (Rejected Draft vs. Verified Code), and an interactive **Probe Custom Edge Case** card using tagged JSON serialization to preserve exact `Object.is` `-0` and `NaN` parity over HTTP.
+- **GitHub Importer, Tabbed PR/ESM Exporter & Local CLI (`src/importer/github.ts`, `src/exporter/bundle.ts`, `src/cli.ts`):** Strict HTTPS domain-allowlisted GitHub `.js`/`.cjs` import, `git apply`-compatible PR patches, runnable `fast-check` Vitest suites, and a sandbox-hardened CLI that refuses to write output if parity cannot be proven.
+- **9 Kiro Specification Suites (`.kiro/specs/`):** `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, `bundle-exporter`, `sandbox-pooling`, `ast-modernizer`, and `judge-playground` (**284 passing tests across 17 suites**).
 
