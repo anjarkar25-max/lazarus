@@ -61,6 +61,13 @@ export interface ProbeParams {
    * `context` and the returned `output` (see tagged.ts). Defaults to plain JSON.
    */
   readonly encoding?: "json" | "tagged";
+  /**
+   * In-memory CommonJS modules (path -> source). When present, the probe's `require()` resolves relative specifiers
+   * against this map only (see virtual-fs.ts). Nothing is ever read from the host file system.
+   */
+  readonly files?: Readonly<Record<string, string>>;
+  /** File the probe code is considered to live in: the base directory for its relative `require()` calls. */
+  readonly entry?: string;
 }
 
 export interface ProbeResult {

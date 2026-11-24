@@ -11,6 +11,7 @@ import { createContext, runInContext } from "node:vm";
 import { types } from "node:util";
 import { SandboxError } from "./errors.js";
 import type { ProbeExecutor, ProbeParams, ProbeResult } from "./types.js";
+import { VIRTUAL_REQUIRE_SOURCE } from "./virtual-fs.js";
 
 /** vm-level budget. The pool's watchdog (3000 ms) is the hard outer limit. */
 export const VM_TIMEOUT_MS = 2800;
@@ -79,12 +80,16 @@ const BOOTSTRAP = `(function () {
     }
     return v;
   }
+${VIRTUAL_REQUIRE_SOURCE}
   var tagged = g.__lzTagged === true;
   var input = tagged ? decodeDeep(parse(g.__lzInput)) : parse(g.__lzInput);
   delete g.__lzInput;
   delete g.__lzTagged;
   Object.defineProperty(g, "console", { value: { log: log, info: log, debug: log, warn: error, error: error }, writable: true, configurable: true, enumerable: false });
   Object.defineProperty(g, "process", { value: { env: {} }, writable: true, configurable: true, enumerable: false });
+  if (g.__lzFiles !== undefined) installVirtualRequire(g, g.__lzFiles, g.__lzEntry);
+  delete g.__lzFiles;
+  delete g.__lzEntry;
   var keys = Object.keys(input);
   for (var i = 0; i < keys.length; i++) {
     Object.defineProperty(g, keys[i], { value: input[keys[i]], writable: true, configurable: true, enumerable: true });
@@ -124,6 +129,10 @@ export class VmProbeExecutor implements ProbeExecutor {
     const tagged = params.encoding === "tagged";
     sandbox["__lzInput"] = JSON.stringify(params.context ?? {});
     if (tagged) sandbox["__lzTagged"] = true;
+    if (params.files !== undefined) {
+      sandbox["__lzFiles"] = JSON.stringify(params.files);
+      if (params.entry !== undefined) sandbox["__lzEntry"] = params.entry;
+    }
     const ctx = createContext(sandbox, { codeGeneration: { strings: true, wasm: false } });
 
     const describeThrown = (thrown: unknown): string => {

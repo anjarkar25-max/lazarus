@@ -41,6 +41,18 @@ interface Exported {
 export interface EsmOptions {
   /** Rule levels for the modernization pass, so rollbacks apply to the ESM output as well. */
   readonly levels?: RuleLevels;
+  /**
+   * Resolves relative `require("./x")` calls of a multi-file graph. When given, `var m = require("./x")`,
+   * `var f = require("./x").f` and `var { a, b } = require("./x")` become `import` declarations of the returned
+   * `source` (e.g. "./x.js"), shaped by what that module exports.
+   */
+  readonly resolveRequire?: (specifier: string) => RequireTarget | undefined;
+}
+export interface RequireTarget {
+  /** Import specifier to emit, e.g. "./money.js". */
+  readonly source: string;
+  /** Export names of the target ES module ("default" for a default export). */
+  readonly exports: readonly string[];
 }
 
 export function toEsmModule(source: string, options: EsmOptions = {}): EsmModuleResult {
@@ -238,6 +250,74 @@ export function toEsmModule(source: string, options: EsmOptions = {}): EsmModule
   };
 
   /** `var x = require("m")` -> import; `var f = require("fs").readFileSync` -> named import (built-ins only). */
+  /** Local graph modules: `require("./x")` in a top-level declaration becomes an exact `import`. */
+  const graphImportFor = (declaration: ESTree.VariableDeclaration): Body[] | null => {
+    const resolver = options.resolveRequire;
+    const declarator = declaration.declarations.length === 1 ? declaration.declarations[0] : undefined;
+    if (resolver === undefined || declarator === undefined || declarator.init === null || declarator.init === undefined) return null;
+    const requireOf = (node: ESTree.Node): { call: ESTree.SimpleCallExpression; spec: string } | null => {
+      if (node.type !== "CallExpression" || !isGlobal(node.callee, "require") || node.arguments.length !== 1) return null;
+      const arg = node.arguments[0];
+      if (arg?.type !== "Literal" || typeof arg.value !== "string" || !(arg.value.startsWith("./") || arg.value.startsWith("../"))) return null;
+      return { call: node, spec: arg.value };
+    };
+    const init = declarator.init;
+    const direct = requireOf(init);
+    const member = init.type === "MemberExpression" && !init.computed && init.property.type === "Identifier" ? requireOf(init.object) : null;
+    const found = direct ?? member;
+    if (found === null) return null;
+    const target = resolver(found.spec);
+    if (target === undefined) fail(`require("${found.spec}") does not resolve to a module of this graph`);
+    const resolved = target as RequireTarget;
+    consumed.add(found.call.callee);
+    const source: ESTree.Literal = { type: "Literal", value: resolved.source };
+    const hasDefault = resolved.exports.includes("default");
+    const named = (name: string): boolean => name !== "default" && resolved.exports.includes(name);
+    const importDecl = (specifiers: ESTree.ImportDeclaration["specifiers"]): Body => ({ type: "ImportDeclaration", specifiers, source, attributes: [] });
+    const helper = (): string => {
+      const base = `__lz_${resolved.source.replace(/^.*\//, "").replace(/\.[^.]+$/, "").replace(/[^\w$]/g, "_")}`;
+      let name = base;
+      for (let i = 2; programScope?.bindings.has(name) === true || a.allNames.has(name); i++) name = `${base}${i}`;
+      return name;
+    };
+    const kind = declaration.kind;
+    if (direct !== null && declarator.id.type === "Identifier") {
+      const local = ident(declarator.id.name);
+      // A module with only named exports is used through its namespace object, like the CommonJS exports object.
+      return [importDecl([hasDefault ? { type: "ImportDefaultSpecifier", local } : { type: "ImportNamespaceSpecifier", local }])];
+    }
+    if (member !== null && declarator.id.type === "Identifier" && init.type === "MemberExpression" && init.property.type === "Identifier") {
+      const prop = init.property.name;
+      if (named(prop)) return [importDecl([{ type: "ImportSpecifier", imported: ident(prop), local: ident(declarator.id.name) }])];
+      if (!hasDefault) fail(`require("${found.spec}").${prop}: the module does not export ${prop}`);
+      const holder = helper();
+      return [
+        importDecl([{ type: "ImportDefaultSpecifier", local: ident(holder) }]),
+        { type: "VariableDeclaration", kind, declarations: [{ type: "VariableDeclarator", id: ident(declarator.id.name), init: { type: "MemberExpression", object: ident(holder), property: ident(prop), computed: false, optional: false } }] },
+      ];
+    }
+    if (direct !== null && declarator.id.type === "ObjectPattern") {
+      const pairs: Array<{ key: string; local: string }> = [];
+      let simple = true;
+      for (const property of declarator.id.properties) {
+        if (property.type !== "Property" || property.computed || property.key.type !== "Identifier" || property.value.type !== "Identifier") {
+          simple = false;
+          break;
+        }
+        pairs.push({ key: property.key.name, local: property.value.name });
+      }
+      if (simple && pairs.every((p) => named(p.key))) {
+        return [importDecl(pairs.map((p) => ({ type: "ImportSpecifier", imported: ident(p.key), local: ident(p.local) })))];
+      }
+      const holder = helper();
+      return [
+        importDecl([hasDefault ? { type: "ImportDefaultSpecifier", local: ident(holder) } : { type: "ImportNamespaceSpecifier", local: ident(holder) }]),
+        { type: "VariableDeclaration", kind, declarations: [{ type: "VariableDeclarator", id: declarator.id, init: ident(holder) }] },
+      ];
+    }
+    fail(`require("${found.spec}") is used in a declaration shape that has no exact ESM equivalent`);
+    return null;
+  };
   const importFor = (declaration: ESTree.VariableDeclaration): Body | null => {
     const declarator = declaration.declarations.length === 1 ? declaration.declarations[0] : undefined;
     if (declarator === undefined || declarator.id.type !== "Identifier" || declarator.init === null || declarator.init === undefined) return null;
@@ -306,6 +386,17 @@ export function toEsmModule(source: string, options: EsmOptions = {}): EsmModule
         }
       }
       if (statement.type === "VariableDeclaration") {
+        const stitched = graphImportFor(statement);
+        if (stitched !== null) {
+          // Keep the original statement's position so comments stay where they were.
+          const original = statement as unknown as Record<string, unknown>;
+          for (const node of stitched) {
+            const carrier = node as unknown as Record<string, unknown>;
+            for (const k of ["start", "end", "loc"]) if (k in original) carrier[k] = original[k];
+          }
+          body.push(...stitched);
+          continue;
+        }
         const imported = importFor(statement);
         if (imported !== null) {
           body.push(imported);

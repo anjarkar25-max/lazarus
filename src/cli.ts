@@ -13,6 +13,8 @@ import { generateResurrectionBundle, sanitizeIdentifier } from "./exporter/bundl
 import type { InputSchema } from "./fuzzer/types.js";
 import { scanLegacyAst } from "./sandbox/ast-scanner.js";
 import { generateCertificate } from "./exporter/certificate.js";
+import { resurrectGraph } from "./crew/graph-resurrector.js";
+import { buildGraphBundle } from "./exporter/graph-bundle.js";
 import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
 
@@ -28,7 +30,7 @@ const DEFAULT_RUNS = 100;
 
 const SchemaArg = z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/, "parameter names must be identifiers"), z.enum(["integer", "number", "string", "boolean", "json"]));
 
-export const USAGE = `lazarus resurrect <file.js|.cjs|.mjs> [options]
+export const USAGE = `lazarus resurrect <file.js|.cjs|.mjs | directory> [options]
 
 Resurrect a legacy ES5 / CommonJS file: extract it with a real AST parser, modernize it, prove
 behavioural parity with differential fuzzing inside the sandbox, and write a verified PR bundle.
@@ -44,6 +46,11 @@ Options:
 
 Writes resurrected.ts, resurrected.test.ts, SPEC.md and resurrection.patch (plus resurrected.mjs,
 legacy.cjs and resurrected.esm.test.ts when the CommonJS -> ESM conversion is exact).
+Directory mode: every .js/.cjs file under the directory (node_modules skipped) is resurrected as one
+CommonJS dependency graph, leaves first, then the stitched ES module graph is fuzzed end to end against
+the original. --entry <file> picks the entry module; --schema then describes its export(s), either flat
+or as {"exportName": {...}}. Writes src/, legacy/, resurrected.test.ts, SPEC.md, the CI workflow and
+resurrection.patch, or nothing when parity fails.
 Exit codes: 0 parity proven, 1 not resurrected, 2 bad usage.`;
 
 interface ParsedArgs {
@@ -124,6 +131,13 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
 
   // ---- read the specimen -------------------------------------------------
   const inputPath = nodePath.resolve(io.cwd, args.file);
+  let isDirectory = false;
+  try {
+    isDirectory = fs.statSync(inputPath).isDirectory();
+  } catch {
+    /* reported below as an unreadable file */
+  }
+  if (isDirectory) return runDirectory(inputPath, args, io);
   if (!/\.(c|m)?js$/i.test(inputPath)) {
     io.stderr(`error: ${args.file} is not a .js, .cjs or .mjs file\n`);
     return 2;
@@ -311,6 +325,112 @@ async function runModule(source: string, idioms: string[], args: ParsedArgs, inp
   for (const [file, content] of files) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
   if (!result.esm.complete) io.stdout(`  note: kept CommonJS (${result.esm.notes.join("; ") || "no exports"})\n`);
   return 0;
+}
+const MAX_GRAPH_FILES = 64;
+const MAX_GRAPH_BYTES = 512 * 1024;
+
+/** .js/.cjs files under `root` (relative, "/"-separated, sorted). Skips node_modules and dot-directories. */
+function discoverSources(root: string): { files: Record<string, string> } | { error: string } {
+  const files: Record<string, string> = {};
+  let total = 0;
+  const walkDir = (dir: string, prefix: string): string | undefined => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const full = nodePath.join(dir, entry.name);
+      const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) {
+        const problem = walkDir(full, rel);
+        if (problem !== undefined) return problem;
+      } else if (entry.isFile() && /\.c?js$/i.test(entry.name)) {
+        const size = fs.statSync(full).size;
+        total += size;
+        if (Object.keys(files).length >= MAX_GRAPH_FILES) return `more than ${MAX_GRAPH_FILES} .js/.cjs files`;
+        if (size > MAX_SOURCE_BYTES || total > MAX_GRAPH_BYTES) return `sources exceed the ${MAX_GRAPH_BYTES} byte limit`;
+        files[rel] = fs.readFileSync(full, "utf8");
+      }
+    }
+    return undefined;
+  };
+  const problem = walkDir(root, "");
+  return problem !== undefined ? { error: problem } : { files };
+}
+
+async function runDirectory(dir: string, args: ParsedArgs, io: CliIo): Promise<number> {
+  const found = discoverSources(dir);
+  if ("error" in found) {
+    io.stderr(`error: ${args.file ?? dir}: ${found.error}\n`);
+    return 2;
+  }
+  const count = Object.keys(found.files).length;
+  if (count === 0) {
+    io.stderr(`error: ${args.file ?? dir} contains no .js or .cjs files\n`);
+    return 2;
+  }
+  let schemas: Record<string, InputSchema> | undefined;
+  if (args.schema !== undefined) {
+    let json: unknown;
+    try {
+      json = JSON.parse(args.schema);
+    } catch {
+      io.stderr("error: --schema is not valid JSON\n");
+      return 2;
+    }
+    const nested = z.record(z.string(), SchemaArg).safeParse(json);
+    const flat = SchemaArg.safeParse(json);
+    if (flat.success) schemas = { default: flat.data, "*": flat.data };
+    else if (nested.success) schemas = nested.data;
+    else {
+      io.stderr("error: invalid --schema for directory mode (use {\"param\":\"kind\"} or {\"export\":{\"param\":\"kind\"}})\n");
+      return 2;
+    }
+  }
+  const name = sanitizeIdentifier(args.name ?? nodePath.basename(dir));
+  io.stdout(`Lazarus: resurrecting the ${count}-file CommonJS graph ${name} from ${args.file ?? dir}\n`);
+  const result = await resurrectGraph(found.files, {
+    name,
+    ...(args.fn !== undefined ? { entry: args.fn } : {}),
+    ...(schemas !== undefined ? { schemas: expandFlatSchema(schemas, found.files, args.fn) } : {}),
+    fileRuns: Math.min(args.runs, 200),
+    graphRuns: args.runs,
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    onProgress: (event) => {
+      if (event.kind === "graph") io.stdout(`  order: ${event.graph.order.join(" -> ")} (entry ${event.graph.entry ?? "none"})\n`);
+      else if (event.kind === "node") io.stdout(`  [${event.file}] ${event.state.toUpperCase()}: ${event.detail}\n`);
+      else io.stdout(`  ${event.message}\n`);
+    },
+  });
+  if (!result.success) {
+    io.stderr(`\nNOT resurrected: ${result.error ?? "parity could not be proven"}. No files written.\n`);
+    const cx = result.parity?.functions.find((f) => !f.passed)?.counterexample;
+    if (cx !== undefined) io.stderr(`  counterexample inputs: ${describeValue(cx.inputs)}\n  reason:  ${cx.reason}\n`);
+    return 1;
+  }
+  const bundle = buildGraphBundle(result, { runs: args.runs });
+  const outDir = nodePath.resolve(io.cwd, args.out);
+  try {
+    for (const [file, content] of Object.entries(bundle.files)) {
+      const target = nodePath.join(outDir, file);
+      fs.mkdirSync(nodePath.dirname(target), { recursive: true });
+      fs.writeFileSync(target, content, "utf8");
+    }
+  } catch (err: unknown) {
+    io.stderr(`error: cannot write to ${args.out}: ${err instanceof Error ? err.message : String(err)}\n`);
+    return 1;
+  }
+  io.stdout(`\nWhole-graph parity proven: ${result.parity?.totalRuns ?? 0} exact Object.is runs end to end, ${result.files.length} files resurrected leaves first.\n`);
+  io.stdout(`Wrote ${Object.keys(bundle.files).length} files to ${outDir}:\n`);
+  for (const [file, content] of Object.entries(bundle.files)) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
+  return 0;
+}
+
+/** A flat `--schema` applies to every export of the entry module. */
+function expandFlatSchema(schemas: Record<string, InputSchema>, files: Record<string, string>, entry: string | undefined): Record<string, InputSchema> {
+  const flat = schemas["*"];
+  if (flat === undefined) return schemas;
+  const entryFile = entry ?? Object.keys(files).at(-1) ?? "";
+  const out: Record<string, InputSchema> = { default: flat };
+  for (const fn of scanLegacyAst(files[entryFile] ?? "").functions) out[fn.exportedAs ?? fn.name] = flat;
+  return out;
 }
 function defaultIo(): CliIo {
   return {

@@ -1,7 +1,11 @@
 import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
-import { bundleToZipEntries, generateResurrectionBundle } from "../exporter/bundle.js";
+import { bundleToZipEntries, generateResurrectionBundle, sanitizeIdentifier } from "../exporter/bundle.js";
 import { createZip } from "../exporter/zip.js";
 import { RedTeamBodySchema, runRedTeam } from "../sandbox/redteam.js";
+import { randomUUID } from "node:crypto";
+import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from "../crew/graph-resurrector.js";
+import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/graph-bundle.js";
+import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
 import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
@@ -197,6 +201,56 @@ export interface WebServerOptions {
   npmFetch?: FetchLike;
 }
 const NpmImportBody = z.object({ packageSpec: z.string().max(300) }).strict();
+const KindSchema = z.enum(["integer", "number", "string", "boolean", "json"]);
+const GraphSchemaArg = z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/), KindSchema);
+export const GraphBodySchema = z
+  .object({
+    name: z.string().max(80).optional(),
+    files: z.record(z.string().min(1).max(200), z.string().max(64_000)),
+    entry: z.string().max(200).optional(),
+    /** Schemas for the entry module's exports: { exportName: { param: kind } } ("default" for module.exports = fn). */
+    schemas: z.record(z.string().max(100), GraphSchemaArg).optional(),
+    fileRuns: z.number().int().min(5).max(200).optional(),
+    graphRuns: z.number().int().min(5).max(MAX_LIVE_FUZZ_RUNS).optional(),
+    seed: z.number().int().optional(),
+  })
+  .strict();
+const GraphZipBody = z.object({ bundleId: z.string().uuid() }).strict();
+/** Bundles of recent successful graph resurrections, so the zip button never has to trust client-sent code. */
+const GRAPH_BUNDLE_CACHE = 16;
+/** What the browser needs to render the result (no bundle file bodies). */
+function summarizeGraph(result: GraphResurrectionResult, bundleId: string | undefined): Record<string, unknown> {
+  return {
+    success: result.success,
+    name: result.name,
+    ...(result.error !== undefined ? { error: result.error } : {}),
+    ...(bundleId !== undefined ? { bundleId } : {}),
+    durationMs: result.durationMs,
+    order: result.graph.order,
+    entry: result.graph.entry,
+    edges: result.graph.edges,
+    files: result.files.map((f) => ({
+      path: f.path,
+      esmPath: f.esmPath,
+      esmCode: f.esmCode,
+      exports: f.esmExports,
+      attempts: f.attempts,
+      healed: f.healed,
+      rolledBack: f.rolledBack,
+      fuzzRuns: f.fuzzRuns,
+      success: f.success,
+    })),
+    parity:
+      result.parity === undefined
+        ? undefined
+        : {
+            passed: result.parity.passed,
+            exact: result.parity.exact,
+            totalRuns: result.parity.totalRuns,
+            functions: result.parity.functions.map((fn) => ({ exportedAs: fn.exportedAs, schema: fn.schema, passed: fn.passed, totalRuns: fn.totalRuns, ...(fn.counterexample !== undefined ? { reason: fn.counterexample.reason } : {}) })),
+          },
+  };
+}
 export function createWebServer(options: WebServerOptions = {}): http.Server {
   // Two warm sandbox workers for interactive probing. Created on first use, closed with the server.
   let probeLegacy: PooledProbeRunner | undefined;
@@ -204,6 +258,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   // Dedicated worker for the Red-Team card, so attacks never touch probe or resurrection pools.
   let redTeamPool: PooledProbeRunner | undefined;
   let redTeamBusy = false;
+  const graphBundles = new Map<string, GraphBundle>();
   const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
     probeLegacy ??= new PooledProbeRunner();
     probeModern ??= new PooledProbeRunner();
@@ -496,6 +551,97 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           fail(500, { error: "Unexpected importer failure", code: "UPSTREAM_ERROR" });
         }
       }
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/resurrect-graph") {
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        res.writeHead(err instanceof PayloadTooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" }));
+        return;
+      }
+      const checked = GraphBodySchema.safeParse(rawBody);
+      let problem: string | undefined = checked.success ? undefined : checked.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+      if (checked.success) {
+        try {
+          validateVirtualFiles(checked.data.files, checked.data.entry);
+          if (Object.keys(checked.data.files).length === 0) problem = "files must contain at least one .js or .cjs file";
+        } catch (err: unknown) {
+          problem = err instanceof Error ? err.message : String(err);
+        }
+      }
+      if (!checked.success || problem !== undefined) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Invalid project: ${problem ?? "malformed body"}` }));
+        return;
+      }
+      const body = checked.data;
+      res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" });
+      const send = (payload: unknown): void => {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      };
+      try {
+        const result = await resurrectGraph(body.files, {
+          name: sanitizeIdentifier(body.name ?? "legacy-project"),
+          ...(body.entry !== undefined ? { entry: body.entry } : {}),
+          ...(body.schemas !== undefined ? { schemas: body.schemas } : {}),
+          fileRuns: body.fileRuns ?? 60,
+          graphRuns: body.graphRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
+          ...(body.seed !== undefined ? { seed: body.seed } : {}),
+          onProgress: (event: GraphProgress) => {
+            if (event.kind === "graph") {
+              const g = event.graph;
+              send({ kind: "graph", graph: { files: g.files, edges: g.edges, order: g.order, entry: g.entry, depth: g.depth, esmPaths: g.esmPaths, cycles: g.cycles, problems: g.problems } });
+            } else {
+              send(event);
+            }
+          },
+        });
+        let bundleId: string | undefined;
+        if (result.success) {
+          bundleId = randomUUID();
+          graphBundles.set(bundleId, buildGraphBundle(result, { runs: body.graphRuns ?? DEFAULT_LIVE_FUZZ_RUNS }));
+          while (graphBundles.size > GRAPH_BUNDLE_CACHE) {
+            const oldest = graphBundles.keys().next().value;
+            if (oldest === undefined) break;
+            graphBundles.delete(oldest);
+          }
+        }
+        send({ kind: "result", result: summarizeGraph(result, bundleId) });
+      } catch (err: unknown) {
+        send({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+      } finally {
+        res.end();
+      }
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/export-graph-zip") {
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON body" }));
+        return;
+      }
+      const checked = GraphZipBody.safeParse(rawBody);
+      const bundle = checked.success ? graphBundles.get(checked.data.bundleId) : undefined;
+      if (bundle === undefined) {
+        res.writeHead(checked.success ? 404 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: checked.success ? "Unknown or expired bundleId; resurrect the project again" : "Body must be { bundleId: uuid }" }));
+        return;
+      }
+      const archive = graphBundleZip(bundle);
+      const fileName = `lazarus-${sanitizeIdentifier(bundle.name).replace(/[^\w-]/g, "_")}-project.zip`;
+      res.writeHead(200, {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Length": archive.length,
+        "Cache-Control": "no-store",
+      });
+      res.end(archive);
       return;
     }
     if (req.method === "POST" && routePath === "/api/redteam") {

@@ -292,6 +292,46 @@
 .rt-pill.bad { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.15); }
 .rt-pill.info { color: #ddd6fe; border-color: var(--violet); background: rgba(139, 92, 246, 0.12); }
 .rt-row code { color: #e2e8f0; }
+.graph-panel { margin: 0 24px 24px; border: 1px solid #1e293b; border-radius: 10px; background: #111827; }
+.graph-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid #1e293b; }
+.graph-title { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--violet); font-weight: 700; }
+.graph-title small { color: #94a3b8; letter-spacing: 0; text-transform: none; font-weight: 400; margin-left: 8px; }
+.graph-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.graph-controls select { background: #090d16; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 5px 8px; font-size: 12px; }
+.graph-btn { background: #1e1b4b; color: #e9d5ff; border: 1px solid var(--violet); border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.graph-btn.go { background: var(--emerald); color: #052e22; border-color: var(--emerald); }
+.graph-btn:disabled { opacity: .45; cursor: not-allowed; }
+.graph-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 14px; padding: 12px 14px 14px; }
+@media (max-width: 1000px) { .graph-body { grid-template-columns: 1fr; } }
+.gf-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.gf-tab { background: #090d16; color: #94a3b8; border: 1px solid #334155; border-radius: 5px 5px 0 0; padding: 4px 10px; font-size: 11px; font-family: ui-monospace, Consolas, monospace; cursor: pointer; }
+.gf-tab.active { color: #fff; border-color: var(--violet); background: #1e1b4b; }
+.gf-tab .entry { color: var(--emerald); margin-left: 4px; }
+#graphEditor { width: 100%; min-height: 260px; box-sizing: border-box; background: #090d16; color: #e2e8f0; border: 1px solid #334155; border-radius: 0 6px 6px 6px; padding: 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; resize: vertical; }
+.gf-note { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+.graph-svg-wrap { background: #090d16; border: 1px solid #1e293b; border-radius: 8px; min-height: 200px; overflow: auto; }
+#graphSvg { display: block; width: 100%; }
+#graphSvg .node rect { fill: #111827; stroke: #475569; stroke-width: 1.5; transition: stroke .3s, fill .3s; }
+#graphSvg .node.probing rect { stroke: #8b5cf6; fill: rgba(139, 92, 246, 0.10); }
+#graphSvg .node.healing rect { stroke: #ef4444; fill: rgba(239, 68, 68, 0.12); }
+#graphSvg .node.resurrected rect { stroke: #10b981; fill: rgba(16, 185, 129, 0.12); }
+#graphSvg .node.failed rect { stroke: #ef4444; fill: rgba(239, 68, 68, 0.25); }
+#graphSvg .node { cursor: pointer; }
+#graphSvg .node .file { fill: #e2e8f0; font: 600 12px ui-monospace, Consolas, monospace; }
+#graphSvg .node .state { fill: #94a3b8; font: 700 9px system-ui, sans-serif; letter-spacing: 1px; }
+#graphSvg .node.probing .state { fill: #c4b5fd; }
+#graphSvg .node.healing .state, #graphSvg .node.failed .state { fill: #fca5a5; }
+#graphSvg .node.resurrected .state { fill: #6ee7b7; }
+#graphSvg .edge { stroke: #475569; stroke-width: 1.5; fill: none; transition: stroke .3s; }
+#graphSvg .edge.stitched { stroke: #10b981; stroke-width: 2; }
+.graph-log { margin-top: 8px; max-height: 150px; overflow: auto; font-size: 11px; font-family: ui-monospace, Consolas, monospace; color: #94a3b8; background: #090d16; border: 1px solid #1e293b; border-radius: 6px; padding: 6px 8px; }
+.graph-log div { padding: 1px 0; }
+.graph-log .heal { color: #fca5a5; }
+.graph-log .ok { color: #6ee7b7; }
+.graph-verdict { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; display: none; }
+.graph-verdict.pass { display: block; border: 1px solid var(--emerald); color: #d1fae5; background: rgba(16, 185, 129, 0.10); }
+.graph-verdict.fail { display: block; border: 1px solid var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.10); }
+#graphEsmOut { margin-top: 8px; max-height: 220px; overflow: auto; font-size: 11px; background: #020617; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; display: none; white-space: pre; }
 </style>
 </head>
 <body>
@@ -483,6 +523,32 @@
       </div>
     </section>
   </main>
+<section class="graph-panel" id="graphPanel" aria-labelledby="graphTitle">
+  <div class="graph-head">
+    <div class="graph-title" id="graphTitle">Multi-File Project (Stitch Graph)<small>CommonJS dependency graph &rarr; stitched ES2022 modules, whole-graph exact Object.is parity</small></div>
+    <div class="graph-controls">
+      <select id="graphPreset" aria-label="Multi-file project">
+        <option value="invoice">legacy-invoice-engine (money &rarr; tax &rarr; invoice)</option>
+        <option value="text">legacy-text-pipeline (trim &rarr; pad &rarr; slug)</option>
+      </select>
+      <button type="button" class="graph-btn go" id="graphRunBtn">Resurrect Project Graph</button>
+      <button type="button" class="graph-btn" id="graphZipBtn" disabled>Download Whole-Project .zip</button>
+    </div>
+  </div>
+  <div class="graph-body">
+    <div>
+      <div class="gf-tabs" id="graphTabs" role="tablist"></div>
+      <textarea id="graphEditor" spellcheck="false" aria-label="Legacy file source"></textarea>
+      <div class="gf-note" id="graphNote">Edit any legacy file, then resurrect. Relative require() calls are resolved inside the sandbox's in-memory module map only.</div>
+    </div>
+    <div>
+      <div class="graph-svg-wrap"><svg id="graphSvg" role="img" aria-label="Dependency graph"></svg></div>
+      <div class="graph-verdict" id="graphVerdict" role="status"></div>
+      <div class="graph-log" id="graphLog" aria-live="polite"></div>
+      <pre id="graphEsmOut"></pre>
+    </div>
+  </div>
+</section>
 
   <script>
     const presets = {
@@ -1364,6 +1430,278 @@
     }
   }
   buttons.forEach((b) => b.addEventListener("click", () => attack(b.dataset.attack, b)));
+})();
+</script>
+<script>
+/* Multi-File Project (Stitch Graph): file-tab editor, live SVG dependency graph over SSE, whole-project zip. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const PROJECTS = {
+    invoice: {
+      name: "legacy-invoice-engine",
+      schemas: undefined,
+      files: {
+        "money.cjs": "// Integer-cent money helpers (ES5, 2009-era). Amounts are 32-bit integer cents.\nfunction toCents(amount) {\n  return Math.round(amount * 100) | 0;\n}\n\nfunction addCents(a, b) {\n  var sum = a + b;\n  return sum | 0;\n}\n\nfunction formatCents(cents) {\n  var sign = cents < 0 ? \"-\" : \"\";\n  var abs = Math.abs(cents);\n  var whole = (abs / 100) | 0;\n  var rest = abs % 100;\n  return sign + \"$\" + whole + \".\" + (rest < 10 ? \"0\" + rest : \"\" + rest);\n}\n\nmodule.exports = {\n  toCents: toCents,\n  addCents: addCents,\n  formatCents: formatCents\n};\n",
+        "tax.cjs": "// Sales tax in basis points (8.25%), rounded toward zero.\nvar money = require('./money.cjs');\n\nvar RATE_BPS = 825;\n\nfunction taxFor(cents) {\n  var tax = (cents * RATE_BPS / 10000) | 0;\n  return tax;\n}\n\nexports.taxFor = taxFor;\n\nexports.withTax = function (cents) {\n  return money.addCents(cents, taxFor(cents));\n};\n",
+        "invoice.cjs": "// Invoice totals: quantity x unit price, plus tax, formatted for the PDF renderer.\nvar money = require('./money.cjs');\nvar tax = require('./tax.cjs');\n\nvar MAX_LINES = 50;\n\nfunction invoiceTotal(unitCents, qty) {\n  var subtotal = 0;\n  for (var i = 0; i < qty && i < MAX_LINES; i++) {\n    subtotal = money.addCents(subtotal, unitCents);\n  }\n  var total = tax.withTax(subtotal);\n  return money.formatCents(total);\n}\n\nmodule.exports = { invoiceTotal: invoiceTotal };\n"
+      }
+    },
+    text: {
+      name: "legacy-text-pipeline",
+      schemas: { "default": { title: "string", width: "integer" } },
+      files: {
+        "trim.cjs": "// Space trimming that predates String.prototype.trim support in the target browsers.\nfunction trimSpaces(str) {\n  var s = String(str);\n  var start = 0, end = s.length;\n  while (start < end && s.charAt(start) == \" \") start++;\n  while (end > start && s.charAt(end - 1) == \" \") end--;\n  return s.substring(start, end);\n}\n\nexports.trimSpaces = trimSpaces;\n",
+        "pad.cjs": "// Left padding with dots, capped at 64 columns.\nvar trim = require('./trim.cjs');\n\nexports.padLeft = function (str, len) {\n  var s = trim.trimSpaces(str);\n  var n = len | 0;\n  if (n > 64) n = 64;\n  while (s.length < n) s = \".\" + s;\n  return s;\n};\n",
+        "slug.cjs": "// URL slugs for the CMS: lower-case ASCII letters and digits, single dashes, padded to a width.\nvar trim = require('./trim.cjs');\nvar padLeft = require('./pad.cjs').padLeft;\n\nfunction slugify(title, width) {\n  var t = trim.trimSpaces(title).toLowerCase();\n  var out = \"\";\n  for (var i = 0; i < t.length; i++) {\n    var c = t.charCodeAt(i);\n    if ((c >= 97 && c <= 122) || (c >= 48 && c <= 57)) {\n      out += t.charAt(i);\n    } else if (out.length > 0 && out.charAt(out.length - 1) != \"-\") {\n      out += \"-\";\n    }\n  }\n  return padLeft(out, width);\n}\n\nmodule.exports = slugify;\n"
+      }
+    }
+  };
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const STATE_LABEL = { dead: "DEAD CJS", probing: "PROBING", healing: "SELF-HEALING", resurrected: "RESURRECTED ESM", failed: "FAILED" };
+  const presetSel = $("graphPreset"), tabs = $("graphTabs"), editor = $("graphEditor"), svg = $("graphSvg");
+  const runBtn = $("graphRunBtn"), zipBtn = $("graphZipBtn"), log = $("graphLog"), verdict = $("graphVerdict"), esmOut = $("graphEsmOut");
+  let project = null, files = {}, active = "", entry = "", bundleId = null, states = {}, esmByFile = {}, layout = null, busy = false;
+
+  function logLine(text, cls) { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text; log.append(d); log.scrollTop = log.scrollHeight; }
+  function el(name, attrs, text) { const n = document.createElementNS(SVG_NS, name); Object.keys(attrs || {}).forEach((k) => n.setAttribute(k, attrs[k])); if (text !== undefined) n.textContent = text; return n; }
+
+  // ---- static analysis on the client (only to draw the graph before the run; the server re-analyzes) ----
+  function clientEdges() {
+    const out = [];
+    const names = Object.keys(files);
+    names.forEach((from) => {
+      const re = /require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+      let m;
+      while ((m = re.exec(files[from])) !== null) {
+        const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
+        const parts = (dir ? dir + "/" + m[1] : m[1]).split("/");
+        const stack = [];
+        parts.forEach((p) => { if (p === "..") stack.pop(); else if (p !== "." && p !== "") stack.push(p); });
+        const base = stack.join("/");
+        const hit = ["", ".js", ".cjs"].map((s) => base + s).find((c) => names.includes(c));
+        if (hit && !out.some((e) => e.from === from && e.to === hit)) out.push({ from: from, to: hit });
+      }
+    });
+    return out;
+  }
+  function depthOf(edges) {
+    const depth = {};
+    const deps = (f) => edges.filter((e) => e.from === f).map((e) => e.to);
+    const visit = (f, seen) => {
+      if (depth[f] !== undefined) return depth[f];
+      if (seen.has(f)) return 0;
+      seen.add(f);
+      const d = deps(f).reduce((mx, x) => Math.max(mx, visit(x, seen) + 1), 0);
+      seen.delete(f);
+      depth[f] = d;
+      return d;
+    };
+    Object.keys(files).forEach((f) => visit(f, new Set()));
+    return depth;
+  }
+
+  function drawGraph(edges, depth) {
+    svg.textContent = "";
+    const W = 168, H = 50, GX = 70, GY = 22, PAD = 16;
+    const cols = {};
+    Object.keys(files).sort().forEach((f) => { const d = depth[f] || 0; (cols[d] = cols[d] || []).push(f); });
+    const colKeys = Object.keys(cols).map(Number).sort((a, b) => a - b);
+    const pos = {};
+    const tallest = Math.max.apply(null, colKeys.map((c) => cols[c].length));
+    colKeys.forEach((c, ci) => {
+      const list = cols[c];
+      const offset = (tallest - list.length) * (H + GY) / 2;
+      list.forEach((f, i) => { pos[f] = { x: PAD + ci * (W + GX), y: PAD + offset + i * (H + GY) }; });
+    });
+    const width = PAD * 2 + colKeys.length * W + Math.max(0, colKeys.length - 1) * GX;
+    const height = PAD * 2 + tallest * H + Math.max(0, tallest - 1) * GY;
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("height", String(Math.max(160, height)));
+    const defs = el("defs");
+    const marker = el("marker", { id: "lzArrow", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
+    marker.append(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#94a3b8" }));
+    const markerOk = el("marker", { id: "lzArrowOk", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
+    markerOk.append(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#10b981" }));
+    defs.append(marker, markerOk);
+    svg.append(defs);
+    const edgeEls = [];
+    edges.forEach((e) => {
+      const a = pos[e.from], b = pos[e.to];
+      if (!a || !b) return;
+      // Importer (right) -> dependency (left): arrows show which module each import pulls in.
+      const x1 = a.x, y1 = a.y + H / 2, x2 = b.x + W, y2 = b.y + H / 2;
+      const mid = (x1 + x2) / 2;
+      const path = el("path", { d: "M " + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + (x2 + 2) + " " + y2, class: "edge", "marker-end": "url(#lzArrow)" });
+      const title = el("title", {}, e.from + " imports " + e.to);
+      path.append(title);
+      svg.append(path);
+      edgeEls.push({ edge: e, path: path });
+    });
+    const nodeEls = {};
+    Object.keys(pos).forEach((f) => {
+      const g = el("g", { class: "node dead", transform: "translate(" + pos[f].x + "," + pos[f].y + ")", tabindex: "0" });
+      g.append(el("rect", { width: String(W), height: String(H), rx: "8" }));
+      g.append(el("text", { class: "file", x: "12", y: "21" }, f + (f === entry ? "  \u2605" : "")));
+      const state = el("text", { class: "state", x: "12", y: "38" }, STATE_LABEL.dead);
+      g.append(state);
+      const title = el("title", {}, f);
+      g.append(title);
+      g.addEventListener("click", () => showFile(f));
+      g.addEventListener("keydown", (ev) => { if (ev.key === "Enter") showFile(f); });
+      svg.append(g);
+      nodeEls[f] = { g: g, state: state, title: title };
+    });
+    layout = { nodeEls: nodeEls, edgeEls: edgeEls };
+    Object.keys(states).forEach((f) => setState(f, states[f], ""));
+  }
+
+  function setState(file, state, detail) {
+    states[file] = state;
+    if (!layout || !layout.nodeEls[file]) return;
+    const n = layout.nodeEls[file];
+    n.g.setAttribute("class", "node " + state);
+    n.state.textContent = STATE_LABEL[state] || state.toUpperCase();
+    if (detail) n.title.textContent = file + ": " + detail;
+    layout.edgeEls.forEach((x) => {
+      const stitched = states[x.edge.from] === "resurrected" && states[x.edge.to] === "resurrected";
+      x.path.setAttribute("class", "edge" + (stitched ? " stitched" : ""));
+      x.path.setAttribute("marker-end", stitched ? "url(#lzArrowOk)" : "url(#lzArrow)");
+    });
+  }
+
+  function renderTabs() {
+    tabs.textContent = "";
+    Object.keys(files).forEach((f) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "gf-tab" + (f === active ? " active" : "");
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", f === active ? "true" : "false");
+      b.textContent = f;
+      if (f === entry) { const s = document.createElement("span"); s.className = "entry"; s.textContent = "\u2605 entry"; b.append(s); }
+      b.addEventListener("click", () => showFile(f));
+      tabs.append(b);
+    });
+  }
+  function showFile(f) {
+    active = f;
+    editor.value = files[f];
+    renderTabs();
+    if (esmByFile[f]) { esmOut.style.display = "block"; esmOut.textContent = "// " + f + " -> " + esmByFile[f].esmPath + "\n" + esmByFile[f].esmCode; }
+    else esmOut.style.display = "none";
+  }
+  function guessEntry(edges) {
+    const required = new Set(edges.map((e) => e.to));
+    const roots = Object.keys(files).filter((f) => !required.has(f)).sort();
+    return roots[roots.length - 1] || Object.keys(files)[0] || "";
+  }
+  function redraw() {
+    const edges = clientEdges();
+    entry = guessEntry(edges);
+    drawGraph(edges, depthOf(edges));
+    renderTabs();
+  }
+  function loadProject(key) {
+    project = PROJECTS[key];
+    files = Object.assign({}, project.files);
+    states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true;
+    log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = "";
+    redraw();
+    showFile(Object.keys(files)[0]);
+  }
+  editor.addEventListener("input", () => {
+    files[active] = editor.value;
+    bundleId = null; zipBtn.disabled = true;
+    delete esmByFile[active];
+    states = {};
+    redraw();
+  });
+  presetSel.addEventListener("change", () => loadProject(presetSel.value));
+
+  async function run() {
+    if (busy) return;
+    busy = true; runBtn.disabled = true; zipBtn.disabled = true; bundleId = null;
+    log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmByFile = {}; esmOut.style.display = "none";
+    states = {};
+    Object.keys(files).forEach((f) => { states[f] = "dead"; });
+    redraw();
+    logLine("Streaming /api/resurrect-graph ...");
+    try {
+      const body = { name: project.name, files: files, seed: 1337 };
+      if (project.schemas) body.schemas = project.schemas;
+      const res = await fetch("/api/resurrect-graph", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok || !res.body) {
+        let msg = "HTTP " + res.status;
+        try { msg = (await res.json()).error || msg; } catch (e) { /* keep status */ }
+        verdict.className = "graph-verdict fail"; verdict.textContent = msg;
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() || "";
+        frames.forEach((frame) => {
+          if (!frame.startsWith("data: ")) return;
+          const data = JSON.parse(frame.slice(6));
+          if (data.kind === "graph") {
+            entry = data.graph.entry || entry;
+            drawGraph(data.graph.edges, data.graph.depth);
+            renderTabs();
+            logLine("Topological resurrection order: " + data.graph.order.join(" \u2192 "));
+            (data.graph.problems || []).forEach((p) => logLine("\u2717 " + p.message, "heal"));
+          } else if (data.kind === "node") {
+            setState(data.file, data.state, data.detail);
+            logLine("[" + data.file + "] " + (STATE_LABEL[data.state] || data.state) + ": " + data.detail, data.state === "healing" || data.state === "failed" ? "heal" : data.state === "resurrected" ? "ok" : "");
+          } else if (data.kind === "log") {
+            logLine(data.message, /parity proven/i.test(data.message) ? "ok" : "");
+          } else if (data.kind === "result") {
+            const r = data.result;
+            (r.files || []).forEach((f) => { esmByFile[f.path] = f; });
+            if (r.success) {
+              bundleId = r.bundleId; zipBtn.disabled = !bundleId;
+              verdict.className = "graph-verdict pass";
+              verdict.textContent = "WHOLE-GRAPH PARITY PROVEN \u2713 " + r.parity.totalRuns + " exact Object.is runs end to end (" + r.order.length + " files, " + r.edges.length + " stitched imports, " + r.durationMs + " ms)";
+            } else {
+              verdict.className = "graph-verdict fail";
+              verdict.textContent = "NOT RESURRECTED \u2717 " + (r.error || "parity could not be proven");
+            }
+            showFile(active);
+          } else if (data.kind === "error") {
+            verdict.className = "graph-verdict fail"; verdict.textContent = data.message;
+          }
+        });
+      }
+    } catch (err) {
+      verdict.className = "graph-verdict fail"; verdict.textContent = "Graph resurrection failed: " + (err && err.message ? err.message : err);
+    } finally {
+      busy = false; runBtn.disabled = false;
+    }
+  }
+  runBtn.addEventListener("click", run);
+  zipBtn.addEventListener("click", async () => {
+    if (!bundleId) return;
+    zipBtn.disabled = true;
+    try {
+      const res = await fetch("/api/export-graph-zip", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bundleId: bundleId }) });
+      if (!res.ok) { let m = "HTTP " + res.status; try { m = (await res.json()).error || m; } catch (e) { /* keep */ } logLine("\u2717 zip export: " + m, "heal"); return; }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "lazarus-" + project.name + "-project.zip";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      logLine("Downloaded " + a.download + " (" + blob.size + " bytes)", "ok");
+    } finally {
+      zipBtn.disabled = !bundleId;
+    }
+  });
+  loadProject("invoice");
 })();
 </script>
 </body>

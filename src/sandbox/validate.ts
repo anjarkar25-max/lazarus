@@ -2,6 +2,7 @@
 // No external schema library. Pure TypeScript with strict mode.
 
 import { SandboxError } from "./errors.js";
+import { validateVirtualFiles } from "./virtual-fs.js";
 import type {
   JsonRpcId,
   ProbeParams,
@@ -93,6 +94,8 @@ export function isProbeParams(v: unknown): v is ProbeParams {
   if ("encoding" in v && v["encoding"] !== undefined && v["encoding"] !== "json" && v["encoding"] !== "tagged") {
     throw new SandboxError("INVALID_REQUEST", 'params.encoding must be "json" or "tagged" when provided');
   }
+  if ("files" in v && v["files"] !== undefined) validateVirtualFiles(v["files"], v["entry"]);
+  else if ("entry" in v && v["entry"] !== undefined) throw new SandboxError("INVALID_REQUEST", "params.entry requires params.files");
   return true;
 }
 
