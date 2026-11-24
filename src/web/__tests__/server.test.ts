@@ -29,6 +29,47 @@ describe("Lazarus Web Telemetry Server", () => {
     expect(html).toContain("LAZARUS // OPERATING TABLE");
   });
 
+  async function resurrect(body: Record<string, unknown>): Promise<{ result: { success: boolean; attempts: number; fuzzReport: { totalRuns: number } }; ms: number }> {
+    const started = Date.now();
+    const res = await fetch(`${baseUrl}/api/resurrect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    const ms = Date.now() - started;
+    const frames = text.split("\n\n").filter((f) => f.startsWith("data: "));
+    const final = frames
+      .map((f) => JSON.parse(f.slice(6)) as { kind: string; result?: { success: boolean; attempts: number; fuzzReport: { totalRuns: number } } })
+      .find((f) => f.kind === "result");
+    if (final?.result === undefined) throw new Error(`no result frame in: ${text.slice(0, 200)}`);
+    return { result: final.result, ms };
+  }
+
+  it("fuzzes 100 inputs by default and finishes a live resurrection in under 3 seconds", async () => {
+    const { result, ms } = await resurrect({
+      name: "live-depth",
+      legacyCode: "var half = (n / 2) | 0; half;",
+      schema: { n: "integer" },
+      seed: 7,
+    });
+    expect(result.success).toBe(true);
+    expect(result.fuzzReport.totalRuns).toBe(100);
+    expect(ms).toBeLessThan(3000);
+  }, 20_000);
+
+  it("caps requested depth at 150 runs and still stays under 3 seconds", async () => {
+    const { result, ms } = await resurrect({
+      name: "live-depth-cap",
+      legacyCode: "var half = (n / 2) | 0; half;",
+      schema: { n: "integer" },
+      fuzzRuns: 5000,
+      seed: 7,
+    });
+    expect(result.fuzzReport.totalRuns).toBe(150);
+    expect(ms).toBeLessThan(3000);
+  }, 20_000);
+
   it("streams live self-healing SSE events and final parity result on POST /api/resurrect", async () => {
     const res = await fetch(`${baseUrl}/api/resurrect`, {
       method: "POST",

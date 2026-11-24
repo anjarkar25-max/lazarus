@@ -3,6 +3,7 @@ import { DifferentialFuzzer, buildRecordArbitrary } from "../fuzzer/differential
 import type { FuzzTrace } from "../fuzzer/types.js";
 import { PooledProbeRunner } from "../sandbox/pool.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
+import { modernize, summarizeForSpec } from "./ast-modernizer.js";
 import { DeterministicModernizer } from "./synthesizer.js";
 import type {
   AgentRole,
@@ -115,6 +116,9 @@ export class ResurrectionOrchestrator {
       "",
       "## Observed Behavioral Invariants",
       traceLines,
+      "",
+      "## Legacy Idioms (AST analysis)",
+      ...summarizeForSpec(modernize(request.legacyCode)),
       "",
       "## Acceptance Criteria",
       "- Modernized implementation MUST preserve exact `Object.is` output parity across all fuzzed inputs.",

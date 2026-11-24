@@ -6,6 +6,7 @@ import * as http from "node:http";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { ResurrectionOrchestrator } from "../crew/orchestrator.js";
+import { toEsmModule } from "../crew/esm-export.js";
 import { DeterministicModernizer } from "../crew/synthesizer.js";
 import type { CodeSynthesizer, CrewEvent, ResurrectionRequest } from "../crew/types.js";
 import type { InputSchema } from "../fuzzer/types.js";
@@ -13,6 +14,10 @@ import type { InputSchema } from "../fuzzer/types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = nodePath.dirname(__filename);
 const publicDir = nodePath.resolve(__dirname, "../../public");
+
+/** Warm sandbox workers make deep live fuzzing cheap; a full resurrection stays well under 3 s. */
+export const DEFAULT_LIVE_FUZZ_RUNS = 100;
+export const MAX_LIVE_FUZZ_RUNS = 150;
 
 interface ResurrectBody {
   name?: string;
@@ -109,7 +114,10 @@ export function createWebServer(): http.Server {
         name: body.name && body.name.trim() ? body.name.trim() : "legacy-specimen",
         legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
         schema: body.schema,
-        fuzzRuns: typeof body.fuzzRuns === "number" ? Math.min(Math.max(body.fuzzRuns, 5), 100) : 25,
+        fuzzRuns:
+          typeof body.fuzzRuns === "number"
+            ? Math.min(Math.max(body.fuzzRuns, 5), MAX_LIVE_FUZZ_RUNS)
+            : DEFAULT_LIVE_FUZZ_RUNS,
         ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
         maxHealingAttempts: 3,
         onEvent: (event: CrewEvent) => {
@@ -174,14 +182,16 @@ export function createWebServer(): http.Server {
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
+        const esm = toEsmModule(parsed.legacyCode);
         const bundle = generateResurrectionBundle({
           specimenName: parsed.specimenName ?? "resurrectedSpecimen",
           legacyCode: parsed.legacyCode,
           modernCode: parsed.modernCode,
           specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
-          fuzzRuns: parsed.fuzzRuns ?? 50,
+          fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
           healed: Boolean(parsed.healed),
           ...(parsed.schema ? { schema: parsed.schema } : {}),
+          ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
         });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(bundle));

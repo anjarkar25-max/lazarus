@@ -246,6 +246,7 @@
     <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
       <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
       <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
+      <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
       <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
       <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
     </div>
@@ -354,7 +355,7 @@
             name: modName.value,
             legacyCode: legacyCode.value,
             schema: parsedSchema,
-            fuzzRuns: 25,
+            fuzzRuns: 100,
             seed: 1337,
             simulateBuggyFirstDraft: simulateBug.checked
           })
@@ -398,6 +399,7 @@
               specOut.textContent = r.specMarkdown;
               modernOut.textContent = r.modernCode;
               runStats.textContent = `${r.fuzzReport.totalRuns} fuzz runs (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`;
+              window.lastFuzzRuns = r.fuzzReport.totalRuns;
               if (r.success) {
                 parityBadge.className = "badge badge-pass";
                 parityBadge.textContent = "100% PARITY PROVEN";
@@ -455,6 +457,9 @@
     if (!lastBundle) return;
     bundleOut.textContent = getTabContent(lastBundle, activeTab);
     tabButtons.forEach((btn) => {
+      if (btn.dataset.tab === "resurrected.mjs") {
+        btn.style.display = lastBundle.files["resurrected.mjs"] ? "" : "none";
+      }
       const selected = btn.dataset.tab === activeTab;
       btn.style.background = selected ? "#0284c7" : "#0f172a";
       btn.style.color = selected ? "#ffffff" : "#94a3b8";
@@ -580,7 +585,7 @@
         legacyCode: legacyCode.value,
         modernCode: modernText,
         specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
-        fuzzRuns: 50,
+        fuzzRuns: window.lastFuzzRuns || 100,
         healed: Boolean(simulateBug && simulateBug.checked),
         schema: parsedSchema
       })

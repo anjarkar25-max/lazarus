@@ -1,38 +1,40 @@
 ﻿{
-    "name":  "lazarus",
-    "version":  "1.0.0",
-    "description":  "",
-    "main":  "index.js",
-    "scripts":  {
-                    "test":  "vitest --run",
-                    "test:sandbox":  "vitest --run src/sandbox",
-                    "start":  "npx tsx src/web/server.ts",
-                    "mcp":  "npx tsx src/mcp/server.ts",
-                    "typecheck":  "tsc --noEmit"
-                },
-    "repository":  {
-                       "type":  "git",
-                       "url":  "git+https://github.com/anjarkar25-max/lazarus.git"
-                   },
-    "keywords":  [
-
-                 ],
-    "author":  "",
-    "license":  "ISC",
-    "bugs":  {
-                 "url":  "https://github.com/anjarkar25-max/lazarus/issues"
-             },
-    "homepage":  "https://github.com/anjarkar25-max/lazarus#readme",
-    "devDependencies":  {
-                            "@types/node":  "^26.6.6",
-                            "fast-check":  "^4.10.2",
-                            "tsx":  "^4.23.15",
-                            "typescript":  "^7.0.2",
-                            "vitest":  "^5.1.0"
-                        },
-    "type":  "module",
-    "dependencies":  {
-                         "@modelcontextprotocol/sdk":  "^1.32.2",
-                         "zod":  "^4.6.7"
-                     }
+    "name": "lazarus",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "vitest --run",
+        "test:sandbox": "vitest --run src/sandbox",
+        "start": "npx tsx src/web/server.ts",
+        "mcp": "npx tsx src/mcp/server.ts",
+        "typecheck": "tsc --noEmit"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/anjarkar25-max/lazarus.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/anjarkar25-max/lazarus/issues"
+    },
+    "homepage": "https://github.com/anjarkar25-max/lazarus#readme",
+    "devDependencies": {
+        "@types/estree": "^1.0.10",
+        "@types/node": "^26.6.6",
+        "fast-check": "^4.10.2",
+        "tsx": "^4.23.15",
+        "typescript": "^7.0.2",
+        "vitest": "^5.1.0"
+    },
+    "type": "module",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.32.2",
+        "acorn": "^8.19.0",
+        "astring": "^1.9.0",
+        "zod": "^4.6.7"
+    }
 }
+
