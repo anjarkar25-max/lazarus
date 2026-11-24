@@ -332,6 +332,26 @@
 .graph-verdict.pass { display: block; border: 1px solid var(--emerald); color: #d1fae5; background: rgba(16, 185, 129, 0.10); }
 .graph-verdict.fail { display: block; border: 1px solid var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.10); }
 #graphEsmOut { margin-top: 8px; max-height: 220px; overflow: auto; font-size: 11px; background: #020617; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; display: none; white-space: pre; }
+.sig-pill { display: block; margin: 0 0 6px 0; padding: 5px 9px; border-radius: 6px; border: 1px solid var(--violet); background: rgba(139, 92, 246, 0.10); color: #ddd6fe; font: 12px ui-monospace, Consolas, monospace; overflow-x: auto; white-space: nowrap; }
+.sig-pill .k { color: #a78bfa; font: 700 10px system-ui, sans-serif; letter-spacing: 1px; text-transform: uppercase; margin-right: 8px; }
+.sig-pill .notes { color: #94a3b8; margin-left: 8px; }
+.mut-card { margin-top: 10px; padding: 10px; border: 1px solid #1e293b; border-radius: 8px; background: #090d16; }
+.mut-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.mut-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--violet); font-weight: 700; }
+.mut-btn { background: #7f1d1d; border: 1px solid var(--crimson); color: #fee2e2; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 800; letter-spacing: .5px; }
+.mut-btn:disabled { opacity: .5; cursor: wait; }
+.mut-score { display: none; margin-bottom: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 800; letter-spacing: .5px; }
+.mut-score.strong { display: block; color: var(--emerald); border: 1px solid var(--emerald); background: rgba(16, 185, 129, 0.12); }
+.mut-score.weak { display: block; color: #fecaca; border: 1px solid var(--crimson); background: rgba(239, 68, 68, 0.12); }
+.mut-score small { display: block; font-weight: 400; letter-spacing: 0; color: #94a3b8; margin-top: 2px; }
+.mut-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.mut-table th { text-align: left; color: #94a3b8; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .5px; padding: 4px 6px; border-bottom: 1px solid #1e293b; }
+.mut-table td { padding: 5px 6px; border-bottom: 1px solid #111827; vertical-align: top; color: #cbd5e1; }
+.mut-table td code { font-family: ui-monospace, Consolas, monospace; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
+.mut-pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .5px; border: 1px solid; }
+.mut-pill.killed { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.12); }
+.mut-pill.survived { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.15); }
+.mut-note { font-size: 11px; color: #94a3b8; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -427,8 +447,21 @@
         </div>
         <div>
           <label>Necromancer Resurrected ES2022 Code</label>
+          <div class="sig-pill" id="sigPill" hidden></div>
           <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
 <div class="cert" id="certCard" aria-live="polite"></div>
+<div class="mut-card" id="mutCard" hidden>
+  <div class="mut-head">
+    <div class="mut-title">Prove the Proof &mdash; Live Mutation Audit</div>
+    <button type="button" class="mut-btn" id="mutBtn">ATTACK MY OWN PROOF (RUN MUTATION AUDIT)</button>
+  </div>
+  <div class="mut-score" id="mutScore" role="status"></div>
+  <table class="mut-table" id="mutTable" hidden>
+    <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
+    <tbody id="mutRows"></tbody>
+  </table>
+  <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
+</div>
 <div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
     <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -680,6 +713,7 @@
               window.lastModuleFunctions = r.module ? r.module.functions : null;
               window.lastAttempts = r.attempts;
               if (window.LazarusCertificate) window.LazarusCertificate.render(r.certificate);
+              if (window.LazarusMutation) window.LazarusMutation.onResult(r);
               if (window.LazarusUI) window.LazarusUI.onResult(r);
               if (r.success) {
                 parityBadge.className = "badge badge-pass";
@@ -910,7 +944,9 @@
         schema: parsedSchema,
         functions: (window.lastModuleFunctions || []).map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
         provenance: window.lazarusProvenance,
-        attempts: window.lastAttempts
+        attempts: window.lastAttempts,
+        typeSignature: window.lastTypeSignature || undefined,
+        mutationAudit: window.lastMutationScore || undefined
     };
     lastBundleBody = JSON.stringify(payload);
     const res = await fetch("/api/export-bundle", { method: "POST", headers: { "Content-Type": "application/json" }, body: lastBundleBody });
@@ -1342,6 +1378,7 @@
   window.LazarusCertificate = {
     hide() { card.style.display = "none"; card.textContent = ""; },
     render(c) {
+      window.lastCertificate = c || null;
       card.textContent = "";
       if (!c) { card.style.display = "none"; return; }
       const head = document.createElement("div"); head.className = "cert-head";
@@ -1351,7 +1388,7 @@
       titles.append(title, id);
       const copy = document.createElement("button"); copy.type = "button"; copy.className = "cert-copy"; copy.textContent = "COPY CERTIFICATE (MARKDOWN)";
       copy.addEventListener("click", async () => {
-        const ok = await copyText(c.markdown);
+        const ok = await copyText(window.LazarusMutation ? window.LazarusMutation.decorate(c.markdown) : c.markdown);
         copy.textContent = ok ? "COPIED" : "COPY FAILED"; copy.classList.toggle("done", ok);
         setTimeout(() => { copy.textContent = "COPY CERTIFICATE (MARKDOWN)"; copy.classList.remove("done"); }, 1800);
       });
@@ -1368,6 +1405,8 @@
         row("Rolled back", c.rolledBack.length ? c.rolledBack.join("; ") : "none", c.rolledBack.length ? "warn" : ""),
         row("Parity proof", c.parity.mode + ", " + c.parity.runs + " fuzz runs" + (c.parity.boundaryRuns ? " (" + c.parity.boundaryRuns + " boundary)" : ""), "ok"),
         row("Attempts", c.parity.attempts + (c.parity.selfHealed ? " (self-healed)" : " (first draft held)")));
+      const mutScore = window.lastMutationScore;
+      if (mutScore) card.append(row("Proof strength", mutScore.killed + "/" + mutScore.total + " mutants killed (" + Math.round(mutScore.killed / mutScore.total * 100) + "% proof strength)", mutScore.killed === mutScore.total ? "ok" : "warn"));
       card.style.display = "block";
     }
   };
@@ -1702,6 +1741,117 @@
     }
   });
   loadProject("invoice");
+})();
+</script>
+<script>
+/* Prove the Proof (mutation audit) + Inferred TypeScript Signature pill. textContent only, no frameworks. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const card = $("mutCard"), btn = $("mutBtn"), scoreEl = $("mutScore"), table = $("mutTable"), rows = $("mutRows"), note = $("mutNote");
+  const pill = $("sigPill"), runBtn = $("runBtn");
+  const legacyCode = $("legacyCode"), schemaJson = $("schemaJson"), modernOut = $("modernOut");
+  if (!card || !btn) return;
+  let lastResult = null, busy = false;
+
+  function reset() {
+    window.lastMutationScore = null;
+    window.lastTypeSignature = null;
+    card.hidden = true;
+    scoreEl.className = "mut-score"; scoreEl.textContent = "";
+    rows.textContent = ""; table.hidden = true;
+    pill.hidden = true; pill.textContent = "";
+  }
+  function showSignature(r) {
+    pill.textContent = "";
+    if (!r.typeSignatureText) { pill.hidden = true; return; }
+    const k = document.createElement("span"); k.className = "k"; k.textContent = "Inferred TypeScript signature";
+    const sig = document.createElement("span"); sig.textContent = r.typeSignatureText;
+    pill.append(k, sig);
+    const notes = (r.typeSignature && r.typeSignature.returnNotes) || [];
+    if (notes.length) { const n = document.createElement("span"); n.className = "notes"; n.textContent = "// " + notes.join("; "); pill.append(n); }
+    pill.title = "Observed over " + (r.typeSignature ? r.typeSignature.samples : 0) + " exact fuzz runs (fuzzed domain only)";
+    pill.hidden = false;
+  }
+  function flatSchema() {
+    try {
+      const s = JSON.parse(schemaJson.value || "{}");
+      if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+      return Object.values(s).every((v) => typeof v === "string") ? s : null;
+    } catch (e) { return null; }
+  }
+  function renderAudit(a) {
+    rows.textContent = "";
+    const strong = a.totalMutants > 0 && a.killed === a.totalMutants;
+    scoreEl.className = "mut-score " + (strong ? "strong" : "weak");
+    scoreEl.textContent = a.totalMutants === 0
+      ? "NO MUTANTS GENERATED"
+      : a.killed + "/" + a.totalMutants + " MUTANTS KILLED \u00b7 " + a.killRatePercent + "% PROOF STRENGTH";
+    const sub = document.createElement("small");
+    sub.textContent = a.baselineVerified
+      ? a.runsPerMutant + " boundary-biased exact Object.is probes per mutant \u00b7 " + a.elapsedMs + " ms" + (a.survived > 0 ? " \u00b7 a survivor is a bug the fuzzer cannot tell apart (often an equivalent mutant)" : "")
+      : (a.note || "baseline not verified");
+    scoreEl.append(sub);
+    a.mutants.forEach((m) => {
+      const tr = document.createElement("tr");
+      const bug = document.createElement("td");
+      const label = document.createElement("strong"); label.textContent = m.label;
+      const diff = document.createElement("code"); diff.textContent = "\n" + m.diffSnippet;
+      bug.title = m.description;
+      bug.append(label, diff);
+      const status = document.createElement("td");
+      const p = document.createElement("span"); p.className = "mut-pill " + (m.status === "KILLED" ? "killed" : "survived"); p.textContent = m.status;
+      status.append(p);
+      const cx = document.createElement("td");
+      if (m.killingCounterexample) {
+        const c = document.createElement("code"); c.textContent = m.killingCounterexample.display;
+        cx.append(c);
+        cx.title = m.killingCounterexample.reason;
+      } else {
+        cx.textContent = "no input among " + m.runs + " probes told it apart";
+      }
+      tr.append(bug, status, cx);
+      rows.append(tr);
+    });
+    table.hidden = a.mutants.length === 0;
+  }
+  async function audit() {
+    if (busy || !lastResult) return;
+    const schema = flatSchema();
+    const modern = (modernOut.textContent || "").trim();
+    if (!schema || !modern) { scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit needs a single-function resurrection with a flat input schema."; return; }
+    busy = true; btn.disabled = true; btn.textContent = "INJECTING BUGS...";
+    try {
+      const res = await fetch("/api/mutation-audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: modern, schema: schema, seed: 1337 }) });
+      const data = await res.json();
+      if (!res.ok) { scoreEl.className = "mut-score weak"; scoreEl.textContent = (data.code === "BUSY" ? "BUSY: " : "") + (data.error || "HTTP " + res.status); return; }
+      renderAudit(data);
+      window.lastMutationScore = data.baselineVerified && data.totalMutants > 0 ? { killed: data.killed, total: data.totalMutants } : null;
+      if (window.LazarusCertificate && window.lastCertificate) window.LazarusCertificate.render(window.lastCertificate);
+    } catch (err) {
+      scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit failed: " + (err && err.message ? err.message : err);
+    } finally {
+      busy = false; btn.disabled = false; btn.textContent = "ATTACK MY OWN PROOF (RUN MUTATION AUDIT)";
+    }
+  }
+  btn.addEventListener("click", audit);
+  if (runBtn) runBtn.addEventListener("click", reset);
+  window.LazarusMutation = {
+    onResult(r) {
+      lastResult = r;
+      window.lastTypeSignature = r.typeSignature || null;
+      showSignature(r);
+      card.hidden = !(r.success && !r.module);
+      if (note) note.hidden = false;
+    },
+    /** The certificate Markdown with the kill score row, once an audit has run. */
+    decorate(markdown) {
+      const s = window.lastMutationScore;
+      if (!s || markdown.indexOf("| Proof strength (mutation audit) |") >= 0) return markdown;
+      const line = "| Proof strength (mutation audit) | " + s.killed + "/" + s.total + " mutants killed (" + Math.round(s.killed / s.total * 100) + "% proof strength) |";
+      return markdown.replace(/(\| Attempts \|[^\n]*\n)/, "$1" + line + "\n");
+    }
+  };
 })();
 </script>
 </body>

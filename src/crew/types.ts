@@ -29,6 +29,8 @@ export interface ResurrectionRequest {
   maxHealingAttempts?: number;
   /** Compare with exact tagged Object.is semantics (-0, NaN, undefined). Defaults to JSON-level for backward compatibility. */
   exact?: boolean;
+  /** Record every input/legacy-output pair of the passing fuzz run (for the Type Alchemist). */
+  collectObservations?: boolean;
   onEvent?: (event: CrewEvent) => void;
 }
 
@@ -56,4 +58,6 @@ export interface ResurrectionResult {
   attempts: number;
   fuzzReport: FuzzReport;
   events: CrewEvent[];
+  /** Inputs and legacy outcomes of the passing fuzz run (only with collectObservations). */
+  observations?: Array<{ inputs: Record<string, unknown>; ok: boolean; output?: unknown }>;
 }

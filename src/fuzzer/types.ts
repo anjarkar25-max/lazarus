@@ -1,4 +1,4 @@
-﻿export type ParamKind = "integer" | "number" | "string" | "boolean" | "json";
+export type ParamKind = "integer" | "number" | "string" | "boolean" | "json";
 
 export type InputSchema = Record<string, ParamKind>;
 
@@ -47,6 +47,10 @@ export interface FuzzOptions {
    * Defaults to true for exact runs of at least 50 runs. Ignored when the run is not exact.
    */
   boundary?: boolean;
+  /** Set false to stop at the first failing input without shrinking it (faster; used by the mutation auditor). */
+  shrink?: boolean;
+  /** Called for every evaluated input with the wire-form inputs and both outcomes (used by the Type Alchemist). */
+  observe?: (inputs: Record<string, unknown>, legacy: ProbeOutcome, modern: ProbeOutcome) => void;
 }
 
 export interface FuzzReport {

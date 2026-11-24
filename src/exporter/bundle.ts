@@ -1,6 +1,7 @@
 import type * as ESTree from 'estree';
 import { parseProgram, printProgram } from '../crew/ast-modernizer.js';
 import { usesOwnThisOrArguments } from '../crew/ast-scope.js';
+import { renderDeclaration, renderJsDoc, renderType, type TypeSignature } from '../crew/type-alchemist.js';
 
 export interface ResurrectionBundleInput {
   specimenName?: string;
@@ -24,6 +25,8 @@ export interface ResurrectionBundleInput {
   functions?: ModuleFunctionInput[];
   /** Resurrection Certificate block (see certificate.ts), embedded in SPEC.md under the status list. */
   certificateMarkdown?: string;
+  /** Fuzz-observed TypeScript signature (Type Alchemist): typed resurrected.ts plus types.d.ts. */
+  typeSignature?: TypeSignature;
 }
 export interface ModuleFunctionInput {
   /** Export name (the TypeScript function name). */
@@ -47,6 +50,8 @@ export interface ResurrectionBundle {
     'resurrected.mjs'?: string;
     'legacy.cjs'?: string;
     'resurrected.esm.test.ts'?: string;
+    /** Declarations inferred by the Type Alchemist (only when a signature was supplied). */
+    'types.d.ts'?: string;
   };
   prDiff: string;
 }
@@ -231,37 +236,22 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
   const modernBody = formatFunctionBody(modernClean, outerNames);
   const legacyBody = formatFunctionBody(legacyClean, outerNames);
 
-  const moduleFns = input.functions !== undefined && input.functions.length > 0 ? input.functions : undefined;
-  const perFn = (moduleFns ?? []).map((fn) => {
-    const fnParams = resolveParams(fn.schema);
-    const names = new Set(fnParams.map((p) => p.paramName));
-    return {
-      name: sanitizeIdentifier(fn.name),
-      signature: fnParams.map((p) => `: `).join(', '),
-      argNames: fnParams.map((p) => p.paramName).join(', '),
-      arbitraries: fnParams.map((p) => p.fcArbitrary).join(', '),
-      modernBody: formatFunctionBody(fn.modernCode.trim(), names),
-      legacyBody: formatFunctionBody(fn.legacyCode.trim(), names),
-    };
-  });
-  const tsFile = moduleFns !== undefined
-    ? [
-        `/**`,
-        ` * Autonomously resurrected by Lazarus Kiro Crew ( exported functions)`,
-        ` * Parity verified via fast-check differential fuzzing ( runs each)`,
-        ` */`,
-        ...perFn.flatMap((f) => [`export function (): unknown {`, f.modernBody, `}`, ``]),
-      ].join('\n')
-    : [
-    `/**`,
-    ` * Autonomously resurrected by Lazarus Kiro Crew`,
-    ` * Parity verified via fast-check differential fuzzing (${fuzzRuns} runs)`,
-    ` */`,
-    `export function ${fnName}(${signature}): unknown {`,
-    modernBody,
-    `}`,
-    ``,
-  ].join('\n');
+  // Fuzz-observed types (Type Alchemist). Used only when they describe exactly this function's parameters;
+  // without them the output is the untyped (`unknown`) form, byte for byte.
+  const sig = input.typeSignature;
+  const typed = sig !== undefined && sig.params.length === params.length && sig.params.every((p, i) => p.name === params[i]?.paramName) ? sig : undefined;
+  const header = [`Autonomously resurrected by Lazarus Kiro Crew`, `Parity verified via fast-check differential fuzzing (${fuzzRuns} runs)`];
+  const tsFile =
+    typed === undefined
+      ? [`/**`, ` * ${header[0]}`, ` * ${header[1]}`, ` */`, `export function ${fnName}(${signature}): unknown {`, modernBody, `}`, ``].join('\n')
+      : [
+          renderJsDoc(typed, header),
+          `export function ${fnName}(${typed.params.map((p) => `${p.name}: ${renderType(p.type)}`).join(', ')}): ${renderType(typed.returns)} {`,
+          modernBody,
+          `}`,
+          ``,
+        ].join('\n');
+  const declarationFile = typed === undefined ? undefined : renderDeclaration(typed, fnName);
 
   const specFile = [
     `# Kiro Resurrection Specification: ${fnName}`,
@@ -287,28 +277,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
     ``,
   ].join('\n');
 
-  const testFile = moduleFns !== undefined
-    ? [
-        `import { describe, it, expect } from 'vitest';`,
-        `import fc from 'fast-check';`,
-        `import {  } from './resurrected.js';`,
-        ``,
-        ...perFn.flatMap((f) => [`function runLegacy_(): unknown {`, f.legacyBody, `}`, ``]),
-        `describe(' differential parity suite', () => {`,
-        ...perFn.flatMap((f) => [
-          `  it(' maintains Object.is behavioral parity across  inputs', () => {`,
-          `    fc.assert(`,
-          `      fc.property(, () => {`,
-          `        expect(Object.is((), runLegacy_())).toBe(true);`,
-          `      }),`,
-          `      { numRuns:  }`,
-          `    );`,
-          `  });`,
-        ]),
-        `});`,
-        ``,
-      ].join('\n')
-    : [
+  const testFile = [
     `import { describe, it, expect } from 'vitest';`,
     `import fc from 'fast-check';`,
     `import { ${fnName} } from './resurrected.js';`,
@@ -411,6 +380,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
     generatedAt,
     files: {
       'resurrected.ts': tsFile,
+      ...(declarationFile !== undefined ? { 'types.d.ts': declarationFile } : {}),
       'SPEC.md': specFile,
       'resurrected.test.ts': testFile,
       [WORKFLOW_PATH]: renderWorkflow(),

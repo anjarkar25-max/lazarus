@@ -26,6 +26,19 @@ export interface CertificateInput {
   readonly attempts: number;
   /** The legacy module converts to a complete ES module. */
   readonly esmComplete?: boolean;
+  /** Result of a "Prove the Proof" mutation audit, when one was run. */
+  readonly mutation?: MutationScore;
+}
+
+export interface MutationScore {
+  readonly killed: number;
+  readonly total: number;
+}
+
+/** "5/5 mutants killed (100% proof strength)". */
+export function describeMutation(score: MutationScore): string {
+  const percent = score.total === 0 ? 0 : Math.round((score.killed / score.total) * 100);
+  return `${score.killed}/${score.total} mutants killed (${percent}% proof strength)`;
 }
 
 export type DebtGrade = "clean" | "low" | "moderate" | "severe";
@@ -51,6 +64,7 @@ export interface Certificate {
     readonly attempts: number;
     readonly selfHealed: boolean;
   };
+  readonly mutation?: MutationScore;
   readonly markdown: string;
 }
 
@@ -144,6 +158,10 @@ export function generateCertificate(input: CertificateInput): Certificate {
   const provenanceLine = describeProvenance(input.provenance);
   const id = `LZ-${shortDigest.toUpperCase()}`;
   const debtGrade = gradeFor(debtScore);
+  const mutation =
+    input.mutation !== undefined && Number.isInteger(input.mutation.killed) && Number.isInteger(input.mutation.total) && input.mutation.total > 0 && input.mutation.killed >= 0 && input.mutation.killed <= input.mutation.total
+      ? { killed: input.mutation.killed, total: input.mutation.total }
+      : undefined;
 
   const markdown = [
     `## Resurrection Certificate ${id}`,
@@ -158,6 +176,7 @@ export function generateCertificate(input: CertificateInput): Certificate {
     `| Rolled back by Exorcist | ${rolledBack.length > 0 ? rolledBack.join("; ") : "none"} |`,
     `| Parity proof | ${parity.mode}, ${parity.runs} fuzz runs${parity.boundaryRuns > 0 ? ` (${parity.boundaryRuns} boundary)` : ""} |`,
     `| Attempts | ${parity.attempts}${selfHealed ? " (self-healed)" : " (first draft held)"} |`,
+    ...(mutation !== undefined ? [`| Proof strength (mutation audit) | ${describeMutation(mutation)} |`] : []),
     ``,
     `_Verified by differential fuzzing in an isolated sandbox. Parity is proven over the fuzzed input domain, not for all inputs._`,
     ``,
@@ -175,6 +194,7 @@ export function generateCertificate(input: CertificateInput): Certificate {
     modernized,
     rolledBack,
     parity,
+    ...(mutation !== undefined ? { mutation } : {}),
     markdown,
   };
 }

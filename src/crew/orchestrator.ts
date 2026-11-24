@@ -162,7 +162,11 @@ export class ResurrectionOrchestrator {
       });
 
       emit("exorcist", "agent_started", `Fuzzing candidate #${attempt} across ${fuzzRuns} generated inputs`);
+      const observed: NonNullable<ResurrectionResult["observations"]> = [];
       lastReport = await deps.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
+        ...(request.collectObservations === true
+          ? { observe: (inputs: Record<string, unknown>, legacy: { ok: boolean; output?: unknown }) => void observed.push({ inputs, ok: legacy.ok, ...(legacy.ok ? { output: legacy.output } : {}) }) }
+          : {}),
         numRuns: fuzzRuns,
         exact: request.exact ?? false,
         ...(request.seed !== undefined ? { seed: request.seed + attempt } : {}),
@@ -187,6 +191,7 @@ export class ResurrectionOrchestrator {
           attempts: attempt,
           fuzzReport: lastReport,
           events,
+          ...(request.collectObservations === true ? { observations: observed } : {}),
         };
       }
 

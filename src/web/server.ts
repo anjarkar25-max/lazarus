@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/graph-bundle.js";
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
+import { runMutationAudit } from "../crew/mutation-audit.js";
+import { inferSignature, parseSignature, renderSignature } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
 import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
@@ -216,6 +218,15 @@ export const GraphBodySchema = z
   })
   .strict();
 const GraphZipBody = z.object({ bundleId: z.string().uuid() }).strict();
+export const MutationAuditBodySchema = z
+  .object({
+    legacyCode: z.string().min(1).max(MAX_CODE_CHARS),
+    modernCode: z.string().min(1).max(MAX_CODE_CHARS),
+    schema: z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/), KindSchema).refine((s) => Object.keys(s).length <= 16, "at most 16 parameters"),
+    seed: z.number().int().optional(),
+  })
+  .strict();
+const MutationScoreSchema = z.object({ killed: z.number().int().min(0), total: z.number().int().min(1).max(50) }).strict().refine((m) => m.killed <= m.total);
 /** Bundles of recent successful graph resurrections, so the zip button never has to trust client-sent code. */
 const GRAPH_BUNDLE_CACHE = 16;
 /** What the browser needs to render the result (no bundle file bodies). */
@@ -259,6 +270,10 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   let redTeamPool: PooledProbeRunner | undefined;
   let redTeamBusy = false;
   const graphBundles = new Map<string, GraphBundle>();
+  // Dedicated workers for the mutation auditor, one audit at a time (like the red-team card).
+  let auditLegacy: PooledProbeRunner | undefined;
+  let auditModern: PooledProbeRunner | undefined;
+  let auditBusy = false;
   const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
     probeLegacy ??= new PooledProbeRunner();
     probeModern ??= new PooledProbeRunner();
@@ -337,6 +352,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
         maxHealingAttempts: 3,
         exact: true,
+        collectObservations: true,
         onEvent: (event: CrewEvent) => {
           res.write(`data: ${JSON.stringify({ kind: "event", event })}\n\n`);
         },
@@ -400,8 +416,14 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           };
           res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
         } else {
-          const resurrected = await orchestrator.resurrect(request);
-          const result = { ...resurrected, ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete) };
+          const { observations, ...resurrected } = await orchestrator.resurrect(request);
+          // Type Alchemist: types observed during the passing fuzz run (fuzzed domain only).
+          const typeSignature = resurrected.success && observations !== undefined && observations.length > 0 ? inferSignature(observations, request.schema) : undefined;
+          const result = {
+            ...resurrected,
+            ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete),
+            ...(typeSignature !== undefined ? { typeSignature, typeSignatureText: renderSignature(typeSignature, sanitizeIdentifier(request.name)) } : {}),
+          };
           res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
         }
       } catch (err: unknown) {
@@ -455,12 +477,17 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
           provenance?: unknown;
           attempts?: number;
+          typeSignature?: unknown;
+          mutationAudit?: unknown;
         };
         if (!parsed.legacyCode || !parsed.modernCode) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
+        const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
+        const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
+        const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
         const fnEntries = (parsed.functions ?? []).filter(
           (f): f is { name: string; schema?: Record<string, string>; modernCode: string } =>
             typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0
@@ -499,7 +526,9 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
             attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
             esmComplete: esm.complete,
+            ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
           }).markdown,
+          ...(typeSignature !== undefined && moduleFunctions.length === 0 ? { typeSignature } : {}),
         });
         if (routePath === "/api/export-zip") {
           const archive = createZip(bundleToZipEntries(bundle));
@@ -644,6 +673,48 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       res.end(archive);
       return;
     }
+    if (req.method === "POST" && routePath === "/api/mutation-audit") {
+      const reply = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        reply(err instanceof PayloadTooLarge ? 413 : 400, { error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" });
+        return;
+      }
+      const checked = MutationAuditBodySchema.safeParse(rawBody);
+      if (!checked.success) {
+        reply(400, { error: `Invalid audit request: ${checked.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` });
+        return;
+      }
+      if (auditBusy) {
+        reply(429, { error: "A mutation audit is already running", code: "BUSY" });
+        return;
+      }
+      auditBusy = true;
+      try {
+        auditLegacy ??= new PooledProbeRunner();
+        auditModern ??= new PooledProbeRunner();
+        const body = checked.data;
+        const result = await runMutationAudit({
+          // The oracle runs exactly what /api/resurrect ran: the extracted specimen expression.
+          legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
+          modernCode: body.modernCode,
+          schema: body.schema,
+          executors: { legacy: auditLegacy, modern: auditModern },
+          ...(body.seed !== undefined ? { seed: body.seed } : {}),
+        });
+        reply(200, { ...result });
+      } catch (err: unknown) {
+        reply(500, { error: err instanceof Error ? err.message : "Mutation audit failed", code: "INTERNAL_ERROR" });
+      } finally {
+        auditBusy = false;
+      }
+      return;
+    }
     if (req.method === "POST" && routePath === "/api/redteam") {
       const reply = (status: number, payload: Record<string, unknown>): void => {
         res.writeHead(status, { "Content-Type": "application/json" });
@@ -716,7 +787,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close()]);
   });
   return server;
 }

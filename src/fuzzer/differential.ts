@@ -250,6 +250,7 @@ export class DifferentialFuzzer {
         this.runSingle(executors.legacy, legacyCode, wire, exact),
         this.runSingle(executors.modern, modernCode, wire, exact),
       ]);
+      options.observe?.(wire, legacy, modern);
       const { matched, reason } = compareOutcomes(legacy, modern, exact);
       if (traces.length < maxTraces) {
         traces.push({ inputs: wire, legacy, modern, matched });
@@ -285,6 +286,7 @@ export class DifferentialFuzzer {
 
     const details = await fc.check(property, {
       numRuns: numRuns - corpusExecuted,
+      ...(options.shrink === false ? { endOnFailure: true } : {}),
       ...(options.seed !== undefined ? { seed: options.seed } : {}),
     });
 
