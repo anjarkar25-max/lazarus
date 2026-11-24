@@ -132,6 +132,7 @@ export class ResurrectionOrchestrator {
     let modernCode = "";
     let lastReport = await deps.fuzzer.fuzz(request.legacyCode, request.legacyCode, request.schema, {
       numRuns: 1,
+      exact: request.exact ?? false,
       ...(request.seed !== undefined ? { seed: request.seed } : {}),
     });
 
@@ -163,6 +164,7 @@ export class ResurrectionOrchestrator {
       emit("exorcist", "agent_started", `Fuzzing candidate #${attempt} across ${fuzzRuns} generated inputs`);
       lastReport = await deps.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
         numRuns: fuzzRuns,
+        exact: request.exact ?? false,
         ...(request.seed !== undefined ? { seed: request.seed + attempt } : {}),
       });
 

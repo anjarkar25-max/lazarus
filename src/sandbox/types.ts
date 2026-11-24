@@ -76,6 +76,11 @@ export interface ProbeResult {
 /** Anything that can execute a probe: ProbeRunner, VmProbeExecutor, PooledProbeRunner. */
 export interface ProbeExecutor {
   run(params: ProbeParams): Promise<ProbeResult>;
+  /**
+   * True when the executor honours `ProbeParams.encoding === "tagged"` (see tagged.ts), which is what
+   * lets the fuzzer compare `-0`, `NaN`, `Infinity` and `undefined` exactly. Absent means plain JSON only.
+   */
+  readonly supportsTaggedEncoding?: boolean;
 }
 
 export interface PingResult {

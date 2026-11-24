@@ -1,4 +1,4 @@
-﻿import type { CounterexampleReport, FuzzReport, FuzzTrace, InputSchema } from "../fuzzer/types.js";
+import type { CounterexampleReport, FuzzReport, FuzzTrace, InputSchema } from "../fuzzer/types.js";
 
 export type AgentRole = "archaeologist" | "architect" | "necromancer" | "exorcist";
 
@@ -27,6 +27,8 @@ export interface ResurrectionRequest {
   fuzzRuns?: number;
   seed?: number;
   maxHealingAttempts?: number;
+  /** Compare with exact tagged Object.is semantics (-0, NaN, undefined). Defaults to JSON-level for backward compatibility. */
+  exact?: boolean;
   onEvent?: (event: CrewEvent) => void;
 }
 

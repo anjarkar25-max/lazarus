@@ -1,10 +1,10 @@
-﻿// Legacy specimen extractor. Parses ES5 / CommonJS source with acorn (it is only parsed, never run),
+// Legacy specimen extractor. Parses ES5 / CommonJS source with acorn (it is only parsed, never run),
 // finds the functions a module defines or exports, and builds a runnable expression that keeps
 // every parameter and the module's helper statements.
 
 import { parse } from "acorn";
 import type * as ESTree from "estree";
-import { usesOwnThisOrArguments, walk, patternIds, type Node } from "../crew/ast-scope.js";
+import { analyze, usesOwnThisOrArguments, walk, patternIds, type Node } from "../crew/ast-scope.js";
 import type { ParamKind } from "../fuzzer/types.js";
 
 export interface ScannedFunction {
@@ -271,11 +271,11 @@ function paramName(param: ESTree.Pattern): string | null {
   return null;
 }
 
-function inferParamKinds(node: FnNode, names: string[]): Record<string, ParamKind> {
+function inferParamKinds(root: Node, names: string[]): Record<string, ParamKind> {
   const kinds = new Map<string, ParamKind>();
   const lengthHint = new Set<string>();
   const wanted = new Set(names);
-  walk(node.body, (n) => {
+  walk(root, (n) => {
     if (n.type === "MemberExpression" && n.object.type === "Identifier" && wanted.has(n.object.name)) {
       const name = n.object.name;
       if (n.computed) {
@@ -333,6 +333,29 @@ function functionSource(source: string, c: Candidate): string {
   return `${fn.async ? "async " : ""}function${fn.generator ? "*" : ""} ${text}`;
 }
 
+const hasName = (nodes: Node[], name: string): boolean => {
+  let found = false;
+  for (const root of nodes) {
+    walk(root, (n, parent, key) => {
+      if (found) return false;
+      if (n.type === "Identifier" && n.name === name) {
+        const isProp = (parent?.type === "MemberExpression" && key === "property" && !parent.computed) || (parent?.type === "Property" && key === "key" && !parent.computed);
+        if (!isProp) found = true;
+      }
+      return undefined;
+    });
+    if (found) break;
+  }
+  return found;
+};
+/** True when `Name.prototype.x = ...` or `Name.prototype = ...` appears among the statements. */
+const hasPrototypeMembers = (nodes: Node[], name: string): boolean =>
+  nodes.some((s) => {
+    if (s.type !== "ExpressionStatement" || s.expression.type !== "AssignmentExpression") return false;
+    const left = s.expression.left;
+    const target = left.type === "MemberExpression" && left.object.type === "MemberExpression" ? left.object : left;
+    return target.type === "MemberExpression" && !target.computed && target.object.type === "Identifier" && target.object.name === name && target.property.type === "Identifier" && target.property.name === "prototype";
+  });
 function buildRunnable(source: string, c: Candidate, helpers: Node[]): string {
   const args = c.node.params
     .map((p) => {
@@ -343,6 +366,13 @@ function buildRunnable(source: string, c: Candidate, helpers: Node[]): string {
       return `typeof ${name} !== "undefined" ? ${name} : undefined`;
     })
     .join(", ");
+  if (c.ownStatement !== null && c.kind === "declaration" && helpers.length > 0 && hasName(helpers, c.name)) {
+    // Other statements (Name.prototype.x = ..., Name.create = ...) need the binding: keep it, call by name.
+    const construct = hasPrototypeMembers(helpers, c.name) ? "new " : "";
+    const all = [...helpers, c.ownStatement].sort((a, b) => pos(a).start - pos(b).start);
+    const body = all.map((h) => source.slice(pos(h).start, pos(h).end)).join("\n");
+    return `(function () {\n${body}\nreturn ${construct}${c.name}(${args});\n})()`;
+  }
   const call = `(${functionSource(source, c)})(${args})`;
   if (helpers.length === 0) return inlineBody(source, c.node) ?? call;
   const preamble = helpers.map((h) => source.slice(pos(h).start, pos(h).end)).join("\n");
@@ -396,10 +426,27 @@ export function scanLegacyAst(source: string, options: ScanOptions = {}): AstSca
       usesThis: walkUsesThis(c.node),
       usesArguments: usesOwnThisOrArguments(c.node) && !walkUsesThis(c.node),
       line: lineOf(c.node),
-      paramKinds: inferParamKinds(c.node, paramNames),
+      paramKinds: inferParamKinds(c.node.body, paramNames),
     };
   });
 
+  const lastStatement = program.body.at(-1);
+  const isScript =
+    exportStatements.size === 0 &&
+    lastStatement !== undefined &&
+    lastStatement.type === "ExpressionStatement" &&
+    !isDirective(lastStatement) &&
+    (functions.length === 0 || program.body.some((s) => functions.some((f) => hasPrototypeMembers([s], f.name))));
+  if (isScript && options.functionName === undefined) {
+    const free = freeVariables(program);
+    return {
+      functions,
+      primaryExpression: plainPrimary(trimmed),
+      detectedIdioms,
+      parsed: true,
+      suggestedSchema: free.length > 0 ? inferParamKinds(program, free) : {},
+    };
+  }
   const wanted = options.functionName;
   const primary =
     (wanted !== undefined ? functions.find((f) => f.name === wanted || f.exportedAs === wanted) : undefined) ??
@@ -416,6 +463,19 @@ export function scanLegacyAst(source: string, options: ScanOptions = {}): AstSca
   };
 }
 
+/** Read-only identifiers the program never declares and the platform does not provide: the caller must supply them. */
+function freeVariables(program: ESTree.Program): string[] {
+  const analysis = analyze(program);
+  const provided = new Set(["module", "exports", "require", "arguments", "undefined", "NaN", "Infinity", "console"]);
+  const names = new Set<string>();
+  for (const ref of analysis.references) {
+    if (ref.binding !== null || ref.write || !ref.read) continue;
+    const name = ref.id.name;
+    if (provided.has(name) || name in globalThis) continue;
+    names.add(name);
+  }
+  return [...names];
+}
 function walkUsesThis(node: FnNode): boolean {
   let found = false;
   walk(node, (n) => {

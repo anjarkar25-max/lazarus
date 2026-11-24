@@ -1,6 +1,8 @@
-﻿import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
+import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
 import { generateResurrectionBundle } from "../exporter/bundle.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import { readHeaderLevels } from "../crew/ast-modernizer.js";
+import { listModuleFunctions, mergeLevels, resurrectModule } from "../crew/module-resurrection.js";
 import { SandboxError } from "../sandbox/errors.js";
 import { PooledProbeRunner } from "../sandbox/pool.js";
 import { decodeTagged, describeValue } from "../sandbox/tagged.js";
@@ -37,6 +39,8 @@ const ContextKey = z.string().regex(/^(?!__lz)[A-Za-z_$][\w$]*$/, "context keys 
 export const ProbeBodySchema = z
   .object({
     legacyCode: z.string().min(1, "legacyCode is required").max(MAX_CODE_CHARS),
+    /** Probe this exported function of a multi-export module (name or export name). */
+    functionName: z.string().min(1).max(200).optional(),
     modernCode: z.string().min(1, "modernCode is required").max(MAX_CODE_CHARS),
     context: z
       .record(ContextKey, z.unknown())
@@ -144,7 +148,8 @@ function readJsonUnknown(req: http.IncomingMessage): Promise<unknown> {
 interface ResurrectBody {
   name?: string;
   legacyCode?: string;
-  schema?: InputSchema;
+  /** Flat `{ param: kind }`, or nested `{ functionName: { param: kind } }` for multi-export modules. */
+  schema?: InputSchema | Record<string, InputSchema>;
   fuzzRuns?: number;
   seed?: number;
   simulateBuggyFirstDraft?: boolean;
@@ -170,6 +175,16 @@ function readJsonBody(req: http.IncomingMessage): Promise<ResurrectBody> {
   });
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+/** `{ fn: { param: kind } }` rather than `{ param: kind }`. */
+function isNestedSchema(schema: unknown): schema is Record<string, InputSchema> {
+  return isPlainObject(schema) && Object.keys(schema).length > 0 && Object.values(schema).every(isPlainObject);
+}
+function flatSchemaOf(schema: InputSchema | Record<string, InputSchema>, preferred?: string): InputSchema {
+  if (!isNestedSchema(schema)) return schema as InputSchema;
+  return (preferred !== undefined ? schema[preferred] : undefined) ?? Object.values(schema)[0] ?? {};
+}
 export function createWebServer(): http.Server {
   // Two warm sandbox workers for interactive probing. Created on first use, closed with the server.
   let probeLegacy: PooledProbeRunner | undefined;
@@ -244,21 +259,63 @@ export function createWebServer(): http.Server {
       const request: ResurrectionRequest = {
         name: body.name && body.name.trim() ? body.name.trim() : "legacy-specimen",
         legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
-        schema: body.schema,
+        schema: flatSchemaOf(body.schema, scanLegacyAst(body.legacyCode).primary?.exportedAs),
         fuzzRuns:
           typeof body.fuzzRuns === "number"
             ? Math.min(Math.max(body.fuzzRuns, 5), MAX_LIVE_FUZZ_RUNS)
             : DEFAULT_LIVE_FUZZ_RUNS,
         ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
         maxHealingAttempts: 3,
+        exact: true,
         onEvent: (event: CrewEvent) => {
           res.write(`data: ${JSON.stringify({ kind: "event", event })}\n\n`);
         },
       };
 
       try {
-        const result = await orchestrator.resurrect(request);
-        res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
+        const moduleFunctions = listModuleFunctions(body.legacyCode).functions;
+        if (moduleFunctions.length >= 2) {
+          // Multi-export CommonJS: one resurrection per function, merged into one result.
+          const nested = isNestedSchema(body.schema) ? body.schema : undefined;
+          const flat = nested === undefined ? (body.schema as InputSchema) : undefined;
+          const schemas: Record<string, InputSchema> = {};
+          for (const fn of moduleFunctions) {
+            const key = fn.exportedAs ?? fn.name;
+            const own = nested?.[key];
+            const picked = Object.fromEntries(Object.entries(flat ?? {}).filter(([param]) => fn.paramNames.includes(param)));
+            schemas[key] = own ?? (Object.keys(picked).length > 0 ? picked : fn.paramKinds);
+          }
+          const merged = await resurrectModule(body.legacyCode, {
+            name: request.name,
+            orchestrator,
+            ...(request.fuzzRuns !== undefined ? { fuzzRuns: request.fuzzRuns } : {}),
+            ...(request.seed !== undefined ? { seed: request.seed } : {}),
+            maxHealingAttempts: 3,
+            schemas,
+            onEvent: request.onEvent ?? (() => undefined),
+          });
+          const { functions, skipped, esm, levels: _levels, ...aggregate } = merged;
+          const result = {
+            ...aggregate,
+            module: {
+              functions: functions.map((f) => ({
+                name: f.name,
+                exportedAs: f.exportedAs,
+                schema: f.schema,
+                success: f.success,
+                attempts: f.attempts,
+                modernCode: f.modernCode,
+                events: f.events,
+              })),
+              skipped,
+              esm: { complete: esm.complete, exports: esm.exports, notes: esm.notes },
+            },
+          };
+          res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
+        } else {
+          const result = await orchestrator.resurrect(request);
+          res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.write(`data: ${JSON.stringify({ kind: "error", message })}\n\n`);
@@ -306,16 +363,33 @@ export function createWebServer(): http.Server {
           specMarkdown?: string;
           fuzzRuns?: number;
           healed?: boolean;
-          schema?: Record<string, string>;
+          schema?: Record<string, string> | Record<string, Record<string, string>>;
+          functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
         };
         if (!parsed.legacyCode || !parsed.modernCode) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const esm = toEsmModule(parsed.legacyCode);
+        const fnEntries = (parsed.functions ?? []).filter(
+          (f): f is { name: string; schema?: Record<string, string>; modernCode: string } =>
+            typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0
+        );
+        // Rollbacks recorded in the candidates' `// ast-rules:` headers must reach the ESM file too.
+        const headerLevels = fnEntries.length > 0 ? mergeLevels(fnEntries.map((f) => f.modernCode)) : readHeaderLevels(parsed.modernCode);
+        const esm = toEsmModule(parsed.legacyCode, headerLevels === undefined ? {} : { levels: headerLevels });
         const scan = scanLegacyAst(parsed.legacyCode);
-        const schema = parsed.schema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
+        const requestedSchema = parsed.schema === undefined ? undefined : flatSchemaOf(parsed.schema as InputSchema, scan.primary?.exportedAs);
+        const schema = requestedSchema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
+        const moduleFunctions = fnEntries.map((f) => {
+          const scanned = scanLegacyAst(parsed.legacyCode ?? "", { functionName: f.name });
+          return {
+            name: f.name,
+            schema: f.schema ?? scanned.suggestedSchema,
+            legacyCode: scanned.primaryExpression,
+            modernCode: f.modernCode,
+          };
+        });
         const bundle = generateResurrectionBundle({
           specimenName: parsed.specimenName ?? "resurrectedSpecimen",
           // The parity oracle runs the extracted expression; the diff shows the file as written.
@@ -327,6 +401,7 @@ export function createWebServer(): http.Server {
           healed: Boolean(parsed.healed),
           ...(schema ? { schema } : {}),
           ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
+          ...(moduleFunctions.length > 0 ? { functions: moduleFunctions } : {}),
         });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(bundle));
@@ -359,10 +434,10 @@ export function createWebServer(): http.Server {
         );
         return;
       }
-      const { legacyCode, modernCode, context } = parsed.data;
+      const { legacyCode, modernCode, context, functionName } = parsed.data;
       const pools = probePools();
       // Legacy runs exactly what /api/resurrect ran: the extracted specimen expression.
-      const legacyRunnable = scanLegacyAst(legacyCode).primaryExpression;
+      const legacyRunnable = scanLegacyAst(legacyCode, functionName === undefined ? {} : { functionName }).primaryExpression;
       const [legacy, modern] = await Promise.all([
         probeSide(pools.legacy, legacyRunnable, context),
         probeSide(pools.modern, modernCode, context),

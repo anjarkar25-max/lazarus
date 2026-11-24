@@ -17,6 +17,19 @@ export interface ResurrectionBundleInput {
    * build the parity oracle; this is what the diff, SPEC.md and legacy.cjs show. Defaults to `legacyCode`.
    */
   legacySource?: string;
+  /**
+   * Multi-export CommonJS module: one typed `export function` and one parity test per entry.
+   * When absent, the single-function layout is produced unchanged.
+   */
+  functions?: ModuleFunctionInput[];
+}
+export interface ModuleFunctionInput {
+  /** Export name (the TypeScript function name). */
+  name: string;
+  schema: Record<string, string>;
+  /** Runnable legacy expression for this function. */
+  legacyCode: string;
+  modernCode: string;
 }
 
 export interface ResurrectionBundle {
@@ -163,7 +176,7 @@ function formatFunctionBody(code: string, outerNames: ReadonlySet<string>): stri
   return [...prefix, `  return ${last};`].join('\n');
 }
 
-export function generateResurrectionBundle(input: ResurrectionBundleInput): ResurrectionBundle {
+function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundle {
   const fnName = sanitizeIdentifier(input.specimenName);
   const legacyClean = input.legacyCode.trim();
   const modernClean = input.modernCode.trim();
@@ -180,7 +193,28 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
   const modernBody = formatFunctionBody(modernClean, outerNames);
   const legacyBody = formatFunctionBody(legacyClean, outerNames);
 
-  const tsFile = [
+  const moduleFns = input.functions !== undefined && input.functions.length > 0 ? input.functions : undefined;
+  const perFn = (moduleFns ?? []).map((fn) => {
+    const fnParams = resolveParams(fn.schema);
+    const names = new Set(fnParams.map((p) => p.paramName));
+    return {
+      name: sanitizeIdentifier(fn.name),
+      signature: fnParams.map((p) => `: `).join(', '),
+      argNames: fnParams.map((p) => p.paramName).join(', '),
+      arbitraries: fnParams.map((p) => p.fcArbitrary).join(', '),
+      modernBody: formatFunctionBody(fn.modernCode.trim(), names),
+      legacyBody: formatFunctionBody(fn.legacyCode.trim(), names),
+    };
+  });
+  const tsFile = moduleFns !== undefined
+    ? [
+        `/**`,
+        ` * Autonomously resurrected by Lazarus Kiro Crew ( exported functions)`,
+        ` * Parity verified via fast-check differential fuzzing ( runs each)`,
+        ` */`,
+        ...perFn.flatMap((f) => [`export function (): unknown {`, f.modernBody, `}`, ``]),
+      ].join('\n')
+    : [
     `/**`,
     ` * Autonomously resurrected by Lazarus Kiro Crew`,
     ` * Parity verified via fast-check differential fuzzing (${fuzzRuns} runs)`,
@@ -214,7 +248,28 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
     ``,
   ].join('\n');
 
-  const testFile = [
+  const testFile = moduleFns !== undefined
+    ? [
+        `import { describe, it, expect } from 'vitest';`,
+        `import fc from 'fast-check';`,
+        `import {  } from './resurrected.js';`,
+        ``,
+        ...perFn.flatMap((f) => [`function runLegacy_(): unknown {`, f.legacyBody, `}`, ``]),
+        `describe(' differential parity suite', () => {`,
+        ...perFn.flatMap((f) => [
+          `  it(' maintains Object.is behavioral parity across  inputs', () => {`,
+          `    fc.assert(`,
+          `      fc.property(, () => {`,
+          `        expect(Object.is((), runLegacy_())).toBe(true);`,
+          `      }),`,
+          `      { numRuns:  }`,
+          `    );`,
+          `  });`,
+        ]),
+        `});`,
+        ``,
+      ].join('\n')
+    : [
     `import { describe, it, expect } from 'vitest';`,
     `import fc from 'fast-check';`,
     `import { ${fnName} } from './resurrected.js';`,
@@ -324,4 +379,79 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
     },
     prDiff,
   };
+}
+
+export interface ModuleFunctionInput {
+  /** Export name (becomes the TypeScript function name). */
+  name: string;
+  schema: Record<string, string>;
+  /** Runnable legacy expression for this function. */
+  legacyCode: string;
+  modernCode: string;
+}
+
+/**
+ * Multi-export CommonJS module: one typed `export function` and one parity test per function.
+ * Without `functions` this is exactly the single-function bundle.
+ */
+export function generateResurrectionBundle(input: ResurrectionBundleInput): ResurrectionBundle {
+  const base = generateSingleBundle(input);
+  const fns = input.functions;
+  if (fns === undefined || fns.length === 0) return base;
+  const fuzzRuns = input.fuzzRuns && input.fuzzRuns > 0 ? input.fuzzRuns : 100;
+  const perFn = fns.map((fn) => {
+    const params = resolveParams(fn.schema);
+    const names = new Set(params.map((p) => p.paramName));
+    return {
+      name: sanitizeIdentifier(fn.name),
+      signature: params.map((p) => `${p.paramName}: ${p.tsType}`).join(', '),
+      argNames: params.map((p) => p.paramName).join(', '),
+      arbitraries: params.map((p) => p.fcArbitrary).join(', '),
+      modernBody: formatFunctionBody(fn.modernCode.trim(), names),
+      legacyBody: formatFunctionBody(fn.legacyCode.trim(), names),
+    };
+  });
+  const tsFile = [
+    `/**`,
+    ` * Autonomously resurrected by Lazarus Kiro Crew (${perFn.length} exported functions)`,
+    ` * Parity verified via fast-check differential fuzzing (${fuzzRuns} runs each)`,
+    ` */`,
+    ...perFn.flatMap((f) => [`export function ${f.name}(${f.signature}): unknown {`, f.modernBody, `}`, ``]),
+  ].join('\n');
+  const testFile = [
+    `import { describe, it, expect } from 'vitest';`,
+    `import fc from 'fast-check';`,
+    `import { ${perFn.map((f) => f.name).join(', ')} } from './resurrected.js';`,
+    ``,
+    ...perFn.flatMap((f) => [`function runLegacy_${f.name}(${f.signature}): unknown {`, f.legacyBody, `}`, ``]),
+    `describe('${base.specimenName} differential parity suite', () => {`,
+    ...perFn.flatMap((f) => [
+      `  it('${f.name} maintains Object.is behavioral parity across ${fuzzRuns} inputs', () => {`,
+      `    fc.assert(`,
+      `      fc.property(${f.arbitraries}, (${f.argNames}) => {`,
+      `        expect(Object.is(${f.name}(${f.argNames}), runLegacy_${f.name}(${f.argNames}))).toBe(true);`,
+      `      }),`,
+      `      { numRuns: ${fuzzRuns} }`,
+      `    );`,
+      `  });`,
+    ]),
+    `});`,
+    ``,
+  ].join('\n');
+  const contract = perFn.map((f) => `\`${f.name}(${f.signature})\``).join(', ');
+  const spec = base.files['SPEC.md'].replace(/^- \*\*Input Contract:\*\* .*$/m, () => `- **Input Contract:** ${contract}`);
+  const files: ResurrectionBundle['files'] = { ...base.files, 'resurrected.ts': tsFile, 'resurrected.test.ts': testFile, 'SPEC.md': spec };
+  if (base.files['resurrected.mjs'] !== undefined) return { ...base, files };
+  // Without an ESM file the PR diff compares legacy.cjs with the TypeScript file.
+  const legacyLines = (input.legacySource ?? input.legacyCode).trim().split(/\r?\n/);
+  const tsLines = tsFile.trimEnd().split(/\r?\n/);
+  const prDiff = [
+    `diff --git a/legacy.cjs b/resurrected.ts`,
+    `--- a/legacy.cjs`,
+    `+++ b/resurrected.ts`,
+    `@@ -1,${legacyLines.length} +1,${tsLines.length} @@`,
+    ...legacyLines.map((line) => `-${line}`),
+    ...tsLines.map((line) => `+${line}`),
+  ].join('\n');
+  return { ...base, files, prDiff };
 }

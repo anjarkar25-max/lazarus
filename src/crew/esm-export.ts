@@ -4,7 +4,7 @@
 
 import { builtinModules } from "node:module";
 import type * as ESTree from "estree";
-import { modernize, parseProgram, printProgram } from "./ast-modernizer.js";
+import { modernize, parseProgram, printProgram, type RuleLevels } from "./ast-modernizer.js";
 import { analyze, lineOf, usesOwnThisOrArguments, walk, type Node } from "./ast-scope.js";
 
 export interface EsmModuleResult {
@@ -33,11 +33,18 @@ type Body = ESTree.Program["body"][number];
 
 interface Exported {
   readonly name: string;
-  readonly node: Body;
+  /** The statement that replaces the assignment, or null when an existing declaration is exported in place. */
+  readonly node: Body | null;
+  /** Declaration to wrap in `export` (`exports.add = add` where `add` is a top-level function or class). */
+  readonly wrap?: Node;
+}
+export interface EsmOptions {
+  /** Rule levels for the modernization pass, so rollbacks apply to the ESM output as well. */
+  readonly levels?: RuleLevels;
 }
 
-export function toEsmModule(source: string): EsmModuleResult {
-  const modern = modernize(source);
+export function toEsmModule(source: string, options: EsmOptions = {}): EsmModuleResult {
+  const modern = modernize(source, options.levels === undefined ? {} : { levels: options.levels });
   if (!modern.parsed) {
     return { code: source.trim(), exports: [], complete: false, notes: [`could not parse the source: ${modern.error ?? "syntax error"}`] };
   }
@@ -97,8 +104,32 @@ export function toEsmModule(source: string): EsmModuleResult {
     return null;
   };
 
+  /** `exports.name = local` where `local` is a top-level binding that never changes. */
+  const exportExisting = (name: string, rhs: ESTree.Identifier): Exported | null => {
+    const binding = a.refByNode.get(rhs)?.binding ?? null;
+    // CommonJS exports a snapshot; an ES export is a live binding. They agree only if it never changes.
+    if (binding === null || binding.scope.kind !== "program" || binding.conflict || binding.refs.some((r) => r.write)) return null;
+    const declaration = binding.declNodes[0];
+    if (name === rhs.name && binding.declNodes.length === 1 && declaration !== undefined && (declaration.type === "FunctionDeclaration" || declaration.type === "ClassDeclaration") && ast.body.includes(declaration)) {
+      return { name, node: null, wrap: declaration };
+    }
+    return {
+      name,
+      node: {
+        type: "ExportNamedDeclaration",
+        declaration: null,
+        specifiers: [{ type: "ExportSpecifier", local: ident(rhs.name), exported: ident(name) }],
+        source: null,
+        attributes: [],
+      },
+    };
+  };
   const namedExport = (name: string, rhs: ESTree.Expression): Exported => {
     if (!isExportName(name)) fail(`export name "${name}" is not a valid ES module binding`);
+    if (rhs.type === "Identifier") {
+      const exported = exportExisting(name, rhs);
+      if (exported !== null) return exported;
+    }
     if (hasTopLevelBinding(name)) fail(`"${name}" is already a top-level binding, so exporting it would change the module's scope`);
 
     if (rhs.type === "FunctionExpression") {
@@ -248,6 +279,7 @@ export function toEsmModule(source: string): EsmModuleResult {
 
   try {
     const body: Body[] = [];
+    const wrapped = new Set<Node>();
     const exportNames: string[] = [];
     let assignedModuleExports = false;
     let assignedNamed = false;
@@ -267,7 +299,8 @@ export function toEsmModule(source: string): EsmModuleResult {
           for (const item of produced) {
             if (exportNames.includes(item.name)) fail(`"${item.name}" is exported more than once`);
             exportNames.push(item.name);
-            body.push(item.node);
+            if (item.node !== null) body.push(item.node);
+            if (item.wrap !== undefined) wrapped.add(item.wrap);
           }
           continue;
         }
@@ -292,7 +325,15 @@ export function toEsmModule(source: string): EsmModuleResult {
     }
     if (exportNames.length === 0) fail("no CommonJS exports were found");
 
-    const converted: ESTree.Program = { ...ast, sourceType: "module", body };
+    const finalBody = body.map((s): Body => {
+      if (!wrapped.has(s) || (s.type !== "FunctionDeclaration" && s.type !== "ClassDeclaration")) return s;
+      const wrapper: ESTree.ExportNamedDeclaration = { type: "ExportNamedDeclaration", declaration: s, specifiers: [], source: null, attributes: [] };
+      const carrier = wrapper as unknown as Record<string, unknown>;
+      const original = s as unknown as Record<string, unknown>;
+      for (const k of ["start", "end", "loc"]) if (k in original) carrier[k] = original[k];
+      return wrapper;
+    });
+    const converted: ESTree.Program = { ...ast, sourceType: "module", body: finalBody };
     return { code: printProgram(converted, comments), exports: exportNames, complete: true, notes };
   } catch (error: unknown) {
     if (error instanceof Incomplete) {

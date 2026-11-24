@@ -41,8 +41,15 @@ const BOOTSTRAP = `(function () {
   var error = sink(err);
   var TAG = "$lazarus";
   function mark(kind) { var o = {}; o[TAG] = kind; return o; }
-  function revive(k, v) {
-    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+  // Own recursive decoder (not a JSON.parse reviver): a reviver returning undefined deletes the property,
+  // which would turn a tagged undefined input into a missing global (ReferenceError) instead of a value.
+  function decodeDeep(v) {
+    if (v !== null && typeof v === "object") {
+      if (Array.isArray(v)) {
+        var arr = [];
+        for (var a = 0; a < v.length; a++) arr.push(decodeDeep(v[a]));
+        return arr;
+      }
       var ks = Object.keys(v);
       if (ks.length === 1 && ks[0] === TAG) {
         switch (v[TAG]) {
@@ -53,6 +60,11 @@ const BOOTSTRAP = `(function () {
           case "undefined": return undefined;
         }
       }
+      var out = {};
+      for (var b = 0; b < ks.length; b++) {
+        Object.defineProperty(out, ks[b], { value: decodeDeep(v[ks[b]]), writable: true, configurable: true, enumerable: true });
+      }
+      return out;
     }
     return v;
   }
@@ -68,7 +80,7 @@ const BOOTSTRAP = `(function () {
     return v;
   }
   var tagged = g.__lzTagged === true;
-  var input = tagged ? parse(g.__lzInput, revive) : parse(g.__lzInput);
+  var input = tagged ? decodeDeep(parse(g.__lzInput)) : parse(g.__lzInput);
   delete g.__lzInput;
   delete g.__lzTagged;
   Object.defineProperty(g, "console", { value: { log: log, info: log, debug: log, warn: error, error: error }, writable: true, configurable: true, enumerable: false });
@@ -101,6 +113,8 @@ function ownDataString(value: unknown, key: string): string | undefined {
 }
 
 export class VmProbeExecutor implements ProbeExecutor {
+  readonly supportsTaggedEncoding = true;
+
   async run(params: ProbeParams): Promise<ProbeResult> {
     const startedAt = Date.now();
     const heapBefore = process.memoryUsage().heapUsed;

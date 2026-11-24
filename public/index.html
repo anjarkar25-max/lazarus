@@ -244,7 +244,9 @@
       .crew-bar { grid-template-columns: repeat(2, 1fr); }
       header { flex-direction: column; align-items: flex-start; gap: 10px; }
     }
-  </style>
+  #probeFn { background: #111827; color: #8b5cf6; border: 1px solid #8b5cf6; border-radius: 4px; padding: 4px 8px; margin-bottom: 8px; font-family: inherit; }
+#probeFn:focus { outline: 1px solid #10b981; }
+</style>
 </head>
 <body>
   <header>
@@ -531,6 +533,7 @@
               modernOut.textContent = r.modernCode;
               runStats.textContent = `${r.fuzzReport.totalRuns} fuzz runs (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`;
               window.lastFuzzRuns = r.fuzzReport.totalRuns;
+              window.lastModuleFunctions = r.module ? r.module.functions : null;
               if (window.LazarusUI) window.LazarusUI.onResult(r);
               if (r.success) {
                 parityBadge.className = "badge badge-pass";
@@ -656,6 +659,24 @@
       bug: false
     }
   );
+  extraPresets.push(
+    {
+      value: "legacyCounterClass",
+      label: "Preset 9: ES5 Prototype Class (Counter.prototype -> ES2022 class)",
+      name: "legacyCounterClass",
+      code: "// ES5 constructor + prototype methods + static factory\nfunction Counter(start) {\n  this.n = start;\n}\nCounter.prototype.inc = function (step) {\n  this.n = this.n + step;\n  return this;\n};\nCounter.prototype.value = function () {\n  return this.n;\n};\nCounter.create = function (start) {\n  return new Counter(start);\n};\nvar counter = Counter.create(start);\ncounter.inc(step).inc(step);\ncounter.value();",
+      schema: '{"start": "integer", "step": "integer"}',
+      bug: false
+    },
+    {
+      value: "cjsMathUtils",
+      label: "Preset 10: Multi-export CommonJS Math Utils (clamp, halve, average)",
+      name: "cjsMathUtils",
+      code: "// Three exports, resurrected one by one and bundled as named ES exports\nexports.clamp = function (n, lo, hi) {\n  return Math.min(hi, Math.max(lo, n));\n};\nexports.halve = function (n) {\n  return (n / 2) | 0;\n};\nexports.average = function (a, b) {\n  return (a + b) / 2;\n};",
+      schema: '{"clamp": {"n": "integer", "lo": "integer", "hi": "integer"}, "halve": {"n": "integer"}, "average": {"a": "integer", "b": "integer"}}',
+      bug: false
+    }
+  );
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -742,7 +763,8 @@
         specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
         fuzzRuns: window.lastFuzzRuns || 100,
         healed: Boolean(simulateBug && simulateBug.checked),
-        schema: parsedSchema
+        schema: parsedSchema,
+        functions: (window.lastModuleFunctions || []).map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode }))
       })
     });
     const bundle = await res.json();
@@ -909,8 +931,44 @@
       return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
     } catch (e) { return null; }
   }
+  // Multi-export modules: one probe form per exported function.
+  function probeFunctions() {
+    const fns = window.lastModuleFunctions;
+    if (fns && fns.length > 1) return fns;
+    const raw = schemaObject();
+    if (raw && Object.keys(raw).length > 1 && Object.values(raw).every((v) => v && typeof v === "object")) {
+      return Object.keys(raw).map((k) => ({ exportedAs: k, schema: raw[k] }));
+    }
+    return null;
+  }
+  function selectedProbeFunction() {
+    const fns = probeFunctions();
+    if (!fns) return null;
+    const picker = $("probeFn");
+    return fns.find((f) => picker && f.exportedAs === picker.value) || fns[0];
+  }
+  function syncProbePicker(fns) {
+    let picker = $("probeFn");
+    if (!fns) { if (picker) picker.remove(); return; }
+    if (!picker) {
+      picker = document.createElement("select");
+      picker.id = "probeFn";
+      picker.title = "Exported function to probe";
+      picker.addEventListener("change", renderProbeInputs);
+      probeInputs.parentNode.insertBefore(picker, probeInputs);
+    }
+    const names = fns.map((f) => f.exportedAs);
+    if (Array.from(picker.options).map((o) => o.value).join("|") !== names.join("|")) {
+      const current = picker.value;
+      picker.textContent = "";
+      names.forEach((n) => { const o = document.createElement("option"); o.value = n; o.textContent = n + "()"; picker.append(o); });
+      if (names.includes(current)) picker.value = current;
+    }
+  }
   function renderProbeInputs() {
-    const schema = schemaObject();
+    syncProbePicker(probeFunctions());
+    const chosen = selectedProbeFunction();
+    const schema = chosen ? chosen.schema : schemaObject();
     if (!schema) { setStatus("Fix the Input Fuzz Schema JSON to edit probe inputs.", true); return; }
     const previous = {};
     probeInputs.querySelectorAll("input").forEach((i) => { previous[i.dataset.key] = i.value; });
@@ -962,6 +1020,7 @@
       setStatus("Run RESURRECT SPECIMEN first, so there is resurrected code to probe.", true);
       return;
     }
+    const chosen = selectedProbeFunction();
     const context = {};
     probeInputs.querySelectorAll("input").forEach((i) => { context[i.dataset.key] = parseInput(i.value); });
     busy = true;
@@ -973,7 +1032,7 @@
       const res = await fetch("/api/probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: modern, context }),
+        body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: chosen && chosen.modernCode ? chosen.modernCode : modern, context, functionName: chosen ? chosen.exportedAs : undefined }),
         signal: controller.signal
       });
       const data = await res.json();
@@ -1006,6 +1065,7 @@
 
   window.LazarusUI = {
     onRunStart() {
+      window.lastModuleFunctions = null;
       matrix.hidden = true;
       probeResults.hidden = true;
       probeVerdict.hidden = true;

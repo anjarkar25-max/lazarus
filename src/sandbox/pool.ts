@@ -82,6 +82,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => Error)
 }
 
 export class PooledProbeRunner implements ProbeExecutor, AsyncDisposable {
+  /** The worker's vm executor understands the tagged encoding. */
+  readonly supportsTaggedEncoding = true;
   private worker: PoolWorker | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private closing: Promise<void> | null = null;

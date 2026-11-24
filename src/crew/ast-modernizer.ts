@@ -9,6 +9,7 @@ import type * as ESTree from "estree";
 import type { CounterexampleReport, ProbeOutcome } from "../fuzzer/types.js";
 import { areOutputsEquivalent } from "../fuzzer/differential.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
+import { decodeTagged } from "../sandbox/tagged.js";
 import {
   analyze,
   inferType,
@@ -29,6 +30,7 @@ import {
 
 export const RULE_LADDERS = {
   "var-scoping": ["let-const", "off"],
+  "prototype-class": ["class", "off"],
   "bitor0-trunc": ["trunc-or0", "off"],
   "function-arrow": ["arrow", "off"],
   "arguments-rest": ["rest", "off"],
@@ -42,6 +44,7 @@ export type RuleLevels = Record<RuleId, number>;
 /** Application order. var-scoping goes first because it relies on original source positions. */
 export const RULE_ORDER: readonly RuleId[] = [
   "var-scoping",
+  "prototype-class",
   "arguments-rest",
   "apply-spread",
   "function-arrow",
@@ -56,12 +59,14 @@ export const RISK_ORDER: readonly RuleId[] = [
   "apply-spread",
   "arguments-rest",
   "function-arrow",
+  "prototype-class",
   "var-scoping",
 ];
 
 export function defaultLevels(): RuleLevels {
   return {
     "var-scoping": 0,
+    "prototype-class": 0,
     "bitor0-trunc": 0,
     "function-arrow": 0,
     "arguments-rest": 0,
@@ -128,7 +133,7 @@ export interface AppliedRewrite {
 }
 
 export interface FlaggedSite {
-  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope";
+  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope" | "prototype-kept";
   readonly line: number;
   readonly text: string;
   readonly reason: string;
@@ -202,7 +207,8 @@ function attachCommentsToStatements(ast: ESTree.Program, comments: Comment[]): v
     const inStatementList =
       ((parent.type === "Program" || parent.type === "BlockStatement" || parent.type === "StaticBlock") && key === "body") ||
       (parent.type === "SwitchCase" && key === "consequent") ||
-      (parent.type === "ObjectExpression" && key === "properties");
+      (parent.type === "ObjectExpression" && key === "properties") ||
+      (parent.type === "ClassBody" && key === "body");
     if (inStatementList) slots.push(n);
   });
   for (const comment of comments) {
@@ -768,6 +774,339 @@ function ruleLooseEquality(a: Analysis, tighten: boolean, applied: AppliedRewrit
 }
 
 // ---------------------------------------------------------------------------
+// Rule: prototype-class  (speculative; ES5 constructor + prototype members -> ES2022 class)
+// ---------------------------------------------------------------------------
+const STATIC_FORBIDDEN = new Set(["name", "length", "prototype", "caller", "arguments"]);
+const STRICT_RESERVED = new Set(["implements", "interface", "let", "package", "private", "protected", "public", "static", "yield"]);
+const PROTOTYPE_CLASS_NOTE =
+  "speculative: class methods are non-enumerable and the body runs in strict mode; verified by Exorcist over the fuzz domain only";
+interface ClassMember {
+  readonly statement: ESTree.ExpressionStatement;
+  readonly isStatic: boolean;
+  readonly key: string;
+  readonly fn: ESTree.FunctionExpression;
+}
+interface ProtoPlan {
+  readonly members: ClassMember[];
+  readonly removed: Set<Node>;
+  readonly protoNodes: Set<Node>;
+  readonly lastIndex: number;
+  readonly literal: ESTree.ObjectExpression | undefined;
+  readonly literalStatement: Node | undefined;
+}
+const isPlainName = (name: string): boolean => /^[A-Za-z_$][\w$]*$/.test(name);
+function memberKey(node: ESTree.MemberExpression): string | undefined {
+  if (!node.computed && node.property.type === "Identifier") return node.property.name;
+  if (node.computed && node.property.type === "Literal" && typeof node.property.value === "string") return node.property.value;
+  return undefined;
+}
+const isNamed = (n: Node | null | undefined, name: string): boolean => n !== null && n !== undefined && n.type === "Identifier" && n.name === name;
+/** `C.prototype` as a bare member expression. */
+function isProtoOf(n: Node, name: string): boolean {
+  return n.type === "MemberExpression" && !n.computed && isNamed(n.object, name) && n.property.type === "Identifier" && n.property.name === "prototype";
+}
+function planPrototypeClass(a: Analysis, decl: ESTree.FunctionDeclaration, index: number): ProtoPlan | string {
+  const name = decl.id?.name ?? "";
+  const body = a.program.body;
+  const members: ClassMember[] = [];
+  const removed = new Set<Node>();
+  const protoNodes = new Set<Node>();
+  const memberStatementIndexes: number[] = [];
+  const seen = new Set<string>();
+  let literal: ESTree.ObjectExpression | undefined;
+  let literalStatement: Node | undefined;
+  let sawProtoMember = false;
+  const add = (statement: ESTree.ExpressionStatement, isStatic: boolean, key: string, fn: ESTree.FunctionExpression): string | undefined => {
+    const id = `${isStatic ? "s" : "p"}:${key}`;
+    if (seen.has(id)) return `duplicate member ${key}`;
+    if (isStatic && STATIC_FORBIDDEN.has(key)) return `static member ${key} collides with a Function property`;
+    if (!isStatic && key === "constructor") return "assigns a custom constructor member";
+    if (fn.id !== null && fn.id !== undefined) return `member ${key} is a named function expression`;
+    seen.add(id);
+    members.push({ statement, isStatic, key, fn });
+    return undefined;
+  };
+  for (let i = index + 1; i < body.length; i++) {
+    const statement = body[i];
+    if (statement === undefined || statement.type !== "ExpressionStatement" || statement.expression.type !== "AssignmentExpression") continue;
+    const { left, right, operator } = statement.expression;
+    if (operator !== "=" || left.type !== "MemberExpression") continue;
+    // C.prototype = { ... }
+    if (isProtoOf(left, name)) {
+      if (sawProtoMember || literal !== undefined) return "assigns C.prototype more than once";
+      if (right.type !== "ObjectExpression") return "assigns C.prototype to something other than an object literal";
+      protoNodes.add(left);
+      memberStatementIndexes.push(i);
+      literal = right;
+      literalStatement = statement;
+      continue;
+    }
+    // C.prototype.key = value
+    if (isProtoOf(left.object, name)) {
+      const key = memberKey(left);
+      if (key === undefined) return "uses a computed prototype member";
+      protoNodes.add(left.object);
+      memberStatementIndexes.push(i);
+      sawProtoMember = true;
+      if (key === "constructor" && isNamed(right, name)) {
+        removed.add(statement);
+        continue;
+      }
+      if (right.type === "ArrowFunctionExpression") return `member ${key} is an arrow function`;
+      if (right.type === "FunctionExpression") {
+        const problem = add(statement, false, key, right);
+        if (problem !== undefined) return problem;
+        removed.add(statement);
+      }
+      continue;
+    }
+    // C.key = value (statics)
+    if (isNamed(left.object, name)) {
+      const key = memberKey(left);
+      if (key === undefined) continue;
+      memberStatementIndexes.push(i);
+      if (right.type === "ArrowFunctionExpression") return `static ${key} is an arrow function`;
+      if (right.type === "FunctionExpression") {
+        const problem = add(statement, true, key, right);
+        if (problem !== undefined) return problem;
+        removed.add(statement);
+      } else if (STATIC_FORBIDDEN.has(key)) {
+        return `static member ${key} collides with a Function property`;
+      }
+    }
+  }
+  if (!sawProtoMember && literal === undefined) return "no prototype members";
+  if (literal !== undefined) {
+    let hasConstructor = false;
+    for (const property of literal.properties) {
+      if (property.type !== "Property" || property.kind !== "init" || property.computed) return "prototype literal has spread, accessor or computed members";
+      const key = property.key.type === "Identifier" ? property.key.name : property.key.type === "Literal" && typeof property.key.value === "string" ? property.key.value : undefined;
+      if (key === undefined) return "prototype literal has an unsupported key";
+      if (key === "constructor") {
+        if (!isNamed(property.value, name)) return "prototype literal sets constructor to something else";
+        hasConstructor = true;
+        continue;
+      }
+      if (property.value.type !== "FunctionExpression") return `prototype literal member ${key} is not a function`;
+      const holder = literalStatement as ESTree.ExpressionStatement;
+      const problem = add(holder, false, key, property.value);
+      if (problem !== undefined) return problem;
+    }
+    if (!hasConstructor) return "prototype literal does not restore `constructor`";
+    removed.add(literalStatement as Node);
+  }
+  const lastIndex = memberStatementIndexes.length === 0 ? index : Math.max(...memberStatementIndexes);
+  return { members, removed, protoNodes, lastIndex, literal, literalStatement };
+}
+function referencesName(root: Node, name: string): boolean {
+  let found = false;
+  walk(root, (n, parent, key) => {
+    if (found) return false;
+    if (n.type === "Identifier" && n.name === name) {
+      const isProp = (parent?.type === "MemberExpression" && key === "property" && !parent.computed) || (parent?.type === "Property" && key === "key" && !parent.computed);
+      if (!isProp) found = true;
+    }
+    return undefined;
+  });
+  return found;
+}
+/** Class bodies are strict mode code. Returns a reason when the nodes use something strict mode rejects or changes. */
+function strictHazard(nodes: Node[], a: Analysis): string | undefined {
+  const inside = (id: Node): boolean => {
+    const p = positionOf(id);
+    return nodes.some((n) => {
+      const r = positionOf(n);
+      return p.start >= r.start && p.end <= r.end;
+    });
+  };
+  for (const ref of a.references) {
+    if (!inside(ref.id)) continue;
+    if (ref.binding === null && ref.write) return `assigns undeclared variable ${ref.id.name}`;
+    if (ref.write && (ref.id.name === "eval" || ref.id.name === "arguments")) return `assigns ${ref.id.name}`;
+  }
+  for (const root of nodes) {
+    let reason: string | undefined;
+    walk(root, (n, parent, key) => {
+      if (reason !== undefined) return false;
+      switch (n.type) {
+        case "WithStatement":
+          reason = "uses `with`";
+          break;
+        case "Identifier":
+          if (STRICT_RESERVED.has(n.name) && !((parent?.type === "MemberExpression" && key === "property" && !parent.computed) || (parent?.type === "Property" && key === "key" && !parent.computed))) {
+            reason = `uses ${n.name} as an identifier`;
+          }
+          break;
+        case "FunctionDeclaration":
+        case "FunctionExpression":
+        case "ArrowFunctionExpression": {
+          const names = n.params.flatMap((p) => patternIds(p).map((id) => id.name));
+          if (new Set(names).size !== names.length) reason = "has duplicate parameter names";
+          else if (names.includes("eval") || names.includes("arguments")) reason = "names a parameter eval or arguments";
+          if (n.type === "FunctionDeclaration" && parent !== null) {
+            const grand = a.parents.get(parent) ?? null;
+            const fine = parent.type === "Program" || (parent.type === "BlockStatement" && grand !== null && /Function/.test(grand.type));
+            if (!fine) reason = "declares a function inside a block";
+          }
+          break;
+        }
+        case "MemberExpression":
+          if (isNamed(n.object, "arguments") && memberKey(n) === "callee") reason = "uses arguments.callee";
+          break;
+        case "UnaryExpression":
+          if (n.operator === "delete" && n.argument.type === "Identifier") reason = "deletes an unqualified identifier";
+          break;
+        case "Literal":
+          if (typeof n.value === "number" && /^0\d/.test(n.raw ?? "")) reason = "uses a legacy octal literal";
+          else if (typeof n.value === "string" && /\\(?:[1-7]|0\d)/.test(n.raw ?? "")) reason = "uses a legacy octal escape";
+          break;
+        default:
+      }
+      return undefined;
+    });
+    if (reason !== undefined) return reason;
+  }
+  return undefined;
+}
+function methodNode(member: ClassMember): ESTree.MethodDefinition {
+  const computed = !isPlainName(member.key);
+  const key: ESTree.Expression = computed ? { type: "Literal", value: member.key, raw: JSON.stringify(member.key) } : ident(member.key);
+  const source = member.statement as unknown as Record<string, unknown>;
+  const node: ESTree.MethodDefinition = {
+    type: "MethodDefinition",
+    kind: "method",
+    static: member.isStatic,
+    computed,
+    key,
+    value: { ...member.fn, id: null },
+  };
+  const carrier = node as unknown as Record<string, unknown>;
+  for (const k of ["start", "end", "loc"]) if (k in source) carrier[k] = source[k];
+  return node;
+}
+function convertToClass(a: Analysis, decl: ESTree.FunctionDeclaration, index: number, plan: ProtoPlan, applied: AppliedRewrite[]): void {
+  const name = decl.id?.name ?? "";
+  const before = gen(decl);
+  const ctor: ESTree.MethodDefinition = {
+    type: "MethodDefinition",
+    kind: "constructor",
+    static: false,
+    computed: false,
+    key: ident("constructor"),
+    value: { type: "FunctionExpression", id: null, params: decl.params, body: decl.body, generator: false, async: false },
+  };
+  const carrier = ctor as unknown as Record<string, unknown>;
+  const original = decl as unknown as Record<string, unknown>;
+  for (const k of ["start", "end", "loc"]) if (k in original) carrier[k] = original[k];
+  const cls: ESTree.ClassDeclaration = {
+    type: "ClassDeclaration",
+    id: ident(name),
+    superClass: null,
+    body: { type: "ClassBody", body: [ctor, ...plan.members.map(methodNode)] },
+  };
+  const clsCarrier = cls as unknown as Record<string, unknown>;
+  for (const k of ["start", "end", "loc"]) if (k in original) clsCarrier[k] = original[k];
+  // Static members stay evaluated in their original order relative to each other because only functions move.
+  a.program.body = a.program.body.flatMap((s, i) => (i === index ? [cls] : plan.removed.has(s) ? [] : [s]));
+  applied.push({
+    rule: "prototype-class",
+    variant: "class",
+    line: lineOf(decl),
+    before,
+    after: gen(cls),
+    speculative: true,
+    note: PROTOTYPE_CLASS_NOTE,
+  });
+}
+/** Converts the first convertible constructor. Returns true when it rewrote something (the caller re-analyzes and repeats). */
+function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: FlaggedSite[]): boolean {
+  const body = a.program.body;
+  const decls = body.flatMap((s, i) => (s.type === "FunctionDeclaration" && s.id ? [{ decl: s, index: i }] : []));
+  for (const { decl, index } of decls) {
+    const name = decl.id?.name ?? "";
+    const keep = (reason: string): void => {
+      flagged.push({ kind: "prototype-kept", line: lineOf(decl), text: `function ${name}(...)`, reason });
+    };
+    const hasProto = body.some((s) => s.type === "ExpressionStatement" && s.expression.type === "AssignmentExpression" && s.expression.left.type === "MemberExpression" && (isProtoOf(s.expression.left, name) || isProtoOf(s.expression.left.object, name)));
+    if (!hasProto) continue;
+    if (decl.generator || decl.async) {
+      keep("generator or async constructor");
+      continue;
+    }
+    if (a.hasEval || a.hasWith || a.usesGlobalObject) {
+      keep("the program uses eval, with or the global object");
+      continue;
+    }
+    const plan = planPrototypeClass(a, decl, index);
+    if (typeof plan === "string") {
+      keep(plan);
+      continue;
+    }
+    const binding = a.scopes.find((s) => s.kind === "program")?.bindings.get(name);
+    if (binding === undefined || binding.conflict || binding.declNodes.length !== 1) {
+      keep("the name is declared more than once");
+      continue;
+    }
+    // Every reference must be safe once `C` is a class (not callable, no .call/.apply/.bind, no stray .prototype).
+    let reason: string | undefined;
+    const ctorRange = positionOf(decl);
+    for (const ref of binding.refs) {
+      const parent = a.parents.get(ref.id) ?? null;
+      if (ref.id === decl.id) continue;
+      if (parent === null) continue;
+      if (parent.type === "CallExpression" && parent.callee === ref.id) reason = "is called without `new`";
+      else if (parent.type === "MemberExpression" && parent.object === ref.id && !parent.computed && parent.property.type === "Identifier") {
+        if (["call", "apply", "bind"].includes(parent.property.name)) reason = `uses .${parent.property.name}()`;
+        else if (parent.property.name === "prototype" && !plan.protoNodes.has(parent)) reason = "uses .prototype outside member assignments";
+      } else if (parent.type === "MemberExpression" && parent.object === ref.id && parent.computed) {
+        reason = "uses computed property access on the constructor";
+      } else if (
+        parent.type === "BinaryExpression" &&
+        parent.operator === "instanceof" &&
+        parent.right === ref.id &&
+        parent.left.type === "ThisExpression" &&
+        positionOf(ref.id).start >= ctorRange.start &&
+        positionOf(ref.id).end <= ctorRange.end
+      ) {
+        reason = "guards `this instanceof` inside the constructor";
+      }
+      if (reason !== undefined) break;
+    }
+    if (reason !== undefined) {
+      keep(reason);
+      continue;
+    }
+    // Statements that touch the name before the class position (or between declaration and last member) would see the TDZ / missing members.
+    const memberSet = new Set<Node>([...plan.removed]);
+    for (let i = 0; i < body.length; i++) {
+      const statement = body[i];
+      if (statement === undefined || i === index || memberSet.has(statement)) continue;
+      const isDataMember =
+        statement.type === "ExpressionStatement" &&
+        statement.expression.type === "AssignmentExpression" &&
+        statement.expression.left.type === "MemberExpression" &&
+        (isNamed(statement.expression.left.object, name) || isProtoOf(statement.expression.left.object, name));
+      if (isDataMember) continue;
+      if ((i < index || i < plan.lastIndex) && referencesName(statement, name)) {
+        reason = i < index ? "is referenced before its declaration" : "is referenced before its members are assigned";
+        break;
+      }
+    }
+    if (reason !== undefined) {
+      keep(reason);
+      continue;
+    }
+    const hazard = strictHazard([decl, ...plan.members.map((m) => m.fn)], a);
+    if (hazard !== undefined) {
+      keep(`strict mode: ${hazard}`);
+      continue;
+    }
+    convertToClass(a, decl, index, plan, applied);
+    return true;
+  }
+  return false;
+}
+// ---------------------------------------------------------------------------
 // Public engine
 // ---------------------------------------------------------------------------
 
@@ -784,6 +1123,13 @@ export function modernize(source: string, options: ModernizeOptions = {}): Moder
   const on = (rule: RuleId): boolean => !isRuleOff(rule, levels);
 
   if (on("var-scoping")) ruleVarScoping(analyze(ast), applied, flagged);
+  if (on("prototype-class")) {
+    let pass = flagged.length;
+    for (let i = 0; i < 20; i++) {
+      flagged.length = pass;
+      if (!rulePrototypeClass(analyze(ast), applied, flagged)) break;
+    }
+  }
   if (on("arguments-rest")) ruleArgumentsRest(analyze(ast), applied);
   if (on("apply-spread")) ruleApplySpread(analyze(ast), levels["apply-spread"], applied);
   if (on("function-arrow")) ruleFunctionArrow(analyze(ast), applied);
@@ -849,6 +1195,7 @@ export interface RefineInput {
 export async function refineCandidate(input: RefineInput): Promise<RefinementResult> {
   const { legacyCode, counterexample, executor } = input;
   const maxProbes = input.maxProbes ?? 60;
+  const tagged = counterexample.exact === true && executor.supportsTaggedEncoding === true;
   let probes = 0;
   let degraded = false;
 
@@ -861,7 +1208,7 @@ export async function refineCandidate(input: RefineInput): Promise<RefinementRes
     if (!candidate.parsed) return false;
     let modern: ProbeOutcome;
     try {
-      const res = await executor.run({ code: candidate.code, context: counterexample.inputs });
+      const res = await executor.run({ code: candidate.code, context: counterexample.inputs, ...(tagged ? { encoding: "tagged" as const } : {}) });
       modern = { ok: true, output: res.output, durationMs: res.durationMs };
     } catch (err: unknown) {
       const code = (err as { code?: unknown } | null)?.code;
@@ -869,7 +1216,11 @@ export async function refineCandidate(input: RefineInput): Promise<RefinementRes
       modern = { ok: false, durationMs: 0 };
     }
     const legacy = counterexample.legacy;
-    if (legacy.ok && modern.ok) return areOutputsEquivalent(legacy.output, modern.output);
+    if (legacy.ok && modern.ok) {
+      return tagged
+        ? areOutputsEquivalent(decodeTagged(legacy.output), decodeTagged(modern.output))
+        : areOutputsEquivalent(legacy.output, modern.output);
+    }
     return !legacy.ok && !modern.ok;
   };
 

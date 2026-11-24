@@ -12,6 +12,7 @@ import type { CrewEvent } from "./crew/types.js";
 import { generateResurrectionBundle, sanitizeIdentifier } from "./exporter/bundle.js";
 import type { InputSchema } from "./fuzzer/types.js";
 import { scanLegacyAst } from "./sandbox/ast-scanner.js";
+import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
 
 export interface CliIo {
@@ -152,6 +153,13 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
     return 2;
   }
 
+  // ---- multi-export module: resurrect every exported function -------------------
+  if (args.fn === undefined) {
+    const moduleFunctions = listModuleFunctions(source).functions;
+    if (moduleFunctions.length >= 2) {
+      return runModule(source, scan.detectedIdioms, args, inputPath, io);
+    }
+  }
   let schema: InputSchema;
   if (args.schema !== undefined) {
     let json: unknown;
@@ -189,6 +197,7 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
     schema,
     fuzzRuns: args.runs,
     maxHealingAttempts: 3,
+    exact: true,
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
     onEvent: (event) => {
       if (PROGRESS_TYPES.has(event.type)) io.stdout(`  [${event.agent}] ${event.message}\n`);
@@ -241,6 +250,59 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
   return 0;
 }
 
+async function runModule(source: string, idioms: string[], args: ParsedArgs, inputPath: string, io: CliIo): Promise<number> {
+  const name = sanitizeIdentifier(args.name ?? nodePath.basename(inputPath).replace(/\.(c|m)?js$/i, ""));
+  const { functions, skipped } = listModuleFunctions(source);
+  io.stdout(`Lazarus: resurrecting module ${name} (${functions.map((f) => f.exportedAs ?? f.name).join(", ")}) from ${args.file ?? inputPath}\n`);
+  io.stdout(`  idioms: ${idioms.join(", ") || "none"}\n`);
+  if (args.schema !== undefined) io.stderr("warning: --schema is ignored for a multi-export module; pass --function to resurrect one export with a schema\n");
+  for (const s of skipped) io.stdout(`  skipped ${s.name}: ${s.reason}\n`);
+  const result = await resurrectModule(source, {
+    name,
+    fuzzRuns: args.runs,
+    maxHealingAttempts: 3,
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    onEvent: (event) => {
+      const fn = typeof event.payload?.functionName === "string" ? event.payload.functionName : "";
+      if (PROGRESS_TYPES.has(event.type)) io.stdout(`  [${fn}/${event.agent}] ${event.message}\n`);
+    },
+  });
+  const failed = result.functions.filter((f) => !f.success);
+  if (!result.success) {
+    io.stderr(`\nNOT resurrected: parity could not be proven for ${failed.map((f) => f.exportedAs).join(", ") || "any function"}. No files written.\n`);
+    const cx = result.fuzzReport.counterexample;
+    if (cx !== undefined) io.stderr(`  reason:  ${cx.reason}\n`);
+    return 1;
+  }
+  const bundle = generateResurrectionBundle({
+    specimenName: name,
+    legacyCode: source,
+    legacySource: source,
+    modernCode: result.modernCode,
+    specMarkdown: result.specMarkdown,
+    fuzzRuns: Math.max(...result.functions.map((f) => f.fuzzReport.totalRuns)),
+    healed: result.attempts > 1,
+    ...(result.esm.complete ? { esmModule: { code: result.esm.code, exports: result.esm.exports } } : {}),
+    functions: result.functions.map((f) => ({ name: f.exportedAs, schema: f.schema, legacyCode: f.legacyCode, modernCode: f.modernCode })),
+  });
+  const outDir = nodePath.resolve(io.cwd, args.out);
+  try {
+    fs.mkdirSync(outDir, { recursive: true });
+  } catch (err: unknown) {
+    io.stderr(`error: cannot create output directory ${args.out}: ${err instanceof Error ? err.message : String(err)}\n`);
+    return 1;
+  }
+  const files: Array<[string, string]> = [
+    ...Object.entries(bundle.files).flatMap(([file, content]) => (content === undefined ? [] : [[file, content] as [string, string]])),
+    ["resurrection.patch", `${bundle.prDiff}\n`],
+  ];
+  for (const [file, content] of files) fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+  io.stdout(`\nParity proven for ${result.functions.length} functions: ${result.fuzzReport.totalRuns} fuzz runs in total, up to ${result.attempts} attempt(s).\n`);
+  io.stdout(`Wrote ${files.length} files to ${outDir}:\n`);
+  for (const [file, content] of files) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
+  if (!result.esm.complete) io.stdout(`  note: kept CommonJS (${result.esm.notes.join("; ") || "no exports"})\n`);
+  return 0;
+}
 function defaultIo(): CliIo {
   return {
     stdout: (text) => void process.stdout.write(text),
