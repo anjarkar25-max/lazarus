@@ -9,7 +9,8 @@
         "start": "npx tsx src/web/server.ts",
         "mcp": "npx tsx src/mcp/server.ts",
         "typecheck": "tsc --noEmit",
-        "resurrect": "npx tsx src/cli.ts"
+        "resurrect": "npx tsx src/cli.ts",
+        "benchmark": "npx tsx src/benchmark.ts"
     },
     "repository": {
         "type": "git",

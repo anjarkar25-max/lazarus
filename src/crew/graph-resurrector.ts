@@ -30,6 +30,7 @@ import {
 } from "./ast-modernizer.js";
 import { analyze, walk } from "./ast-scope.js";
 import { toEsmModule } from "./esm-export.js";
+import { plural } from "../text/plural.js";
 import { annotateModule, applyBoundaryFixes } from "./ts-emit.js";
 import { verifyStrictTypeScript, type TypecheckResult } from "./ts-verifier.js";
 import { inferSignature, type Observation, type TypeSignature } from "./type-alchemist.js";
@@ -588,7 +589,7 @@ async function resurrectWith(
     }
     esmByFile.set(file, { code: esm.code, exports: esm.exports });
     perFileObs.set(file, attemptObs);
-    emit({ kind: "node", file, state: "resurrected", detail: `${probes.length} export(s), ${fuzzRuns} runs, ${attempts} attempt(s)${healed ? `, rolled back ${rolledBack.join(", ")}` : ""}` });
+    emit({ kind: "node", file, state: "resurrected", detail: `${plural(probes.length, "export")}, ${plural(fuzzRuns, "run")}, ${plural(attempts, "attempt")}${healed ? `, rolled back ${rolledBack.join(", ")}` : ""}` });
   }
 
   // Whole-graph parity: original CommonJS graph vs stitched ESM graph, end to end through the entry module.
@@ -697,12 +698,12 @@ async function resurrectWith(
     const bad = parity.functions.find((f) => !f.passed);
     return fail(`whole-graph parity failed for ${bad?.exportedAs ?? "an export"}: ${bad?.counterexample?.reason ?? "divergence"}`, results, parity);
   }
-  emit({ kind: "log", message: `Whole-graph parity proven: ${parity.totalRuns} exact Object.is runs across ${parity.functions.length} entry export(s)${graphRounds > 0 ? ` after ${graphRounds} graph-level rollback(s)` : ""}` });
+  emit({ kind: "log", message: `Whole-graph parity proven: ${parity.totalRuns} exact Object.is runs across ${plural(parity.functions.length, "entry export")}${graphRounds > 0 ? ` after ${graphRounds} graph-level rollback(s)` : ""}` });
   emit({ kind: "log", message: "Type Alchemist: replaying the whole-graph inputs to observe every cross-module call" });
   const typed = await typeGraph(results, graph, legacyGraphExec, entry, entryProbes, perFileObs, graphInputs);
   emit({
     kind: "log",
-    message: `tsc --strict on the typed project: ${typed.typecheck.errorCount} error(s) across ${typed.typecheck.filesChecked} file(s)${typed.typecheck.adjustments.length > 0 ? `, ${typed.typecheck.adjustments.length} member(s) declared any at the migration boundary` : ""}`,
+    message: `tsc --strict on the typed project: ${plural(typed.typecheck.errorCount, "error")} across ${plural(typed.typecheck.filesChecked, "file")}${typed.typecheck.adjustments.length > 0 ? `, ${plural(typed.typecheck.adjustments.length, "member")} declared any at the migration boundary` : ""}`,
   });
   return { success: true, name: options.name, graph, files: typed.files, parity, typecheck: typed.typecheck, durationMs: Date.now() - started };
 }

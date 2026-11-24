@@ -131,6 +131,49 @@ describe("GET / serves Lazarus Studio", () => {
     expect(studio).not.toContain("fetch(");
   });
 
+  it("has a full-width Verification Deck under the three-column table, in the pinned order", () => {
+    const single = pane("pane-single");
+    const deckAt = single.indexOf('<section class="verify-deck" id="verifyDeck"');
+    expect(deckAt).toBeGreaterThan(single.indexOf("</main>"));
+    const deck = single.slice(deckAt);
+    const at = (id: string): number => deck.indexOf(`id="${id}"`);
+    // Full width: the matrix (Attempt 1 vs. verified code + LCS diff) and the legacy diff.
+    expect(at("healingMatrix")).toBeLessThan(deck.indexOf('<div class="deck-grid">'));
+    expect(at("legacyDiffBlock")).toBeLessThan(deck.indexOf('<div class="deck-grid">'));
+    // Two columns: certificate + audit, then bundle + probe.
+    const order = ["healingMatrix", "matrixDiff", "legacyDiffBlock", "certCard", "mutCard", "bundlePanel", "copyPrSummaryBtn", "probeCard"].map(at);
+    expect(order.every((v) => v > 0)).toBe(true);
+    expect([...order].sort((x, y) => x - y)).toEqual(order);
+    // The three-column row keeps input, spec/code output and telemetry only.
+    const main = single.slice(single.indexOf("<main>"), single.indexOf("</main>"));
+    for (const id of ["legacyCode", "specOut", "sigPill", "modernOut", "tscBadge", "legacyDiffToggle", "logList"]) expect(main, id).toContain(`id="${id}"`);
+    for (const id of ["healingMatrix", "certCard", "mutCard", "bundlePanel", "probeCard"]) expect(main, id).not.toContain(`id="${id}"`);
+  });
+
+  it("has the Crew Log | MCP Wire Trace toggle in the telemetry card, Crew Log by default", () => {
+    const main = pane("pane-single");
+    expect(main).toContain('id="teleCrewBtn" aria-pressed="true" aria-controls="logList">Crew Log</button>');
+    expect(main).toContain('id="teleTraceBtn" aria-pressed="false" aria-controls="traceList">MCP Wire Trace');
+    expect(main).toContain('<div class="trace-list" id="traceList" hidden');
+    expect(main.indexOf('id="traceList"')).toBeGreaterThan(main.indexOf('id="logList"'));
+    // Trace events go to the trace view only.
+    expect(html).toContain('if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); continue; }');
+  });
+
+  it("has the Copy GitHub PR Summary button in the PR Bundle bar, fed by the server export", () => {
+    const bar = html.slice(html.indexOf('<div id="bundlePanel"'), html.indexOf('<pre id="bundleOut"'));
+    expect(bar).toContain('id="copyPrSummaryBtn"');
+    expect(bar).toContain(">Copy GitHub PR Summary</button>");
+    expect(html).toContain("window.LazarusBundle = { build: buildBundleFromCurrentUI };");
+    expect(html).toContain('typeof bundle.prSummary !== "string"');
+  });
+
+  it("uses correct singular/plural forms in tsc labels", () => {
+    expect(html).not.toMatch(/file\(s\)|" typed \.ts files"/);
+    expect(html).toContain('" typed .ts file" + (tc.filesChecked === 1 ? "" : "s")');
+    expect(html).toContain('" file" + (tc.filesChecked === 1 ? "" : "s") + " checked with TypeScript "');
+  });
+
   it("keeps the routes the tour relies on", async () => {
     const audit = await fetch(`${baseUrl}/api/mutation-audit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     expect(audit.status).toBe(400);

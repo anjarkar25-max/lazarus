@@ -5,6 +5,7 @@ import type { GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import type { ParamKind } from "../fuzzer/types.js";
 import { renderWorkflow, sanitizeIdentifier, WORKFLOW_PATH } from "./bundle.js";
 import { createZip } from "./zip.js";
+import { plural } from "../text/plural.js";
 import { describeTypecheck, strictTsconfig } from "../crew/ts-verifier.js";
 
 export interface GraphBundle {
@@ -99,7 +100,7 @@ function renderSpec(result: GraphResurrectionResult): string {
     `- **Status:** ${result.success ? "Whole-graph behavioral parity proven (exact \`Object.is\`)" : "NOT resurrected"}`,
     `- **Entry module:** \`${result.graph.entry ?? "none"}\` -> \`src/${entryOutput}\``,
     `- **Resurrection order (leaves first):** ${result.graph.order.map((f) => `\`${f}\``).join(" -> ")}`,
-    `- **Whole-graph fuzz runs:** ${parity?.totalRuns ?? 0} across ${parity?.functions.length ?? 0} entry export(s)`,
+    `- **Whole-graph fuzz runs:** ${parity?.totalRuns ?? 0} across ${plural(parity?.functions.length ?? 0, "entry export")}`,
     ...(tc !== undefined ? [`- **TypeScript Strict Check:** ${describeTypecheck(tc)}${tc.passed ? "" : ` (first: ${firstError})`}`] : []),
     ...(tc !== undefined && tc.adjustments.length > 0 ? [`- **Migration boundary (declared \`any\`):** ${tc.adjustments.join("; ")}`] : []),
     ``,

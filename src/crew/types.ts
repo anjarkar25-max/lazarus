@@ -10,7 +10,9 @@ export type CrewEventType =
   | "fuzz_completed"
   | "counterexample_found"
   | "self_healed"
-  | "completed";
+  | "completed"
+  /** Wire trace of a real tool execution (sandbox probe batch, AST scan, strict tsc check). */
+  | "mcp_trace";
 
 export interface CrewEvent {
   timestamp: string;

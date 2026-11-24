@@ -434,6 +434,40 @@ pre { max-width: 100%; }
 .tour-focus { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 8px; animation: tourPulse 1.2s ease-in-out infinite; }
 @keyframes tourPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.0); } 50% { box-shadow: 0 0 18px 2px rgba(139, 92, 246, 0.45); } }
 @media (prefers-reduced-motion: reduce) { .tour-focus { animation: none; } .tour-progress i { transition: none; } }
+
+/* ---- Verification Deck ---------------------------------------------------- */
+.verify-deck { margin: 0 24px 24px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #0b1120; }
+.deck-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.deck-head h2 { margin: 0; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--emerald); }
+.deck-head small { color: var(--muted); font-size: 11px; }
+.deck-wide > * + * { margin-top: 10px; }
+.deck-wide .matrix { margin-top: 0; }
+.deck-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 12px; }
+.deck-col { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.deck-col > .cert, .deck-col > .mut-card, .deck-col > .probe-card, .deck-col > #bundlePanel { margin-top: 0 !important; }
+@media (max-width: 1100px) { .deck-grid { grid-template-columns: 1fr; } }
+.verify-deck .diff-view { max-height: 420px; }
+.pr-summary-btn { background: #1e1b4b; color: #e9d5ff; border: 1px solid var(--violet); padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.pr-summary-btn.done { border-color: var(--emerald); color: var(--emerald); }
+
+/* ---- MCP Wire Trace -------------------------------------------------------- */
+.tele-toggle { display: inline-flex; border: 1px solid #334155; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.tele-btn { border: none; border-radius: 0; background: #0b1120; color: var(--muted); padding: 5px 10px; font-size: 11px; font-weight: 700; }
+.tele-btn + .tele-btn { border-left: 1px solid #334155; }
+.tele-btn[aria-pressed="true"] { background: #1e1b4b; color: #ede9fe; }
+.tele-count { display: inline-block; min-width: 1.6em; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: #334155; color: #e2e8f0; font-size: 10px; text-align: center; }
+.trace-list { display: flex; flex-direction: column; gap: 6px; max-height: 520px; overflow: auto; }
+.trace-empty { font-size: 11px; color: var(--muted); padding: 8px; border: 1px dashed #334155; border-radius: 6px; }
+.trace-row { padding: 6px 8px; border-radius: 6px; background: #0b1120; border-left: 3px solid var(--violet); font-size: 11px; color: #cbd5e1; }
+.trace-row .tr-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.trace-row .tr-tool { color: #ede9fe; font-weight: 700; word-break: break-all; }
+.trace-row .tr-ms { color: var(--emerald); font-weight: 700; }
+.trace-row .tr-pill { font-size: 9px; font-weight: 800; letter-spacing: .5px; padding: 1px 6px; border-radius: 999px; border: 1px solid; }
+.tr-pill.warm { color: var(--emerald); border-color: var(--emerald); }
+.tr-pill.cold { color: #fcd34d; border-color: #f59e0b; }
+.tr-pill.local { color: #94a3b8; border-color: #475569; }
+.trace-row .tr-agent { color: #64748b; text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
+.trace-row .tr-sum { margin-top: 3px; color: #94a3b8; }
 </style>
 </head>
 <body>
@@ -446,8 +480,8 @@ pre { max-width: 100%; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">638 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">16 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">663 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">17 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -558,70 +592,104 @@ pre { max-width: 100%; }
               <span class="tsc-badge" id="tscBadge" hidden></span>
               <button type="button" class="diff-toggle" id="legacyDiffToggle" aria-pressed="false" aria-controls="legacyDiff" disabled>Legacy vs. Resurrected Diff</button>
             </div>
-            <div class="diff-block" id="legacyDiffBlock" hidden>
-              <div class="diff-head"><span>Legacy specimen (&minus;) vs resurrected code (+)</span><span class="diff-stats" id="legacyDiffStats"></span></div>
-              <div class="diff-view" id="legacyDiff" role="table" aria-label="Line diff from the legacy specimen to the resurrected code"></div>
-            </div>
-  <div class="cert" id="certCard" aria-live="polite"></div>
-  <div class="mut-card" id="mutCard" hidden>
-    <div class="mut-head">
-      <div class="mut-title">Prove the Proof &mdash; Live Mutation Audit</div>
-      <button type="button" class="mut-btn" id="mutBtn">ATTACK MY OWN PROOF (RUN MUTATION AUDIT)</button>
-    </div>
-    <div class="mut-score" id="mutScore" role="status"></div>
-    <table class="mut-table" id="mutTable" hidden>
-      <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
-      <tbody id="mutRows"></tbody>
-    </table>
-    <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
-  </div>
-  <div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-      <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
-        <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
-        <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
-        <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
-        <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
-        <button type="button" class="bundle-tab" data-tab=".github/workflows/lazarus-parity.yml" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">lazarus-parity.yml (CI)</button>
-        <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
-      </div>
-      <div style="display:flex;gap:6px;">
-        <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
-        <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
-        <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
-        <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
-      </div>
-    </div>
-    <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
-  </div>
           </div>
   
-          <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
-          <div id="healingMatrix" class="matrix" hidden>
-            <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
-            <div class="matrix-grid">
-              <section class="matrix-col rejected">
-                <div class="matrix-title">Attempt 1 &middot; Rejected draft</div>
-                <pre id="matrixDraft"></pre>
-                <dl class="cx">
-                  <dt>shrunk input</dt><dd id="cxInput"></dd>
-                  <dt>legacy output</dt><dd id="cxLegacy" class="ok"></dd>
-                  <dt>draft output</dt><dd id="cxDraft" class="bad"></dd>
-                </dl>
-                <div id="cxReason" class="reason"></div>
-              </section>
-              <section class="matrix-col verified">
-                <div class="matrix-title" id="matrixFinalTitle">Final &middot; Verified code</div>
-                <pre id="matrixFinal"></pre>
-                <div id="matrixRules" class="rule-chips"></div>
-              </section>
-            </div>
-            <div class="diff-block" id="matrixDiffBlock">
-              <div class="diff-head"><span>Self-Healing Diff &middot; rejected draft (&minus;) vs verified code (+)</span><span class="diff-stats" id="matrixDiffStats"></span></div>
-              <div class="diff-view" id="matrixDiff" role="table" aria-label="Line diff from the rejected draft to the verified code"></div>
+  
+        </div>
+      </section>
+  
+      <section class="panel">
+        <div class="panel-header"><span>Live Kiro Crew &amp; Fuzzer Telemetry</span><span id="runStats">0 runs</span></div>
+        <div class="panel-body">
+          <div class="tele-toggle" role="group" aria-label="Telemetry view">
+            <button type="button" class="tele-btn" id="teleCrewBtn" aria-pressed="true" aria-controls="logList">Crew Log</button>
+            <button type="button" class="tele-btn" id="teleTraceBtn" aria-pressed="false" aria-controls="traceList">MCP Wire Trace <span class="tele-count" id="traceCount">0</span></button>
+          </div>
+          <div class="log-list" id="logList">
+            <div class="log-item">
+              <div class="log-meta">SYSTEM READY</div>
+              <div>Isolated Node VM sandbox, custom MCP server, and fast-check differential oracle armed.</div>
             </div>
           </div>
-  
+          <div class="trace-list" id="traceList" hidden aria-live="polite">
+            <div class="trace-empty" id="traceEmpty">No tool calls yet. Resurrect a specimen to see every real <code>lazarus-sandbox</code> probe batch, AST scan and strict tsc check with its measured timing.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <section class="verify-deck" id="verifyDeck" aria-labelledby="deckTitle">
+      <div class="deck-head">
+        <h2 id="deckTitle">Verification Deck</h2>
+        <small>Self-healing diff, certificate, mutation audit, PR bundle and edge-case probes, at full width.</small>
+      </div>
+      <div class="deck-wide">
+        <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
+        <div id="healingMatrix" class="matrix" hidden>
+          <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
+          <div class="matrix-grid">
+            <section class="matrix-col rejected">
+              <div class="matrix-title">Attempt 1 &middot; Rejected draft</div>
+              <pre id="matrixDraft"></pre>
+              <dl class="cx">
+                <dt>shrunk input</dt><dd id="cxInput"></dd>
+                <dt>legacy output</dt><dd id="cxLegacy" class="ok"></dd>
+                <dt>draft output</dt><dd id="cxDraft" class="bad"></dd>
+              </dl>
+              <div id="cxReason" class="reason"></div>
+            </section>
+            <section class="matrix-col verified">
+              <div class="matrix-title" id="matrixFinalTitle">Final &middot; Verified code</div>
+              <pre id="matrixFinal"></pre>
+              <div id="matrixRules" class="rule-chips"></div>
+            </section>
+          </div>
+          <div class="diff-block" id="matrixDiffBlock">
+            <div class="diff-head"><span>Self-Healing Diff &middot; rejected draft (&minus;) vs verified code (+)</span><span class="diff-stats" id="matrixDiffStats"></span></div>
+            <div class="diff-view" id="matrixDiff" role="table" aria-label="Line diff from the rejected draft to the verified code"></div>
+          </div>
+        </div>
+        <div class="diff-block" id="legacyDiffBlock" hidden>
+          <div class="diff-head"><span>Legacy specimen (&minus;) vs resurrected code (+)</span><span class="diff-stats" id="legacyDiffStats"></span></div>
+          <div class="diff-view" id="legacyDiff" role="table" aria-label="Line diff from the legacy specimen to the resurrected code"></div>
+        </div>
+      </div>
+      <div class="deck-grid">
+        <div class="deck-col">
+          <div class="cert" id="certCard" aria-live="polite"></div>
+          <div class="mut-card" id="mutCard" hidden>
+            <div class="mut-head">
+              <div class="mut-title">Prove the Proof &mdash; Live Mutation Audit</div>
+              <button type="button" class="mut-btn" id="mutBtn">ATTACK MY OWN PROOF (RUN MUTATION AUDIT)</button>
+            </div>
+            <div class="mut-score" id="mutScore" role="status"></div>
+            <table class="mut-table" id="mutTable" hidden>
+              <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
+              <tbody id="mutRows"></tbody>
+            </table>
+            <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
+          </div>
+        </div>
+        <div class="deck-col">
+          <div id="bundlePanel" style="display:none;margin-top:10px;border-top:1px solid #1e293b;padding-top:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+              <div id="bundleTabs" style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="bundle-tab" data-tab="prDiff" style="background:#0284c7;color:#fff;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Diff</button>
+                <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
+                <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
+                <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
+                <button type="button" class="bundle-tab" data-tab=".github/workflows/lazarus-parity.yml" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">lazarus-parity.yml (CI)</button>
+                <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button id="copyPrSummaryBtn" type="button" class="pr-summary-btn" title="Ready-to-paste GitHub Pull Request description (built and verified by the server)">Copy GitHub PR Summary</button>
+                <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
+                <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
+                <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
+                <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
+              </div>
+            </div>
+            <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
+          </div>
           <!-- Probe Custom Edge Case: judge-driven Object.is parity against the sandbox -->
           <div id="probeCard" class="probe-card">
             <div class="probe-head"><span>Probe Custom Edge Case</span><small>Object.is parity &middot; sandboxed &middot; 3 s limit</small></div>
@@ -646,20 +714,8 @@ pre { max-width: 100%; }
             <div id="probeVerdict" class="verdict" hidden></div>
           </div>
         </div>
-      </section>
-  
-      <section class="panel">
-        <div class="panel-header"><span>Live Kiro Crew &amp; Fuzzer Telemetry</span><span id="runStats">0 runs</span></div>
-        <div class="panel-body">
-          <div class="log-list" id="logList">
-            <div class="log-item">
-              <div class="log-meta">SYSTEM READY</div>
-              <div>Isolated Node VM sandbox, custom MCP server, and fast-check differential oracle armed.</div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+      </div>
+    </section>
     </div>
   <div class="studio-pane" id="pane-graph" role="tabpanel" aria-labelledby="tab-graph" hidden>
     <section class="graph-panel" id="graphPanel" aria-labelledby="graphTitle">
@@ -828,6 +884,7 @@ pre { max-width: 100%; }
             const data = JSON.parse(frame.slice(6));
             if (data.kind === "event") {
               const ev = data.event;
+              if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); continue; }
               ["archaeologist", "architect", "necromancer", "exorcist"].forEach((a) => {
                 const card = document.getElementById("card-" + a);
                 if (a === ev.agent) {
@@ -1105,6 +1162,7 @@ pre { max-width: 100%; }
     return bundle;
   }
 
+  window.LazarusBundle = { build: buildBundleFromCurrentUI };
   if (exportBtn) {
     exportBtn.addEventListener("click", async () => {
       const bundle = await buildBundleFromCurrentUI();
@@ -1853,7 +1911,7 @@ pre { max-width: 100%; }
               bundleId = r.bundleId; zipBtn.disabled = !bundleId;
               verdict.className = "graph-verdict pass";
               const tc = r.typecheck;
-              const tsLine = tc ? " \u00b7 tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s") + " across " + tc.filesChecked + " typed .ts files" : "";
+              const tsLine = tc ? " \u00b7 tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s") + " across " + tc.filesChecked + " typed .ts file" + (tc.filesChecked === 1 ? "" : "s") : "";
               verdict.textContent = "WHOLE-GRAPH PARITY PROVEN \u2713 " + r.parity.totalRuns + " exact Object.is runs end to end (" + r.order.length + " files, " + r.edges.length + " stitched imports, " + r.durationMs + " ms)" + tsLine;
               if (tc && !tc.passed) verdict.className = "graph-verdict fail";
             } else {
@@ -2140,7 +2198,7 @@ pre { max-width: 100%; }
       tscBadge.hidden = false;
       tscBadge.className = "tsc-badge " + (tc.passed ? "pass" : "fail");
       tscBadge.textContent = "tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s");
-      tscBadge.title = tc.filesChecked + " file(s) checked with TypeScript " + tc.tsVersion + (tc.adjustments && tc.adjustments.length ? "; migration boundary: " + tc.adjustments.join("; ") : "");
+      tscBadge.title = tc.filesChecked + " file" + (tc.filesChecked === 1 ? "" : "s") + " checked with TypeScript " + tc.tsVersion + (tc.adjustments && tc.adjustments.length ? "; migration boundary: " + tc.adjustments.join("; ") : "");
     } else {
       tscBadge.hidden = true;
     }
@@ -2272,6 +2330,76 @@ pre { max-width: 100%; }
     if (!tour) return;
     tour.cancelled = true;
     tour.cleanups.splice(0).forEach((fn) => fn());
+  });
+})();
+</script>
+<script>
+/* MCP Wire Trace view + Copy GitHub PR Summary. Real events only; textContent only. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const crewBtn = $("teleCrewBtn"), traceBtn = $("teleTraceBtn"), logList = $("logList"), traceList = $("traceList"), count = $("traceCount"), empty = $("traceEmpty");
+  let traces = 0;
+  function show(trace) {
+    const on = trace === true;
+    logList.hidden = on;
+    traceList.hidden = !on;
+    crewBtn.setAttribute("aria-pressed", on ? "false" : "true");
+    traceBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  crewBtn.addEventListener("click", () => show(false));
+  traceBtn.addEventListener("click", () => show(true));
+  function span(cls, text) { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
+  window.LazarusTrace = {
+    reset() {
+      traces = 0;
+      count.textContent = "0";
+      traceList.querySelectorAll(".trace-row").forEach((r) => r.remove());
+      empty.hidden = false;
+    },
+    add(ev) {
+      const p = ev.payload || {};
+      if (typeof p.tool !== "string" || typeof p.durationMs !== "number") return;
+      empty.hidden = true;
+      const row = document.createElement("div");
+      row.className = "trace-row";
+      const top = document.createElement("div");
+      top.className = "tr-top";
+      const reuse = p.poolReused === true ? ["warm", p.tool.indexOf("tsc") >= 0 ? "WARM COMPILER REUSED" : "POOL REUSED"] : p.poolReused === false ? ["cold", p.tool.indexOf("tsc") >= 0 ? "COMPILER STARTED" : "WORKER SPAWNED"] : ["local", "IN-PROCESS"];
+      top.append(span("tr-agent", ev.agent + (p.functionName ? " \u00b7 " + p.functionName : "")), span("tr-tool", p.tool), span("tr-ms", p.durationMs + " ms"), span("tr-pill " + reuse[0], reuse[1]));
+      if (typeof p.probes === "number") top.append(span("tr-agent", p.probes + " probe" + (p.probes === 1 ? "" : "s")));
+      row.append(top, span("tr-sum", p.summary || ""));
+      row.querySelector(".tr-sum").style.display = "block";
+      traceList.append(row);
+      traces++;
+      count.textContent = String(traces);
+    }
+  };
+  $("runBtn").addEventListener("click", () => window.LazarusTrace.reset());
+
+  // Copy GitHub PR Summary: the server builds it from the same verified bundle as the export.
+  const prBtn = $("copyPrSummaryBtn");
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall back */ }
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove(); return ok;
+  }
+  prBtn.addEventListener("click", async () => {
+    if (!window.LazarusBundle) return;
+    prBtn.disabled = true;
+    const original = "Copy GitHub PR Summary";
+    try {
+      const bundle = await window.LazarusBundle.build();
+      if (!bundle || typeof bundle.prSummary !== "string") { prBtn.textContent = "No summary (export failed)"; return; }
+      const ok = await copyText(bundle.prSummary);
+      prBtn.textContent = ok ? "Copied PR Summary" : "Copy failed";
+      prBtn.classList.toggle("done", ok);
+    } finally {
+      prBtn.disabled = false;
+      setTimeout(() => { prBtn.textContent = original; prBtn.classList.remove("done"); }, 1800);
+    }
   });
 })();
 </script>

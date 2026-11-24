@@ -2,7 +2,9 @@ import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/
 import { bundleToZipEntries, generateResurrectionBundle, sanitizeIdentifier } from "../exporter/bundle.js";
 import { createZip } from "../exporter/zip.js";
 import { generateVerifiedBundle, type TypecheckReport, type VerifiedBundle } from "../exporter/verified-bundle.js";
-import { closeSharedTsVerifier } from "../crew/ts-verifier.js";
+import { closeSharedTsVerifier, describeTypecheck } from "../crew/ts-verifier.js";
+import { TRACE_TOOLS, type WireTrace } from "../crew/orchestrator.js";
+import { plural } from "../text/plural.js";
 import { RedTeamBodySchema, runRedTeam } from "../sandbox/redteam.js";
 import { randomUUID } from "node:crypto";
 import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from "../crew/graph-resurrector.js";
@@ -11,7 +13,8 @@ import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
-import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
+import { generateCertificate, sanitizeProvenance, type CertificateInput } from "../exporter/certificate.js";
+import { buildGitHubPrSummary } from "../exporter/pr-summary.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
 import type { ResurrectionResult } from "../crew/types.js";
 import { readHeaderLevels } from "../crew/ast-modernizer.js";
@@ -219,7 +222,7 @@ export type ExportRequest = {
  * Builds the PR bundle and verifies its TypeScript with the real compiler under --strict. The certificate and SPEC.md
  * carry that server-computed result; any client-supplied claim about it is ignored.
  */
-export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle> {
+export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string }> {
   const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
@@ -233,6 +236,16 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
   const scan = scanLegacyAst(parsed.legacyCode);
   const requestedSchema = parsed.schema === undefined ? undefined : flatSchemaOf(parsed.schema as InputSchema, scan.primary?.exportedAs);
   const schema = requestedSchema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
+  const certificateInput = (typecheck: TypecheckReport): CertificateInput => ({
+    provenance: sanitizeProvenance(parsed.provenance),
+    legacySource: parsed.legacyCode,
+    modernCode: parsed.modernCode,
+    fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
+    attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
+    esmComplete: esm.complete,
+    ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
+    typecheck,
+  });
   const moduleFunctions = fnEntries.map((f) => {
     const scanned = scanLegacyAst(parsed.legacyCode ?? "", { functionName: f.name });
     return {
@@ -242,7 +255,7 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
       modernCode: f.modernCode,
     };
   });
-  return generateVerifiedBundle(
+  const verified = await generateVerifiedBundle(
     {
       specimenName: parsed.specimenName ?? "resurrectedSpecimen",
       // The parity oracle runs the extracted expression; the diff shows the file as written.
@@ -257,18 +270,9 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
       ...(moduleFunctions.length > 0 ? { functions: moduleFunctions } : {}),
       ...(typeSignature !== undefined && moduleFunctions.length === 0 ? { typeSignature } : {}),
     },
-    (typecheck) =>
-      generateCertificate({
-        provenance: sanitizeProvenance(parsed.provenance),
-        legacySource: parsed.legacyCode,
-        modernCode: parsed.modernCode,
-        fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
-        attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
-        esmComplete: esm.complete,
-        ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
-        typecheck,
-      }).markdown
+    (typecheck) => generateCertificate(certificateInput(typecheck)).markdown
   );
+  return { ...verified, prSummary: buildGitHubPrSummary({ ...certificateInput(verified.typecheck), name: sanitizeIdentifier(parsed.specimenName ?? "resurrectedSpecimen") }) };
 }
 export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
@@ -416,10 +420,35 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
 
       const orchestrator = new ResurrectionOrchestrator({ synthesizer });
 
+      /** Wire traces measured by the server itself (streamed now, and appended to the result's events). */
+      const serverTraces: CrewEvent[] = [];
+      const sendTrace = (agent: CrewEvent["agent"], trace: WireTrace): void => {
+        const event: CrewEvent = { timestamp: new Date().toISOString(), agent, type: "mcp_trace", message: `${trace.tool} \u00b7 ${trace.durationMs} ms \u00b7 ${trace.summary}`, payload: { ...trace } };
+        serverTraces.push(event);
+        res.write(`data: ${JSON.stringify({ kind: "event", event })}\n\n`);
+      };
+      const scanStarted = performance.now();
+      const scan = scanLegacyAst(body.legacyCode);
+      sendTrace("archaeologist", {
+        tool: TRACE_TOOLS.astScan,
+        durationMs: Math.round((performance.now() - scanStarted) * 100) / 100,
+        poolReused: null,
+        summary: scan.parsed
+          ? `specimen extracted: ${scan.primary !== undefined ? `function ${scan.primary.name}` : "script expression"}; ${plural(scan.detectedIdioms.length, "legacy idiom")}`
+          : `parse failed: ${scan.parseError ?? "syntax error"}`,
+      });
+      /** Trace of the strict tsc check behind a verified bundle (timing and process reuse from the verifier). */
+      const traceTypecheck = (tc: TypecheckReport): void =>
+        sendTrace("exorcist", {
+          tool: TRACE_TOOLS.tscStrict,
+          durationMs: tc.elapsedMs,
+          poolReused: tc.reusedProcess,
+          summary: `${describeTypecheck(tc)} via ${tc.engine}${tc.rounds > 1 ? `, ${plural(tc.rounds, "compiler run")}` : ""}`,
+        });
       const request: ResurrectionRequest = {
         name: body.name && body.name.trim() ? body.name.trim() : "legacy-specimen",
-        legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
-        schema: flatSchemaOf(body.schema, scanLegacyAst(body.legacyCode).primary?.exportedAs),
+        legacyCode: scan.primaryExpression,
+        schema: flatSchemaOf(body.schema, scan.primary?.exportedAs),
         fuzzRuns:
           typeof body.fuzzRuns === "number"
             ? Math.min(Math.max(body.fuzzRuns, 5), MAX_LIVE_FUZZ_RUNS)
@@ -484,8 +513,10 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
                 functions: functions.map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
               })
             : undefined;
+          if (verified !== undefined) traceTypecheck(verified.typecheck);
           const result = {
             ...aggregate,
+            events: [...serverTraces.slice(0, 1), ...aggregate.events, ...serverTraces.slice(1)],
             ...certificateFor(merged, esm.complete, verified?.typecheck),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             module: {
@@ -521,8 +552,10 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             : undefined;
           // If tsc rejected the observed return type, the exported (and displayed) signature is the widened one.
           const typeSignature = observed !== undefined && verified?.typecheck.widenedReturn === true ? widenReturn(observed) : observed;
+          if (verified !== undefined) traceTypecheck(verified.typecheck);
           const result = {
             ...resurrected,
+            events: [...serverTraces.slice(0, 1), ...resurrected.events, ...serverTraces.slice(1)],
             ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete, verified?.typecheck),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             ...(typeSignature !== undefined ? { typeSignature, typeSignatureText: renderSignature(typeSignature, sanitizeIdentifier(request.name)) } : {}),
@@ -575,7 +608,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const { bundle, typecheck } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
+        const { bundle, typecheck, prSummary } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
         if (routePath === "/api/export-zip") {
           const archive = createZip(bundleToZipEntries(bundle));
           res.writeHead(200, {
@@ -588,7 +621,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...bundle, typecheck }));
+        res.end(JSON.stringify({ ...bundle, typecheck, prSummary }));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.writeHead(400, { "Content-Type": "application/json" });

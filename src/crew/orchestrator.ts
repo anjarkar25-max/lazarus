@@ -5,6 +5,7 @@ import { PooledProbeRunner } from "../sandbox/pool.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { modernize, summarizeForSpec } from "./ast-modernizer.js";
 import { DeterministicModernizer } from "./synthesizer.js";
+import { plural } from "../text/plural.js";
 import type {
   AgentRole,
   CodeSynthesizer,
@@ -17,7 +18,34 @@ import type {
 interface SessionDeps {
   readonly runner: ProbeExecutor;
   readonly fuzzer: DifferentialFuzzer;
+  /** Pools whose real counters back the wire trace (empty when the executors are not pools). */
+  readonly pools: readonly PooledProbeRunner[];
 }
+
+/** Tool names in wire traces. Sandbox batches go through the `lazarus-sandbox` MCP server's tool. */
+export const TRACE_TOOLS = {
+  sandboxProbe: "lazarus-sandbox/run_legacy_probe",
+  astScan: "lazarus/ast_scan",
+  tscStrict: "lazarus/tsc_strict",
+} as const;
+
+/** Payload of an `mcp_trace` event, measured from the actual execution. */
+export interface WireTrace {
+  readonly tool: string;
+  readonly durationMs: number;
+  /**
+   * Sandbox batches: no new worker process had to start during the batch (warm pool reused).
+   * Strict tsc: the warm compiler process was reused. In-process steps: null.
+   */
+  readonly poolReused: boolean | null;
+  readonly summary: string;
+  /** Sandbox probes actually dispatched during the batch (from the pool counters), when known. */
+  readonly probes?: number;
+  /** Worker processes started during the batch, when known. */
+  readonly spawned?: number;
+}
+
+const roundMs = (ms: number): number => Math.round(ms * 100) / 100;
 
 export class ResurrectionOrchestrator {
   private readonly runner: ProbeExecutor | undefined;
@@ -36,7 +64,7 @@ export class ResurrectionOrchestrator {
 
   async resurrect(request: ResurrectionRequest): Promise<ResurrectionResult> {
     if (this.runner !== undefined && this.fuzzer !== undefined) {
-      return this.resurrectWith({ runner: this.runner, fuzzer: this.fuzzer }, request);
+      return this.resurrectWith({ runner: this.runner, fuzzer: this.fuzzer, pools: this.runner instanceof PooledProbeRunner ? [this.runner] : [] }, request);
     }
     // One warm worker per side for the whole session, always torn down on exit.
     await using legacyPool = new PooledProbeRunner();
@@ -44,7 +72,8 @@ export class ResurrectionOrchestrator {
     const fuzzer = this.fuzzer ?? new DifferentialFuzzer({ legacy: legacyPool, modern: modernPool });
     // `return await` is required: a bare `return` would leave the `await using` scope (and
     // close both pools) before the session has finished.
-    return await this.resurrectWith({ runner: this.runner ?? legacyPool, fuzzer }, request);
+    const pools = this.runner instanceof PooledProbeRunner ? [this.runner, ...(this.fuzzer === undefined ? [modernPool] : [])] : this.fuzzer === undefined ? [legacyPool, modernPool] : [legacyPool];
+    return await this.resurrectWith({ runner: this.runner ?? legacyPool, fuzzer, pools }, request);
   }
 
   private async resurrectWith(deps: SessionDeps, request: ResurrectionRequest): Promise<ResurrectionResult> {
@@ -65,6 +94,26 @@ export class ResurrectionOrchestrator {
       events.push(event);
       request.onEvent?.(event);
     };
+    const counters = (): { spawns: number; probes: number } =>
+      deps.pools.reduce((acc, p) => ({ spawns: acc.spawns + p.stats.spawns, probes: acc.probes + p.stats.probes }), { spawns: 0, probes: 0 });
+    /** Runs a sandbox batch and emits its wire trace from the real timings and pool counters. */
+    const traceSandbox = async <T>(agent: AgentRole, run: () => Promise<T>, summarize: (value: T) => string): Promise<T> => {
+      const before = counters();
+      const started = performance.now();
+      const value = await run();
+      const durationMs = roundMs(performance.now() - started);
+      const after = counters();
+      const known = deps.pools.length > 0;
+      const trace: WireTrace = {
+        tool: TRACE_TOOLS.sandboxProbe,
+        durationMs,
+        poolReused: known ? after.spawns === before.spawns : null,
+        summary: summarize(value),
+        ...(known ? { probes: after.probes - before.probes, spawned: after.spawns - before.spawns } : {}),
+      };
+      emit(agent, "mcp_trace", `${trace.tool} \u00b7 ${durationMs} ms \u00b7 ${trace.summary}`, { ...trace });
+      return value;
+    };
 
     // 1. ARCHAEOLOGIST: Probe legacy code on boundary inputs inside sandbox
     emit("archaeologist", "agent_started", `Probing legacy module "${request.name}" in isolated sandbox`);
@@ -74,6 +123,7 @@ export class ResurrectionOrchestrator {
     });
 
     const baselineTraces: FuzzTrace[] = [];
+    await traceSandbox("archaeologist", async () => {
     for (const inputs of sampleInputs) {
       const start = Date.now();
       try {
@@ -89,6 +139,7 @@ export class ResurrectionOrchestrator {
         baselineTraces.push({ inputs, legacy: outcome, modern: outcome, matched: true });
       }
     }
+    }, () => `${sampleInputs.length} boundary probes of the legacy specimen`);
     emit("archaeologist", "probe_sampled", `Captured ${baselineTraces.length} baseline runtime traces`, {
       sampleCount: baselineTraces.length,
     });
@@ -108,6 +159,17 @@ export class ResurrectionOrchestrator {
       )
       .join("\n");
 
+    // AST scan of the legacy code (acorn parse + rewrite analysis, in process; nothing is executed).
+    const scanStarted = performance.now();
+    const scanned = modernize(request.legacyCode);
+    const idiomLines = summarizeForSpec(scanned);
+    const scanTrace: WireTrace = {
+      tool: TRACE_TOOLS.astScan,
+      durationMs: roundMs(performance.now() - scanStarted),
+      poolReused: null,
+      summary: scanned.parsed ? `${plural(scanned.applied.length, "rewrite site")}, ${scanned.flagged.length} flagged` : "source did not parse",
+    };
+    emit("architect", "mcp_trace", `${scanTrace.tool} \u00b7 ${scanTrace.durationMs} ms \u00b7 ${scanTrace.summary}`, { ...scanTrace });
     const specMarkdown = [
       `# Specification: ${request.name}`,
       "",
@@ -118,7 +180,7 @@ export class ResurrectionOrchestrator {
       traceLines,
       "",
       "## Legacy Idioms (AST analysis)",
-      ...summarizeForSpec(modernize(request.legacyCode)),
+      ...idiomLines,
       "",
       "## Acceptance Criteria",
       "- Modernized implementation MUST preserve exact `Object.is` output parity across all fuzzed inputs.",
@@ -130,11 +192,16 @@ export class ResurrectionOrchestrator {
     const maxAttempts = request.maxHealingAttempts ?? 3;
     const fuzzRuns = request.fuzzRuns ?? 20;
     let modernCode = "";
-    let lastReport = await deps.fuzzer.fuzz(request.legacyCode, request.legacyCode, request.schema, {
-      numRuns: 1,
-      exact: request.exact ?? false,
-      ...(request.seed !== undefined ? { seed: request.seed } : {}),
-    });
+    let lastReport = await traceSandbox(
+      "exorcist",
+      () =>
+        deps.fuzzer.fuzz(request.legacyCode, request.legacyCode, request.schema, {
+          numRuns: 1,
+          exact: request.exact ?? false,
+          ...(request.seed !== undefined ? { seed: request.seed } : {}),
+        }),
+      (r) => `${plural(r.totalRuns, "warm-up run")} of the oracle against itself`
+    );
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       emit(
@@ -163,14 +230,14 @@ export class ResurrectionOrchestrator {
 
       emit("exorcist", "agent_started", `Fuzzing candidate #${attempt} across ${fuzzRuns} generated inputs`);
       const observed: NonNullable<ResurrectionResult["observations"]> = [];
-      lastReport = await deps.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
+      lastReport = await traceSandbox("exorcist", () => deps.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
         ...(request.collectObservations === true
           ? { observe: (inputs: Record<string, unknown>, legacy: { ok: boolean; output?: unknown }) => void observed.push({ inputs, ok: legacy.ok, ...(legacy.ok ? { output: legacy.output } : {}) }) }
           : {}),
         numRuns: fuzzRuns,
         exact: request.exact ?? false,
         ...(request.seed !== undefined ? { seed: request.seed + attempt } : {}),
-      });
+      }), (r) => `${plural(r.totalRuns, "differential run")}, candidate #${attempt} vs legacy: ${r.passed ? "exact parity" : "counterexample found"}`);
 
       emit("exorcist", "fuzz_completed", `Completed ${lastReport.totalRuns} differential runs`, {
         passed: lastReport.passed,

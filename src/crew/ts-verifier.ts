@@ -12,6 +12,7 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as nodePath from "node:path";
+import { plural } from "../text/plural.js";
 
 export interface TsDiagnostic {
   /** Path relative to the checked file map ("" for project-wide diagnostics). */
@@ -33,6 +34,8 @@ export interface TypecheckResult {
   readonly engine: "typescript-api" | "tsc-cli";
   readonly tsVersion: string;
   readonly filesChecked: number;
+  /** The check ran on an already-warm compiler process (always false for the CLI engine). */
+  readonly reusedProcess: boolean;
 }
 
 /** The settings every verification uses (also written to exported projects as tsconfig.json). */
@@ -194,6 +197,7 @@ export class StrictTsVerifier {
   private async verifyWithApi(files: Readonly<Record<string, string>>, tsFiles: string[]): Promise<TypecheckResult> {
     const started = Date.now();
     this.clearIdle();
+    const reusedProcess = this.api !== undefined;
     const api = await this.ensureApi();
     const id = randomUUID();
     const map: Record<string, string> = { ...files, "tsconfig.json": strictTsconfig(), "package.json": `${JSON.stringify({ type: "module" })}\n` };
@@ -218,7 +222,7 @@ export class StrictTsVerifier {
           const { line, column } = at !== undefined ? lineColumn(text, d.pos) : { line: 0, column: 0 };
           return { file, line, column, code: d.code, message: flatten(d) };
         });
-        return { passed: errors.length === 0, errorCount: errors.length, diagnostics, elapsedMs: Date.now() - started, engine: "typescript-api", tsVersion: installedTypeScriptVersion(), filesChecked: tsFiles.length };
+        return { passed: errors.length === 0, errorCount: errors.length, diagnostics, elapsedMs: Date.now() - started, engine: "typescript-api", tsVersion: installedTypeScriptVersion(), filesChecked: tsFiles.length, reusedProcess };
       } finally {
         snapshot.dispose();
       }
@@ -299,7 +303,7 @@ async function verifyWithCli(files: Readonly<Record<string, string>>, tsFiles: s
     if (output.code !== 0 && errors.length === 0) {
       errors.push({ file: "", line: 0, column: 0, code: 0, message: `tsc exited with code ${String(output.code)}: ${output.text.trim().slice(0, 300)}` });
     }
-    return { passed: errors.length === 0, errorCount: errors.length, diagnostics: errors.slice(0, MAX_DIAGNOSTICS), elapsedMs: Date.now() - started, engine: "tsc-cli", tsVersion: installedTypeScriptVersion(), filesChecked: tsFiles.length };
+    return { passed: errors.length === 0, errorCount: errors.length, diagnostics: errors.slice(0, MAX_DIAGNOSTICS), elapsedMs: Date.now() - started, engine: "tsc-cli", tsVersion: installedTypeScriptVersion(), filesChecked: tsFiles.length, reusedProcess: false };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -325,6 +329,5 @@ export async function closeSharedTsVerifier(): Promise<void> {
 
 /** One-line summary for certificates and SPEC.md, e.g. "tsc --strict: 0 errors (2 files, TypeScript 7.0.2)". */
 export function describeTypecheck(result: Pick<TypecheckResult, "errorCount" | "filesChecked" | "tsVersion">): string {
-  const count = `${result.errorCount} error${result.errorCount === 1 ? "" : "s"}`;
-  return `tsc --strict: ${count} (${result.filesChecked} file${result.filesChecked === 1 ? "" : "s"}, TypeScript ${result.tsVersion})`;
+  return `tsc --strict: ${plural(result.errorCount, "error")} (${plural(result.filesChecked, "file")}, TypeScript ${result.tsVersion})`;
 }
