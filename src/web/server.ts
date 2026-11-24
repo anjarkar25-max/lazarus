@@ -1,13 +1,15 @@
 import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
 import { bundleToZipEntries, generateResurrectionBundle, sanitizeIdentifier } from "../exporter/bundle.js";
 import { createZip } from "../exporter/zip.js";
+import { generateVerifiedBundle, type TypecheckReport, type VerifiedBundle } from "../exporter/verified-bundle.js";
+import { closeSharedTsVerifier } from "../crew/ts-verifier.js";
 import { RedTeamBodySchema, runRedTeam } from "../sandbox/redteam.js";
 import { randomUUID } from "node:crypto";
 import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/graph-bundle.js";
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
-import { inferSignature, parseSignature, renderSignature } from "../crew/type-alchemist.js";
+import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
 import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
@@ -198,6 +200,76 @@ function flatSchemaOf(schema: InputSchema | Record<string, InputSchema>, preferr
   if (!isNestedSchema(schema)) return schema as InputSchema;
   return (preferred !== undefined ? schema[preferred] : undefined) ?? Object.values(schema)[0] ?? {};
 }
+/** Body of /api/export-bundle and /api/export-zip (also used by /api/resurrect to report the strict check). */
+export type ExportRequest = {
+  specimenName?: string;
+  legacyCode?: string;
+  modernCode?: string;
+  specMarkdown?: string;
+  fuzzRuns?: number;
+  healed?: boolean;
+  schema?: Record<string, string> | Record<string, Record<string, string>>;
+  functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
+  provenance?: unknown;
+  attempts?: number;
+  typeSignature?: unknown;
+  mutationAudit?: unknown;
+};
+/**
+ * Builds the PR bundle and verifies its TypeScript with the real compiler under --strict. The certificate and SPEC.md
+ * carry that server-computed result; any client-supplied claim about it is ignored.
+ */
+export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle> {
+  const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
+  const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
+  const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
+  const fnEntries = (parsed.functions ?? []).filter(
+    (f): f is { name: string; schema?: Record<string, string>; modernCode: string } =>
+      typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0
+  );
+  // Rollbacks recorded in the candidates' `// ast-rules:` headers must reach the ESM file too.
+  const headerLevels = fnEntries.length > 0 ? mergeLevels(fnEntries.map((f) => f.modernCode)) : readHeaderLevels(parsed.modernCode);
+  const esm = toEsmModule(parsed.legacyCode, headerLevels === undefined ? {} : { levels: headerLevels });
+  const scan = scanLegacyAst(parsed.legacyCode);
+  const requestedSchema = parsed.schema === undefined ? undefined : flatSchemaOf(parsed.schema as InputSchema, scan.primary?.exportedAs);
+  const schema = requestedSchema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
+  const moduleFunctions = fnEntries.map((f) => {
+    const scanned = scanLegacyAst(parsed.legacyCode ?? "", { functionName: f.name });
+    return {
+      name: f.name,
+      schema: f.schema ?? scanned.suggestedSchema,
+      legacyCode: scanned.primaryExpression,
+      modernCode: f.modernCode,
+    };
+  });
+  return generateVerifiedBundle(
+    {
+      specimenName: parsed.specimenName ?? "resurrectedSpecimen",
+      // The parity oracle runs the extracted expression; the diff shows the file as written.
+      legacyCode: scan.primaryExpression,
+      legacySource: parsed.legacyCode,
+      modernCode: parsed.modernCode,
+      specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
+      fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
+      healed: Boolean(parsed.healed),
+      ...(schema ? { schema } : {}),
+      ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
+      ...(moduleFunctions.length > 0 ? { functions: moduleFunctions } : {}),
+      ...(typeSignature !== undefined && moduleFunctions.length === 0 ? { typeSignature } : {}),
+    },
+    (typecheck) =>
+      generateCertificate({
+        provenance: sanitizeProvenance(parsed.provenance),
+        legacySource: parsed.legacyCode,
+        modernCode: parsed.modernCode,
+        fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
+        attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
+        esmComplete: esm.complete,
+        ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
+        typecheck,
+      }).markdown
+  );
+}
 export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
   npmFetch?: FetchLike;
@@ -244,6 +316,8 @@ function summarizeGraph(result: GraphResurrectionResult, bundleId: string | unde
       path: f.path,
       esmPath: f.esmPath,
       esmCode: f.esmCode,
+      tsPath: f.tsPath,
+      tsCode: f.tsCode,
       exports: f.esmExports,
       attempts: f.attempts,
       healed: f.healed,
@@ -251,6 +325,7 @@ function summarizeGraph(result: GraphResurrectionResult, bundleId: string | unde
       fuzzRuns: f.fuzzRuns,
       success: f.success,
     })),
+    ...(result.typecheck !== undefined ? { typecheck: result.typecheck } : {}),
     parity:
       result.parity === undefined
         ? undefined
@@ -361,7 +436,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       const legacySource = body.legacyCode;
       const provenance = sanitizeProvenance(body.provenance);
       /** The certificate exists only for a verified resurrection. */
-      const certificateFor = (r: ResurrectionResult, esmComplete: boolean): { certificate?: ReturnType<typeof generateCertificate> } =>
+      const certificateFor = (r: ResurrectionResult, esmComplete: boolean, typecheck?: TypecheckReport): { certificate?: ReturnType<typeof generateCertificate> } =>
         r.success
           ? {
               certificate: generateCertificate({
@@ -371,6 +446,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
                 fuzz: { totalRuns: r.fuzzReport.totalRuns, exact: r.fuzzReport.exact === true, ...(r.fuzzReport.boundaryRuns !== undefined ? { boundaryRuns: r.fuzzReport.boundaryRuns } : {}) },
                 attempts: r.attempts,
                 esmComplete,
+                ...(typecheck !== undefined ? { typecheck } : {}),
               }),
             }
           : {};
@@ -397,9 +473,21 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             onEvent: request.onEvent ?? (() => undefined),
           });
           const { functions, skipped, esm, levels: _levels, ...aggregate } = merged;
+          // The same strict check the export runs, so the live result and the PR bundle agree.
+          const verified = merged.success
+            ? await buildExportBundle({
+                specimenName: sanitizeIdentifier(request.name),
+                legacyCode: body.legacyCode,
+                modernCode: merged.modernCode,
+                fuzzRuns: merged.fuzzReport.totalRuns,
+                attempts: merged.attempts,
+                functions: functions.map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
+              })
+            : undefined;
           const result = {
             ...aggregate,
-            ...certificateFor(merged, esm.complete),
+            ...certificateFor(merged, esm.complete, verified?.typecheck),
+            ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             module: {
               functions: functions.map((f) => ({
                 name: f.name,
@@ -418,10 +506,25 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         } else {
           const { observations, ...resurrected } = await orchestrator.resurrect(request);
           // Type Alchemist: types observed during the passing fuzz run (fuzzed domain only).
-          const typeSignature = resurrected.success && observations !== undefined && observations.length > 0 ? inferSignature(observations, request.schema) : undefined;
+          const observed = resurrected.success && observations !== undefined && observations.length > 0 ? inferSignature(observations, request.schema) : undefined;
+          const verified = resurrected.success
+            ? await buildExportBundle({
+                specimenName: sanitizeIdentifier(request.name),
+                legacyCode: body.legacyCode,
+                modernCode: resurrected.modernCode,
+                fuzzRuns: resurrected.fuzzReport.totalRuns,
+                attempts: resurrected.attempts,
+                healed: resurrected.attempts > 1,
+                schema: request.schema,
+                ...(observed !== undefined ? { typeSignature: observed } : {}),
+              })
+            : undefined;
+          // If tsc rejected the observed return type, the exported (and displayed) signature is the widened one.
+          const typeSignature = observed !== undefined && verified?.typecheck.widenedReturn === true ? widenReturn(observed) : observed;
           const result = {
             ...resurrected,
-            ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete),
+            ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete, verified?.typecheck),
+            ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             ...(typeSignature !== undefined ? { typeSignature, typeSignatureText: renderSignature(typeSignature, sanitizeIdentifier(request.name)) } : {}),
           };
           res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
@@ -466,70 +569,13 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         raw += chunk;
       }
       try {
-        const parsed = JSON.parse(raw || "{}") as {
-          specimenName?: string;
-          legacyCode?: string;
-          modernCode?: string;
-          specMarkdown?: string;
-          fuzzRuns?: number;
-          healed?: boolean;
-          schema?: Record<string, string> | Record<string, Record<string, string>>;
-          functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
-          provenance?: unknown;
-          attempts?: number;
-          typeSignature?: unknown;
-          mutationAudit?: unknown;
-        };
+        const parsed = JSON.parse(raw || "{}") as ExportRequest;
         if (!parsed.legacyCode || !parsed.modernCode) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
-        const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
-        const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
-        const fnEntries = (parsed.functions ?? []).filter(
-          (f): f is { name: string; schema?: Record<string, string>; modernCode: string } =>
-            typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0
-        );
-        // Rollbacks recorded in the candidates' `// ast-rules:` headers must reach the ESM file too.
-        const headerLevels = fnEntries.length > 0 ? mergeLevels(fnEntries.map((f) => f.modernCode)) : readHeaderLevels(parsed.modernCode);
-        const esm = toEsmModule(parsed.legacyCode, headerLevels === undefined ? {} : { levels: headerLevels });
-        const scan = scanLegacyAst(parsed.legacyCode);
-        const requestedSchema = parsed.schema === undefined ? undefined : flatSchemaOf(parsed.schema as InputSchema, scan.primary?.exportedAs);
-        const schema = requestedSchema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
-        const moduleFunctions = fnEntries.map((f) => {
-          const scanned = scanLegacyAst(parsed.legacyCode ?? "", { functionName: f.name });
-          return {
-            name: f.name,
-            schema: f.schema ?? scanned.suggestedSchema,
-            legacyCode: scanned.primaryExpression,
-            modernCode: f.modernCode,
-          };
-        });
-        const bundle = generateResurrectionBundle({
-          specimenName: parsed.specimenName ?? "resurrectedSpecimen",
-          // The parity oracle runs the extracted expression; the diff shows the file as written.
-          legacyCode: scan.primaryExpression,
-          legacySource: parsed.legacyCode,
-          modernCode: parsed.modernCode,
-          specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
-          fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
-          healed: Boolean(parsed.healed),
-          ...(schema ? { schema } : {}),
-          ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
-          ...(moduleFunctions.length > 0 ? { functions: moduleFunctions } : {}),
-          certificateMarkdown: generateCertificate({
-            provenance: sanitizeProvenance(parsed.provenance),
-            legacySource: parsed.legacyCode,
-            modernCode: parsed.modernCode,
-            fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
-            attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1,
-            esmComplete: esm.complete,
-            ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
-          }).markdown,
-          ...(typeSignature !== undefined && moduleFunctions.length === 0 ? { typeSignature } : {}),
-        });
+        const { bundle, typecheck } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
         if (routePath === "/api/export-zip") {
           const archive = createZip(bundleToZipEntries(bundle));
           res.writeHead(200, {
@@ -542,7 +588,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(bundle));
+        res.end(JSON.stringify({ ...bundle, typecheck }));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -787,7 +833,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), closeSharedTsVerifier()]);
   });
   return server;
 }

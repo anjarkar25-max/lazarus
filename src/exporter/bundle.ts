@@ -27,6 +27,8 @@ export interface ResurrectionBundleInput {
   certificateMarkdown?: string;
   /** Fuzz-observed TypeScript signature (Type Alchemist): typed resurrected.ts plus types.d.ts. */
   typeSignature?: TypeSignature;
+  /** Server-computed strict type-check summary for SPEC.md (see verified-bundle.ts); never taken from a client. */
+  typecheckLines?: string[];
 }
 export interface ModuleFunctionInput {
   /** Export name (the TypeScript function name). */
@@ -259,6 +261,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
     `- **Status:** 100% Behavioral Parity Proven (\`Object.is\`)`,
     `- **Differential Fuzzing Runs:** ${fuzzRuns}`,
     `- **Self-Healed by Necromancer:** ${input.healed ? 'Yes' : 'No (Zero Divergences)'}`,
+    ...(input.typecheckLines ?? []),
     `- **Input Contract:** \`${signature}\``,
     ``,
     ...(input.certificateMarkdown !== undefined ? [input.certificateMarkdown.trim(), ``] : []),

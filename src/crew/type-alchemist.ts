@@ -180,9 +180,23 @@ function returnNotesFor(values: readonly unknown[]): string[] {
 }
 
 /** Signature from fuzz observations. `schema` supplies parameter order and the fuzzed kinds. */
-export function inferSignature(observations: readonly Observation[], schema: InputSchema): TypeSignature {
+export interface InferOptions {
+  /**
+   * "schema" (default): parameters get the type of their fuzz kind (observed types only for `json`).
+   * "observed": parameters get the union of the values they were actually called with (multi-file graphs, where a
+   * module is called by its dependents with values the per-file fuzz schema never produced).
+   */
+  readonly paramsFrom?: "schema" | "observed";
+}
+
+export function inferSignature(observations: readonly Observation[], schema: InputSchema, options: InferOptions = {}): TypeSignature {
   const decoded = observations.map((o) => ({ inputs: decodeTagged(o.inputs) as Record<string, unknown>, ok: o.ok, output: o.ok ? decodeTagged(o.output) : undefined }));
   const params = Object.entries(schema).map(([name, fuzzedAs]) => {
+    if (options.paramsFrom === "observed") {
+      const seen = decoded.filter((o) => Object.prototype.hasOwnProperty.call(o.inputs, name));
+      const observed = seen.reduce<TsType | undefined>((acc, o) => mergeTypes(acc, typeOfValue(o.inputs[name])), undefined);
+      if (observed !== undefined) return { name, type: observed, fuzzedAs };
+    }
     if (fuzzedAs !== "json") return { name, type: PARAM_FROM_KIND[fuzzedAs], fuzzedAs };
     const observed = decoded.reduce<TsType | undefined>((acc, o) => mergeTypes(acc, typeOfValue(o.inputs[name])), undefined);
     return { name, type: observed ?? { kind: "unknown" }, fuzzedAs };
@@ -198,6 +212,10 @@ export function inferSignature(observations: readonly Observation[], schema: Inp
   };
 }
 
+/** The same signature with the return type widened to `unknown` (used when tsc rejects the observed return type). */
+export function widenReturn(sig: TypeSignature): TypeSignature {
+  return { ...sig, returns: { kind: "unknown" } };
+}
 /** `(n: number) => number`, for the UI pill. */
 export function renderSignature(sig: TypeSignature, name: string): string {
   return `${name}(${sig.params.map((p) => `${p.name}: ${renderType(p.type)}`).join(", ")}): ${renderType(sig.returns)}`;
@@ -209,7 +227,11 @@ const docSafe = (text: string): string => text.replace(/\*\//g, "* /").replace(/
 export function renderJsDoc(sig: TypeSignature, header: readonly string[] = []): string {
   const lines = [...header.map((h) => ` * ${docSafe(h)}`)];
   if (header.length > 0) lines.push(" *");
-  for (const p of sig.params) lines.push(` * @param ${p.name} ${docSafe(`fuzzed as ${p.fuzzedAs}`)}`);
+  for (const p of sig.params) {
+    const fromKind = p.fuzzedAs === "json" ? undefined : renderType(PARAM_FROM_KIND[p.fuzzedAs]);
+    const observed = renderType(p.type);
+    lines.push(` * @param ${p.name} ${docSafe(fromKind === observed ? `fuzzed as ${p.fuzzedAs}` : `observed as ${observed} (fuzzed as ${p.fuzzedAs})`)}`);
+  }
   const notes = [...sig.returnNotes, ...(sig.throws > 0 ? [`throws for ${sig.throws} of ${sig.samples} observed inputs`] : [])];
   lines.push(` * @returns ${docSafe(notes.length > 0 ? notes.join("; ") : renderType(sig.returns))}`);
   lines.push(` * @remarks ${docSafe(`Types inferred by the Lazarus Type Alchemist from ${sig.samples} exact fuzz observations (fuzzed domain only).`)}`);

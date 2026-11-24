@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripTypeScriptTypes } from "node:module";
 import { parse } from "acorn";
 import * as fc from "fast-check";
 import { afterAll, describe, expect, it } from "vitest";
@@ -237,19 +238,21 @@ describe("resurrectGraph", () => {
         "package.json",
         "resurrected.test.ts",
         "resurrection.patch",
-        "src/invoice.js",
-        "src/money.js",
+        "src/invoice.ts",
+        "src/money.ts",
         "src/package.json",
-        "src/tax.js",
+        "src/tax.ts",
+        "tsconfig.json",
       ].sort()
     );
     for (const e of entries) expect(e.data.toString("utf8")).toBe(bundle.files[e.name]);
     const patch = bundle.files["resurrection.patch"] ?? "";
-    for (const f of ["money", "tax", "invoice"]) expect(patch).toContain(`diff --git a/${f}.cjs b/src/${f}.js`);
+    for (const f of ["money", "tax", "invoice"]) expect(patch).toContain(`diff --git a/${f}.cjs b/src/${f}.ts`);
     expect(bundle.files["SPEC.md"]).toContain("`money.cjs` -> `tax.cjs` -> `invoice.cjs`");
     expect(bundle.files["resurrected.test.ts"]).toContain("import * as modern from './src/invoice.js';");
     expect(bundle.files["resurrected.test.ts"]).toContain("createRequire(import.meta.url)('./legacy/invoice.cjs')");
-    for (const f of ["src/money.js", "src/tax.js", "src/invoice.js"]) expect(() => parse(bundle.files[f] ?? "", { ecmaVersion: "latest", sourceType: "module" })).not.toThrow();
+    // Typed modules: valid TypeScript whose type-erased form is the verified ES module.
+    for (const f of ["src/money.ts", "src/tax.ts", "src/invoice.ts"]) expect(() => parse(stripTypeScriptTypes(bundle.files[f] ?? ""), { ecmaVersion: "latest", sourceType: "module" })).not.toThrow();
   }, 60_000);
 });
 
@@ -268,7 +271,7 @@ describe("CLI directory mode", () => {
       expect(code).toBe(0);
       expect(stdout).toContain("order: money.cjs -> tax.cjs -> invoice.cjs");
       expect(stdout).toContain("Whole-graph parity proven");
-      for (const f of ["src/money.js", "src/tax.js", "src/invoice.js", "legacy/invoice.cjs", "resurrected.test.ts", "SPEC.md", "resurrection.patch", ".github/workflows/lazarus-parity.yml"]) {
+      for (const f of ["src/money.ts", "src/tax.ts", "src/invoice.ts", "tsconfig.json", "legacy/invoice.cjs", "resurrected.test.ts", "SPEC.md", "resurrection.patch", ".github/workflows/lazarus-parity.yml"]) {
         expect(fs.existsSync(nodePath.join(out, f))).toBe(true);
       }
     } finally {

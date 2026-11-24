@@ -30,6 +30,9 @@ import {
 } from "./ast-modernizer.js";
 import { analyze, walk } from "./ast-scope.js";
 import { toEsmModule } from "./esm-export.js";
+import { annotateModule, applyBoundaryFixes } from "./ts-emit.js";
+import { verifyStrictTypeScript, type TypecheckResult } from "./ts-verifier.js";
+import { inferSignature, type Observation, type TypeSignature } from "./type-alchemist.js";
 
 // ---------------------------------------------------------------------------
 // Graph analysis
@@ -314,6 +317,12 @@ export interface ExportProbe {
   readonly schema: InputSchema;
 }
 
+export interface GraphTypecheck extends TypecheckResult {
+  /** Members declared `any` at the migration boundary. */
+  readonly adjustments: string[];
+  readonly rounds: number;
+}
+
 export interface FileResult {
   readonly path: string;
   readonly esmPath: string;
@@ -321,6 +330,11 @@ export interface FileResult {
   /** Modernized CommonJS that passed the per-file Exorcist. */
   readonly modernCjs: string;
   readonly esmCode: string;
+  /** Typed TypeScript module (Type Alchemist annotations), e.g. `money.ts`. Empty until the graph is proven. */
+  readonly tsPath: string;
+  readonly tsCode: string;
+  /** Inferred signatures of the exported functions, by export name. */
+  readonly signatures: Record<string, TypeSignature>;
   readonly esmExports: string[];
   readonly levels: RuleLevels;
   readonly rulesApplied: RuleId[];
@@ -346,6 +360,8 @@ export interface GraphResurrectionResult {
   readonly graph: ModuleGraph;
   readonly files: FileResult[];
   readonly parity: GraphParity | undefined;
+  /** Strict `tsc` check of the typed project (only after whole-graph parity is proven). */
+  readonly typecheck?: GraphTypecheck;
   readonly error?: string;
   readonly durationMs: number;
 }
@@ -394,11 +410,17 @@ async function fuzzAll(
   legacyCall: (p: ExportProbe) => string,
   modernCall: (p: ExportProbe) => string,
   runs: number,
-  seed: number | undefined
+  seed: number | undefined,
+  collect?: (probe: ExportProbe, observation: Observation) => void
 ): Promise<{ reports: Array<{ probe: ExportProbe; report: FuzzReport }>; failing?: { probe: ExportProbe; report: FuzzReport } }> {
   const reports: Array<{ probe: ExportProbe; report: FuzzReport }> = [];
   for (const probe of probes) {
-    const report = await fuzzer.fuzz(legacyCall(probe), modernCall(probe), probe.schema, { numRuns: runs, exact: true, ...(seed !== undefined ? { seed } : {}) });
+    const report = await fuzzer.fuzz(legacyCall(probe), modernCall(probe), probe.schema, {
+      numRuns: runs,
+      exact: true,
+      ...(seed !== undefined ? { seed } : {}),
+      ...(collect !== undefined ? { observe: (inputs: Record<string, unknown>, legacy: { ok: boolean; output?: unknown }) => collect(probe, { inputs, ok: legacy.ok, ...(legacy.ok ? { output: legacy.output } : {}) }) } : {}),
+    });
     reports.push({ probe, report });
     if (!report.passed) return { reports, failing: { probe, report } };
   }
@@ -441,6 +463,8 @@ async function resurrectWith(
   for (const f of graph.files) legacyFiles[f] = files[f] ?? "";
   const results: FileResult[] = [];
   const esmByFile = new Map<string, { code: string; exports: string[] }>();
+  /** Per file, per export: inputs and legacy outputs of the passing per-file fuzz run. */
+  const perFileObs = new Map<string, Map<string, Observation[]>>();
   /** CommonJS -> ESM for one file, with its relative requires stitched to the dependencies' ES modules. */
   const esmFor = (file: string, levels: RuleLevels): ReturnType<typeof toEsmModule> =>
     toEsmModule(legacyFiles[file] ?? "", {
@@ -459,6 +483,12 @@ async function resurrectWith(
     const source = legacyFiles[file] ?? "";
     emit({ kind: "node", file, state: "probing", detail: `Exorcist fuzzing the exports of ${file}` });
     const probes = probesOf(source, file === graph.entry ? options.schemas : undefined);
+    let attemptObs = new Map<string, Observation[]>();
+    const collect = (probe: ExportProbe, observation: Observation): void => {
+      const list = attemptObs.get(probe.exportedAs) ?? [];
+      list.push(observation);
+      attemptObs.set(probe.exportedAs, list);
+    };
     let levels = defaultLevels();
     let attempts = 0;
     let healed = false;
@@ -476,7 +506,8 @@ async function resurrectWith(
       const modernExec = withVirtualFiles(executors.modern, modernFiles);
       const fuzzer = new DifferentialFuzzer({ legacy: legacyExec, modern: modernExec });
       const call = (p: ExportProbe): string => callFor(file, p);
-      const outcome = await fuzzAll(fuzzer, probes, call, call, fileRuns, options.seed);
+      attemptObs = new Map();
+      const outcome = await fuzzAll(fuzzer, probes, call, call, fileRuns, options.seed, collect);
       fuzzRuns += outcome.reports.reduce((sum, r) => sum + r.report.totalRuns, 0);
       if (outcome.failing === undefined) {
         passed = true;
@@ -520,7 +551,8 @@ async function resurrectWith(
       candidate = modernize(source, { levels });
       const fuzzer = new DifferentialFuzzer({ legacy: legacyExec, modern: withVirtualFiles(executors.modern, { ...legacyFiles, [file]: candidate.code }) });
       const call = (p: ExportProbe): string => callFor(file, p);
-      const outcome = await fuzzAll(fuzzer, probes, call, call, fileRuns, options.seed);
+      attemptObs = new Map();
+      const outcome = await fuzzAll(fuzzer, probes, call, call, fileRuns, options.seed, collect);
       fuzzRuns += outcome.reports.reduce((sum, r) => sum + r.report.totalRuns, 0);
       passed = outcome.failing === undefined;
       if (passed) notes.push("kept every AST rule off (verbatim legacy semantics)");
@@ -536,6 +568,9 @@ async function resurrectWith(
       modernCjs: candidate.code,
       esmCode: esm.complete ? `// ast-rules: ${encodeLevels(levels)}\n${esm.code}` : "",
       esmExports: esm.exports,
+      tsPath: tsPathFor(graph.esmPaths[file] ?? esmPathFor(file)),
+      tsCode: "",
+      signatures: {},
       levels,
       rulesApplied: [...new Set(candidate.applied.map((a) => a.rule))],
       rolledBack,
@@ -552,6 +587,7 @@ async function resurrectWith(
       return fail(`${file} could not be resurrected: ${notes.join("; ") || "parity could not be proven"}`, results);
     }
     esmByFile.set(file, { code: esm.code, exports: esm.exports });
+    perFileObs.set(file, attemptObs);
     emit({ kind: "node", file, state: "resurrected", detail: `${probes.length} export(s), ${fuzzRuns} runs, ${attempts} attempt(s)${healed ? `, rolled back ${rolledBack.join(", ")}` : ""}` });
   }
 
@@ -572,12 +608,17 @@ async function resurrectWith(
   };
   const modernCall = (probe: ExportProbe): string =>
     probe.exportedAs === "default" ? `require(${JSON.stringify(`./${esmEntry}`)}).default(${Object.keys(probe.schema).join(", ")})` : callFor(esmEntry, probe);
+  /** Wire inputs of the latest whole-graph fuzz run, per entry export. */
+  let graphInputs = new Map<string, Record<string, unknown>[]>();
   const checkGraph = async (modernGraph: Record<string, string>, runs: number, seed: number | undefined): Promise<GraphParity> => {
     const fuzzer = new DifferentialFuzzer({ legacy: legacyGraphExec, modern: withVirtualFiles(executors.modern, modernGraph) });
     const functions: GraphParity["functions"] = [];
     let total = 0;
+    graphInputs = new Map();
     for (const probe of entryProbes) {
-      const report = await fuzzer.fuzz(callFor(entry, probe), modernCall(probe), probe.schema, { numRuns: runs, exact: true, ...(seed !== undefined ? { seed } : {}) });
+      const inputs: Record<string, unknown>[] = [];
+      graphInputs.set(probe.exportedAs, inputs);
+      const report = await fuzzer.fuzz(callFor(entry, probe), modernCall(probe), probe.schema, { numRuns: runs, exact: true, ...(seed !== undefined ? { seed } : {}), observe: (wire) => void inputs.push(wire) });
       total += report.totalRuns;
       functions.push({ name: probe.name, exportedAs: probe.exportedAs, schema: probe.schema, passed: report.passed, totalRuns: report.totalRuns, ...(report.counterexample !== undefined ? { counterexample: report.counterexample } : {}) });
       if (!report.passed) break;
@@ -657,7 +698,131 @@ async function resurrectWith(
     return fail(`whole-graph parity failed for ${bad?.exportedAs ?? "an export"}: ${bad?.counterexample?.reason ?? "divergence"}`, results, parity);
   }
   emit({ kind: "log", message: `Whole-graph parity proven: ${parity.totalRuns} exact Object.is runs across ${parity.functions.length} entry export(s)${graphRounds > 0 ? ` after ${graphRounds} graph-level rollback(s)` : ""}` });
-  return { success: true, name: options.name, graph, files: results, parity, durationMs: Date.now() - started };
+  emit({ kind: "log", message: "Type Alchemist: replaying the whole-graph inputs to observe every cross-module call" });
+  const typed = await typeGraph(results, graph, legacyGraphExec, entry, entryProbes, perFileObs, graphInputs);
+  emit({
+    kind: "log",
+    message: `tsc --strict on the typed project: ${typed.typecheck.errorCount} error(s) across ${typed.typecheck.filesChecked} file(s)${typed.typecheck.adjustments.length > 0 ? `, ${typed.typecheck.adjustments.length} member(s) declared any at the migration boundary` : ""}`,
+  });
+  return { success: true, name: options.name, graph, files: typed.files, parity, typecheck: typed.typecheck, durationMs: Date.now() - started };
+}
+
+/** `lib/money.js` -> `lib/money.ts`. */
+export function tsPathFor(esmPath: string): string {
+  return esmPath.replace(/\.js$/, ".ts");
+}
+
+const MAX_CALLS_PER_EXPORT = 400;
+
+/**
+ * Legacy-graph probe that wraps every exported function of every module (dependencies first, so dependents capture the
+ * wrappers) and records the arguments and return value of each call while the entry export runs on the given inputs.
+ * It runs in the sandbox like any other probe; it only observes, parity was already proven.
+ */
+function callObservationProbe(order: readonly string[], entry: string, probe: ExportProbe): string {
+  const args = Object.keys(probe.schema).map((k) => `input[${JSON.stringify(k)}]`).join(", ");
+  const call = probe.exportedAs === "default" ? `entryModule(${args})` : `entryModule[${JSON.stringify(probe.exportedAs)}](${args})`;
+  return `(function () {
+  var log = [];
+  var counts = {};
+  function record(file, name, args, ret) {
+    var key = file + "#" + name;
+    counts[key] = (counts[key] || 0) + 1;
+    if (counts[key] <= ${MAX_CALLS_PER_EXPORT}) log.push({ f: file, n: name, a: args, r: ret });
+  }
+  function wrap(file, m) {
+    if (m === null || typeof m !== "object") return;
+    Object.keys(m).forEach(function (k) {
+      var fn = m[k];
+      if (typeof fn !== "function") return;
+      m[k] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        var ret = fn.apply(this, arguments);
+        record(file, k, args, ret);
+        return ret;
+      };
+    });
+  }
+  ${JSON.stringify(order)}.forEach(function (f) { wrap(f, require("./" + f)); });
+  var entryModule = require(${JSON.stringify(`./${entry}`)});
+  lazarusGraphInputs.forEach(function (input) {
+    try {
+      var ret = ${call};
+      ${probe.exportedAs === "default" ? `record(${JSON.stringify(entry)}, "default", [${args}], ret);` : ""}
+    } catch (e) {}
+  });
+  return log;
+})()`;
+}
+
+async function typeGraph(
+  results: readonly FileResult[],
+  graph: ModuleGraph,
+  legacyExec: ProbeExecutor,
+  entry: string,
+  entryProbes: readonly ExportProbe[],
+  perFileObs: ReadonlyMap<string, ReadonlyMap<string, Observation[]>>,
+  graphInputs: ReadonlyMap<string, Record<string, unknown>[]>
+): Promise<{ files: FileResult[]; typecheck: GraphTypecheck }> {
+  // 1. Observe every cross-module call made while the entry runs on the whole-graph fuzz inputs.
+  const calls = new Map<string, Observation[]>();
+  for (const probe of entryProbes) {
+    const inputs = graphInputs.get(probe.exportedAs) ?? [];
+    if (inputs.length === 0) continue;
+    let log: unknown;
+    try {
+      log = (await legacyExec.run({ code: callObservationProbe(graph.order, entry, probe), context: { lazarusGraphInputs: inputs }, encoding: "tagged" })).output;
+    } catch {
+      continue; // Observation is best effort; per-file observations still apply.
+    }
+    if (!Array.isArray(log)) continue;
+    for (const item of log) {
+      if (typeof item !== "object" || item === null) continue;
+      const rec = item as { f?: unknown; n?: unknown; a?: unknown; r?: unknown };
+      if (typeof rec.f !== "string" || typeof rec.n !== "string" || !Array.isArray(rec.a)) continue;
+      const key = `${rec.f}\u0000${rec.n}`;
+      const list = calls.get(key) ?? [];
+      list.push({ inputs: { __args: rec.a }, ok: true, output: rec.r });
+      calls.set(key, list);
+    }
+  }
+  // 2. Signatures: per-file fuzz observations plus observed calls, parameters typed by what they actually received.
+  const typedFiles: FileResult[] = results.map((r) => {
+    const signatures: Record<string, TypeSignature> = {};
+    for (const probe of r.probes) {
+      const names = Object.keys(probe.schema);
+      const own = perFileObs.get(r.path)?.get(probe.exportedAs) ?? [];
+      const observedCalls = (calls.get(`${r.path}\u0000${probe.exportedAs}`) ?? []).map((c): Observation => {
+        const args = (c.inputs["__args"] as unknown[] | undefined) ?? [];
+        return { inputs: Object.fromEntries(names.map((n, i) => [n, args[i]])), ok: true, output: c.output };
+      });
+      const observations = [...own, ...observedCalls];
+      if (observations.length > 0) signatures[probe.exportedAs] = inferSignature(observations, probe.schema, { paramsFrom: "observed" });
+    }
+    const annotated = annotateModule(r.esmCode, new Map(Object.entries(signatures)));
+    return { ...r, tsCode: annotated.code, signatures };
+  });
+  // 3. Strict check of the whole typed project; declare legacy internals strict mode cannot type, then check again.
+  const project = (files: readonly FileResult[]): Record<string, string> => Object.fromEntries(files.map((f) => [f.tsPath, f.tsCode]));
+  let result = await verifyStrictTypeScript(project(typedFiles));
+  let rounds = 1;
+  const adjustments: string[] = [];
+  let files = typedFiles;
+  if (!result.passed) {
+    let changed = false;
+    files = typedFiles.map((f) => {
+      const fixed = applyBoundaryFixes(f.tsCode, result.diagnostics, f.tsPath);
+      if (!fixed.changed) return f;
+      changed = true;
+      adjustments.push(...fixed.adjustments.map((a) => `${f.tsPath}: ${a}`));
+      return { ...f, tsCode: fixed.code };
+    });
+    if (changed) {
+      result = await verifyStrictTypeScript(project(files));
+      rounds++;
+    }
+  }
+  return { files, typecheck: { ...result, adjustments, rounds } };
 }
 
 /** Relative import specifier from a directory to a file, always starting with "./" or "../". */

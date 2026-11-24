@@ -94,7 +94,7 @@ describe("POST /api/resurrect-graph", () => {
     expect(res.headers.get("content-type")).toBe("application/zip");
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="lazarus-legacy_invoice_engine-project.zip"');
     const names = readZip(Buffer.from(await res.arrayBuffer())).map((e) => e.name);
-    expect(names).toEqual(expect.arrayContaining(["src/money.js", "src/tax.js", "src/invoice.js", "legacy/money.cjs", "resurrected.test.ts", "SPEC.md", "resurrection.patch", ".github/workflows/lazarus-parity.yml"]));
+    expect(names).toEqual(expect.arrayContaining(["src/money.ts", "src/tax.ts", "src/invoice.ts", "tsconfig.json", "legacy/money.cjs", "resurrected.test.ts", "SPEC.md", "resurrection.patch", ".github/workflows/lazarus-parity.yml"]));
   });
 
   it("returns 404 for an unknown bundleId and 400 for a malformed one", async () => {

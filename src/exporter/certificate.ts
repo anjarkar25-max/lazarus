@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { RULE_ORDER, modernize, readHeaderLevels, type RuleId } from "../crew/ast-modernizer.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import { describeTypecheck } from "../crew/ts-verifier.js";
 
 export type ProvenanceKind = "preset" | "github" | "npm" | "paste" | "file";
 
@@ -28,6 +29,14 @@ export interface CertificateInput {
   readonly esmComplete?: boolean;
   /** Result of a "Prove the Proof" mutation audit, when one was run. */
   readonly mutation?: MutationScore;
+  /** Server-computed strict TypeScript check of the exported code (never a client claim). */
+  readonly typecheck?: TypecheckClaim;
+}
+
+export interface TypecheckClaim {
+  readonly errorCount: number;
+  readonly filesChecked: number;
+  readonly tsVersion: string;
 }
 
 export interface MutationScore {
@@ -65,6 +74,7 @@ export interface Certificate {
     readonly selfHealed: boolean;
   };
   readonly mutation?: MutationScore;
+  readonly typecheck?: TypecheckClaim;
   readonly markdown: string;
 }
 
@@ -158,6 +168,11 @@ export function generateCertificate(input: CertificateInput): Certificate {
   const provenanceLine = describeProvenance(input.provenance);
   const id = `LZ-${shortDigest.toUpperCase()}`;
   const debtGrade = gradeFor(debtScore);
+  const tc = input.typecheck;
+  const typecheck =
+    tc !== undefined && Number.isInteger(tc.errorCount) && tc.errorCount >= 0 && Number.isInteger(tc.filesChecked) && tc.filesChecked >= 0 && /^[\w.+-]{1,40}$/.test(tc.tsVersion)
+      ? { errorCount: tc.errorCount, filesChecked: tc.filesChecked, tsVersion: tc.tsVersion }
+      : undefined;
   const mutation =
     input.mutation !== undefined && Number.isInteger(input.mutation.killed) && Number.isInteger(input.mutation.total) && input.mutation.total > 0 && input.mutation.killed >= 0 && input.mutation.killed <= input.mutation.total
       ? { killed: input.mutation.killed, total: input.mutation.total }
@@ -177,6 +192,7 @@ export function generateCertificate(input: CertificateInput): Certificate {
     `| Parity proof | ${parity.mode}, ${parity.runs} fuzz runs${parity.boundaryRuns > 0 ? ` (${parity.boundaryRuns} boundary)` : ""} |`,
     `| Attempts | ${parity.attempts}${selfHealed ? " (self-healed)" : " (first draft held)"} |`,
     ...(mutation !== undefined ? [`| Proof strength (mutation audit) | ${describeMutation(mutation)} |`] : []),
+    ...(typecheck !== undefined ? [`| TypeScript strict check | ${describeTypecheck(typecheck)} |`] : []),
     ``,
     `_Verified by differential fuzzing in an isolated sandbox. Parity is proven over the fuzzed input domain, not for all inputs._`,
     ``,
@@ -195,6 +211,7 @@ export function generateCertificate(input: CertificateInput): Certificate {
     rolledBack,
     parity,
     ...(mutation !== undefined ? { mutation } : {}),
+    ...(typecheck !== undefined ? { typecheck } : {}),
     markdown,
   };
 }

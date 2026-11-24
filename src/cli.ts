@@ -15,6 +15,7 @@ import { scanLegacyAst } from "./sandbox/ast-scanner.js";
 import { generateCertificate } from "./exporter/certificate.js";
 import { resurrectGraph } from "./crew/graph-resurrector.js";
 import { buildGraphBundle } from "./exporter/graph-bundle.js";
+import { describeTypecheck } from "./crew/ts-verifier.js";
 import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
 
@@ -418,6 +419,10 @@ async function runDirectory(dir: string, args: ParsedArgs, io: CliIo): Promise<n
     return 1;
   }
   io.stdout(`\nWhole-graph parity proven: ${result.parity?.totalRuns ?? 0} exact Object.is runs end to end, ${result.files.length} files resurrected leaves first.\n`);
+  if (result.typecheck !== undefined) {
+    io.stdout(`${describeTypecheck(result.typecheck)}${result.typecheck.adjustments.length > 0 ? `; ${result.typecheck.adjustments.length} member(s) declared any at the migration boundary` : ""}\n`);
+    for (const d of result.typecheck.diagnostics.slice(0, 5)) io.stdout(`  ${d.file}:${d.line}:${d.column} TS${d.code} ${d.message}\n`);
+  }
   io.stdout(`Wrote ${Object.keys(bundle.files).length} files to ${outDir}:\n`);
   for (const [file, content] of Object.entries(bundle.files)) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
   return 0;

@@ -5,6 +5,7 @@ import type { GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import type { ParamKind } from "../fuzzer/types.js";
 import { renderWorkflow, sanitizeIdentifier, WORKFLOW_PATH } from "./bundle.js";
 import { createZip } from "./zip.js";
+import { describeTypecheck, strictTsconfig } from "../crew/ts-verifier.js";
 
 export interface GraphBundle {
   readonly name: string;
@@ -87,24 +88,31 @@ function renderTest(result: GraphResurrectionResult, runs: number): string {
 
 function renderSpec(result: GraphResurrectionResult): string {
   const parity = result.parity;
+  const tc = result.typecheck;
+  const first = tc?.diagnostics[0];
+  const firstError = first === undefined ? "unknown error" : `${first.file}:${first.line}:${first.column} TS${first.code} ${first.message}`.replace(/`/g, "'").slice(0, 200);
+  const outputByLegacy = new Map(result.files.map((f) => [f.path, outputPath(f)]));
+  const entryOutput = outputByLegacy.get(result.graph.entry ?? "") ?? "";
   const lines = [
     `# Kiro Resurrection Specification: ${result.name} (multi-file graph)`,
     ``,
     `- **Status:** ${result.success ? "Whole-graph behavioral parity proven (exact \`Object.is\`)" : "NOT resurrected"}`,
-    `- **Entry module:** \`${result.graph.entry ?? "none"}\` -> \`src/${result.graph.esmPaths[result.graph.entry ?? ""] ?? ""}\``,
+    `- **Entry module:** \`${result.graph.entry ?? "none"}\` -> \`src/${entryOutput}\``,
     `- **Resurrection order (leaves first):** ${result.graph.order.map((f) => `\`${f}\``).join(" -> ")}`,
     `- **Whole-graph fuzz runs:** ${parity?.totalRuns ?? 0} across ${parity?.functions.length ?? 0} entry export(s)`,
+    ...(tc !== undefined ? [`- **TypeScript Strict Check:** ${describeTypecheck(tc)}${tc.passed ? "" : ` (first: ${firstError})`}`] : []),
+    ...(tc !== undefined && tc.adjustments.length > 0 ? [`- **Migration boundary (declared \`any\`):** ${tc.adjustments.join("; ")}`] : []),
     ``,
     `## Dependency graph`,
     ``,
-    ...result.graph.edges.map((e) => `- \`${e.from}\` requires \`${e.to}\` (\`${e.specifier}\`) -> \`import ... from\` \`src/${result.graph.esmPaths[e.to] ?? e.to}\``),
+    ...result.graph.edges.map((e) => `- \`${e.from}\` requires \`${e.to}\` (\`${e.specifier}\`) -> \`import ... from\` \`src/${outputByLegacy.get(e.to) ?? e.to}\``),
     ...(result.graph.edges.length === 0 ? ["- (no internal dependencies)"] : []),
     ``,
     `## Files`,
     ``,
     `| Legacy | Resurrected | Exports | Attempts | Fuzz runs | Rolled back |`,
     `| --- | --- | --- | --- | --- | --- |`,
-    ...result.files.map((f) => `| \`${f.path}\` | \`src/${f.esmPath}\` | ${f.esmExports.join(", ") || "none"} | ${f.attempts}${f.healed ? " (self-healed)" : ""} | ${f.fuzzRuns} | ${f.rolledBack.join(", ") || "none"} |`),
+    ...result.files.map((f) => `| \`${f.path}\` | \`src/${outputPath(f)}\` | ${f.esmExports.join(", ") || "none"} | ${f.attempts}${f.healed ? " (self-healed)" : ""} | ${f.fuzzRuns} | ${f.rolledBack.join(", ") || "none"} |`),
     ``,
     `## Whole-graph parity`,
     ``,
@@ -118,11 +126,14 @@ function renderSpec(result: GraphResurrectionResult): string {
   return lines.join("\n");
 }
 
+/** `money.ts` for a typed module, the ES module path otherwise. */
+const outputPath = (f: GraphResurrectionResult["files"][number]): string => (f.tsCode !== "" ? f.tsPath : f.esmPath);
+
 export function buildGraphBundle(result: GraphResurrectionResult, options: { readonly runs?: number } = {}): GraphBundle {
   const runs = options.runs ?? 100;
   const files: Record<string, string> = {};
   for (const f of result.files) {
-    files[`src/${f.esmPath}`] = `${f.esmCode.trimEnd()}\n`;
+    files[`src/${outputPath(f)}`] = `${(f.tsCode || f.esmCode).trimEnd()}\n`;
     files[`legacy/${f.path}`] = `${f.legacyCode.replace(/\r\n/g, "\n").trimEnd()}\n`;
   }
   // `.js` files are ES modules under src/ and CommonJS under legacy/, whatever the root package says.
@@ -139,10 +150,12 @@ export function buildGraphBundle(result: GraphResurrectionResult, options: { rea
     null,
     2
   )}\n`;
+  // `npx tsc --noEmit` in the unzipped project checks the typed modules under the same strict settings.
+  files["tsconfig.json"] = strictTsconfig(["src/**/*.ts"]);
   files["resurrected.test.ts"] = renderTest(result, runs);
   files["SPEC.md"] = renderSpec(result);
   files[WORKFLOW_PATH] = renderWorkflow();
-  const patch = result.files.map((f) => unifiedFileDiff(f.path, `src/${f.esmPath}`, f.legacyCode, f.esmCode)).join("\n");
+  const patch = result.files.map((f) => unifiedFileDiff(f.path, `src/${outputPath(f)}`, f.legacyCode, f.tsCode || f.esmCode)).join("\n");
   files["resurrection.patch"] = `${patch}\n`;
   return { name: result.name, files, patch };
 }

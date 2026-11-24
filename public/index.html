@@ -1405,6 +1405,7 @@
         row("Rolled back", c.rolledBack.length ? c.rolledBack.join("; ") : "none", c.rolledBack.length ? "warn" : ""),
         row("Parity proof", c.parity.mode + ", " + c.parity.runs + " fuzz runs" + (c.parity.boundaryRuns ? " (" + c.parity.boundaryRuns + " boundary)" : ""), "ok"),
         row("Attempts", c.parity.attempts + (c.parity.selfHealed ? " (self-healed)" : " (first draft held)")));
+      if (c.typecheck) card.append(row("TypeScript strict", "tsc --strict: " + c.typecheck.errorCount + " error" + (c.typecheck.errorCount === 1 ? "" : "s") + " (" + c.typecheck.filesChecked + " file" + (c.typecheck.filesChecked === 1 ? "" : "s") + ", TypeScript " + c.typecheck.tsVersion + ")", c.typecheck.errorCount === 0 ? "ok" : "warn"));
       const mutScore = window.lastMutationScore;
       if (mutScore) card.append(row("Proof strength", mutScore.killed + "/" + mutScore.total + " mutants killed (" + Math.round(mutScore.killed / mutScore.total * 100) + "% proof strength)", mutScore.killed === mutScore.total ? "ok" : "warn"));
       card.style.display = "block";
@@ -1627,7 +1628,7 @@
     active = f;
     editor.value = files[f];
     renderTabs();
-    if (esmByFile[f]) { esmOut.style.display = "block"; esmOut.textContent = "// " + f + " -> " + esmByFile[f].esmPath + "\n" + esmByFile[f].esmCode; }
+    if (esmByFile[f]) { const typed = esmByFile[f].tsCode; esmOut.style.display = "block"; esmOut.textContent = "// " + f + " -> " + (typed ? esmByFile[f].tsPath : esmByFile[f].esmPath) + "\n" + (typed || esmByFile[f].esmCode); }
     else esmOut.style.display = "none";
   }
   function guessEntry(edges) {
@@ -1705,7 +1706,10 @@
             if (r.success) {
               bundleId = r.bundleId; zipBtn.disabled = !bundleId;
               verdict.className = "graph-verdict pass";
-              verdict.textContent = "WHOLE-GRAPH PARITY PROVEN \u2713 " + r.parity.totalRuns + " exact Object.is runs end to end (" + r.order.length + " files, " + r.edges.length + " stitched imports, " + r.durationMs + " ms)";
+              const tc = r.typecheck;
+              const tsLine = tc ? " \u00b7 tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s") + " across " + tc.filesChecked + " typed .ts files" : "";
+              verdict.textContent = "WHOLE-GRAPH PARITY PROVEN \u2713 " + r.parity.totalRuns + " exact Object.is runs end to end (" + r.order.length + " files, " + r.edges.length + " stitched imports, " + r.durationMs + " ms)" + tsLine;
+              if (tc && !tc.passed) verdict.className = "graph-verdict fail";
             } else {
               verdict.className = "graph-verdict fail";
               verdict.textContent = "NOT RESURRECTED \u2717 " + (r.error || "parity could not be proven");
