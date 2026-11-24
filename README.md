@@ -2,7 +2,7 @@
 
 > **Kiroween 2026 (Frankenstein Category)** | **Live Studio:** [lazarus-yf0a.onrender.com](https://lazarus-yf0a.onrender.com) | **MIT License**
 >
-> **638 passing tests across 35 Vitest suites** · **16 `.kiro/specs/` suites** · **4-Agent Kiro Crew** · **Custom `lazarus-sandbox` MCP Server** · **`tsc --strict: 0 errors`**
+> **663 passing tests across 35 Vitest suites** · **17 `.kiro/specs/` suites** · **4-Agent Kiro Crew** · **Custom `lazarus-sandbox` MCP Server** · **`tsc --strict: 0 errors`**
 
 Lazarus ingests unmaintained legacy ES5/CommonJS JavaScript—single files, **multi-file `require()` dependency graphs**, live **GitHub** URLs, packages from the **npm Graveyard**, or local directories via **CLI**—and autonomously resurrects them into strict ES2022/TypeScript backed by **exact `Object.is` differential fuzzing**, **live mutation testing**, and **real `tsc --strict` compiler verification**.
 
@@ -16,16 +16,17 @@ flowchart TD
     D --> E["Exorcist Agent<br/>Exact Tagged Object.is fast-check Fuzzer"]
     E -- "Counterexample Found<br/>Speculative Rule Rollback" --> D
     E -- "100% Exact Parity Proven" --> F["Mutation Auditor + tsc --strict Verifier<br/>Prove the Proof (Kill Score) + Zero Compiler Errors"]
-    F --> G["Resurrection Certificate + .zip PR Archive<br/>Typed .ts, tsconfig.json, git-apply Patch, Vitest Suite, GitHub Actions CI"]
+    F --> G["Resurrection Certificate + GitHub PR Summary + .zip Archive<br/>Typed .ts, tsconfig.json, git-apply Patch, Vitest Suite, GitHub Actions CI"]
 ```
 
 ## Quick Start
 
 ```bash
 npm install
-npm test                                                                   # 638 tests across 35 suites
+npm test                                                                   # 663 tests across 35 suites
 npm start                                                                  # Launch Lazarus Studio on http://localhost:3000
 npm run mcp                                                                # Start stdio MCP server (lazarus-sandbox)
+npm run benchmark                                                          # Run live parity & tsc --strict benchmark across all presets
 npm run resurrect -- ./examples/legacy-quantize.cjs --out ./out            # Resurrect a single file via CLI
 npm run resurrect -- ./examples/legacy-invoice-engine --out ./out-project  # Resurrect a multi-file CJS directory via CLI
 ```
@@ -45,13 +46,12 @@ npm run resurrect -- ./examples/legacy-invoice-engine --out ./out-project  # Res
 | `es5-ascii-checksum` | `for (var i = 0; ...)` `charCodeAt` | Empty strings, Unicode boundaries, loop scoping | 100% Exact Parity |
 | `mixAB` | Multi-parameter ES5 bitwise mix | Multi-parameter Acorn extraction + integer boundaries | 100% Exact Parity |
 
-## Lazarus Studio V7 Highlights
+## Lazarus Studio V8 Highlights
 
-- **3-Tab Lazarus Studio & Guided Judge Tour (`public/index.html`, `src/web/line-diff.ts`):** Organizes Single File & npm Graveyard, Multi-File Stitch Graph, and Sandbox Red-Team Lab into a clean studio workspace with a **1-click 20s Guided Judge Tour** and line-by-line red/green LCS diffing in the Self-Healing Matrix.
-- **Multi-File CommonJS Graph Resurrection (`src/crew/graph-resurrector.ts`, `src/sandbox/virtual-fs.ts`):** Uses an isolated in-memory virtual `require()` loader (zero host filesystem access) to parse multi-file projects, resurrect dependencies in topological order, stream a live **SVG Dependency Graph**, and export typed `.ts` modules + `tsconfig.json` via UI or Directory CLI.
-- **"Prove the Proof" Live Mutation Audit (`src/crew/mutation-audit.ts`, `POST /api/mutation-audit`):** Deliberately injects semantic AST bugs (boundary flips, `Math.trunc` → `Math.floor`, sign/guard sabotage) into resurrected code and runs Exorcist to prove real **Mutation Kill Strength** alongside `429 BUSY` anti-stacking protection.
-- **Fuzz-Driven Type Alchemist & Real `tsc --strict` Verification (`src/crew/type-alchemist.ts`, `src/crew/ts-verifier.ts`):** Infers strict TypeScript annotations from observed fuzz traces and verifies generated single-file and multi-file `.ts` output directly with the TypeScript compiler (server-recomputed anti-tamper proofs stamped into the Resurrection Certificate and `SPEC.md`).
-- **Exact Tagged `Object.is` Exorcist & Persistent Sandbox Pool (`src/fuzzer/differential.ts`, `src/sandbox/pool.ts`, `src/sandbox/redteam.ts`):** Enforces exact `Object.is` parity (`-0`, `NaN`, `±Infinity`, `undefined`) across both fuzzing and the live `POST /api/probe` playground, backed by pooled workers with **0 leaked Node processes** and a live **Red-Team Lab** (`Infinite Loop`, `process.exit(1)`, `256MB Heap Bomb`, `Hostile Escape`).
-- **Live npm Graveyard, GitHub Importer & Zero-Dependency `.zip` PR Archive (`src/importer/npm.ts`, `src/exporter/zip.ts`, `src/exporter/certificate.ts`):** Allowlisted HTTPS fetching, deterministic SHA-256 Resurrection Certificates, `git apply`-verified patches, runnable `fast-check` Vitest suites, and `.github/workflows/lazarus-parity.yml`.
-- **16 Kiro Specification Suites (`.kiro/specs/`):** `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, `bundle-exporter`, `sandbox-pooling`, `ast-modernizer`, `judge-playground`, `exact-exorcist-and-prototypes`, `npm-graveyard-importer`, `grand-prize-polish`, `module-graph-necromancer`, `mutation-proof-and-types`, `strict-ts-verification`, and `studio-ux-and-diff` (**638 passing tests across 35 suites**).
+- **3-Tab Studio & Widescreen Verification Deck (`public/index.html`, `src/web/line-diff.ts`):** Pairs a compact 3-column live workspace with a full-width lower Verification Deck so side-by-side Attempt 1 vs. Verified Code, red/green LCS diffs, Resurrection Certificates, Mutation Audits, and PR Bundles render cleanly without horizontal clipping—plus a **1-click 20s Guided Judge Tour**.
+- **Live MCP Wire-Trace Inspector (`src/crew/orchestrator.ts`, `src/web/server.ts`):** Streams real-time `lazarus-sandbox` MCP tool invocations (`sandbox_probe`, `ast_scan`, `ts_verify`) with exact execution timings and worker pool reuse telemetry.
+- **Multi-File CommonJS Graph Resurrection (`src/crew/graph-resurrector.ts`, `src/sandbox/virtual-fs.ts`):** Uses an isolated in-memory virtual `require()` loader (zero host filesystem access) to resurrect multi-file projects in topological order, render a live **SVG Dependency Graph**, and export typed `.ts` modules + `tsconfig.json` via UI or Directory CLI.
+- **"Prove the Proof" Live Mutation Audit & Real `tsc --strict` Verification (`src/crew/mutation-audit.ts`, `src/crew/ts-verifier.ts`):** Injects semantic AST mutants to verify **Mutation Kill Strength** and compiles generated `.ts` output with `tsc --strict` (server-recomputed anti-tamper proofs stamped into the Resurrection Certificate and `SPEC.md`).
+- **One-Click GitHub PR Summary, `.zip` Archive & Benchmark CLI (`src/exporter/pr-summary.ts`, `src/exporter/zip.ts`, `src/benchmark.ts`):** Copies a ready-to-paste Markdown PR description, downloads a zero-dependency `.zip` bundle with `.github/workflows/lazarus-parity.yml`, and runs `npm run benchmark` across all presets with **0 leaked Node processes**.
+- **17 Kiro Specification Suites (`.kiro/specs/`):** `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, `bundle-exporter`, `sandbox-pooling`, `ast-modernizer`, `judge-playground`, `exact-exorcist-and-prototypes`, `npm-graveyard-importer`, `grand-prize-polish`, `module-graph-necromancer`, `mutation-proof-and-types`, `strict-ts-verification`, `studio-ux-and-diff`, and `flagship-studio-polish` (**663 passing tests across 35 suites**).
 
