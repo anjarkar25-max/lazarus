@@ -49,3 +49,4 @@ npm run resurrect -- ./examples/legacy-quantize.cjs --out ./out    # Resurrect a
 - **GitHub Importer, Tabbed PR/ESM Exporter & Local CLI (`src/importer/github.ts`, `src/exporter/bundle.ts`, `src/cli.ts`):** Strict HTTPS domain-allowlisted GitHub `.js`/`.cjs` import, `git apply`-compatible PR patches, runnable `fast-check` Vitest suites, and a sandbox-hardened CLI that refuses to write output if parity cannot be proven.
 - **9 Kiro Specification Suites (`.kiro/specs/`):** `sandbox`, `mcp-server`, `differential-fuzzer`, `crew-orchestrator`, `web-ui`, `bundle-exporter`, `sandbox-pooling`, `ast-modernizer`, and `judge-playground` (**284 passing tests across 17 suites**).
 
+
