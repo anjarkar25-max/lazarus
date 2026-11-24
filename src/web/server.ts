@@ -1,10 +1,15 @@
 ﻿import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
 import { generateResurrectionBundle } from "../exporter/bundle.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import { SandboxError } from "../sandbox/errors.js";
+import { PooledProbeRunner } from "../sandbox/pool.js";
+import { decodeTagged, describeValue } from "../sandbox/tagged.js";
+import { areOutputsEquivalent } from "../fuzzer/differential.js";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { ResurrectionOrchestrator } from "../crew/orchestrator.js";
 import { toEsmModule } from "../crew/esm-export.js";
 import { DeterministicModernizer } from "../crew/synthesizer.js";
@@ -18,6 +23,123 @@ const publicDir = nodePath.resolve(__dirname, "../../public");
 /** Warm sandbox workers make deep live fuzzing cheap; a full resurrection stays well under 3 s. */
 export const DEFAULT_LIVE_FUZZ_RUNS = 100;
 export const MAX_LIVE_FUZZ_RUNS = 150;
+
+// ---------------------------------------------------------------------------
+// POST /api/probe: run one custom input through legacy and resurrected code
+// ---------------------------------------------------------------------------
+
+const MAX_CODE_CHARS = 64_000;
+const MAX_BODY_BYTES = 256_000;
+
+/** Context keys become globals in the sandbox, so they must be plain identifiers (and not internals). */
+const ContextKey = z.string().regex(/^(?!__lz)[A-Za-z_$][\w$]*$/, "context keys must be plain identifiers");
+
+export const ProbeBodySchema = z
+  .object({
+    legacyCode: z.string().min(1, "legacyCode is required").max(MAX_CODE_CHARS),
+    modernCode: z.string().min(1, "modernCode is required").max(MAX_CODE_CHARS),
+    context: z
+      .record(ContextKey, z.unknown())
+      .refine((record) => Object.keys(record).length <= 32, "context may have at most 32 keys")
+      .default({}),
+  })
+  .strict();
+
+export interface ProbeSide {
+  ok: boolean;
+  /** Human-readable value that keeps -0, NaN and undefined distinguishable. */
+  display: string;
+  /** The value in tagged form (see sandbox/tagged.ts), so clients can re-decode it exactly. */
+  output?: unknown;
+  errorCode?: string;
+  errorMessage?: string;
+  stdout?: string;
+  stderr?: string;
+  durationMs: number;
+}
+
+export interface ProbeResponse {
+  legacy: ProbeSide;
+  modern: ProbeSide;
+  exactParity: boolean;
+  /** Why the sides match or differ. */
+  reason: string;
+}
+
+async function probeSide(runner: PooledProbeRunner, code: string, context: Record<string, unknown>): Promise<{ side: ProbeSide; value: unknown }> {
+  const started = Date.now();
+  try {
+    const result = await runner.run({ code, context, encoding: "tagged" });
+    const value = decodeTagged(result.output);
+    return {
+      value,
+      side: {
+        ok: true,
+        display: describeValue(value),
+        output: result.output,
+        durationMs: result.durationMs,
+        ...(result.stdout ? { stdout: result.stdout } : {}),
+        ...(result.stderr ? { stderr: result.stderr } : {}),
+      },
+    };
+  } catch (err: unknown) {
+    const errorCode = err instanceof SandboxError ? err.code : "INTERNAL_ERROR";
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return { value: undefined, side: { ok: false, display: `${errorCode}: ${errorMessage}`, errorCode, errorMessage, durationMs: Date.now() - started } };
+  }
+}
+
+function explainMismatch(legacy: unknown, modern: unknown): string {
+  if (typeof legacy === "number" && typeof modern === "number") {
+    if (legacy === 0 && modern === 0) return `sign of zero differs: legacy ${describeValue(legacy)} vs modern ${describeValue(modern)}`;
+    if (Number.isNaN(legacy) !== Number.isNaN(modern)) return `NaN differs: legacy ${describeValue(legacy)} vs modern ${describeValue(modern)}`;
+  }
+  return `values differ: legacy ${describeValue(legacy)} vs modern ${describeValue(modern)}`;
+}
+
+export function compareProbeSides(legacy: { side: ProbeSide; value: unknown }, modern: { side: ProbeSide; value: unknown }): ProbeResponse {
+  let exactParity: boolean;
+  let reason: string;
+  if (legacy.side.ok && modern.side.ok) {
+    exactParity = areOutputsEquivalent(legacy.value, modern.value);
+    reason = exactParity ? "Object.is parity: both returned the same value" : explainMismatch(legacy.value, modern.value);
+  } else if (!legacy.side.ok && !modern.side.ok) {
+    exactParity = true;
+    reason = "both implementations rejected the input";
+  } else {
+    exactParity = false;
+    reason = legacy.side.ok
+      ? `modern failed (${modern.side.errorCode}) while legacy returned ${legacy.side.display}`
+      : `legacy failed (${legacy.side.errorCode}) while modern returned ${modern.side.display}`;
+  }
+  return { legacy: legacy.side, modern: modern.side, exactParity, reason };
+}
+
+class PayloadTooLarge extends Error {}
+
+function readJsonUnknown(req: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    let tooLarge = false;
+    req.on("data", (chunk: Buffer) => {
+      if (tooLarge) return;
+      raw += chunk.toString("utf8");
+      if (raw.length > MAX_BODY_BYTES) {
+        tooLarge = true;
+        reject(new PayloadTooLarge("Payload too large"));
+      }
+    });
+    req.on("end", () => {
+      if (tooLarge) return;
+      try {
+        resolve(raw ? (JSON.parse(raw) as unknown) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on("error", reject);
+  });
+}
 
 interface ResurrectBody {
   name?: string;
@@ -49,7 +171,16 @@ function readJsonBody(req: http.IncomingMessage): Promise<ResurrectBody> {
 }
 
 export function createWebServer(): http.Server {
-  return http.createServer(async (req, res) => {
+  // Two warm sandbox workers for interactive probing. Created on first use, closed with the server.
+  let probeLegacy: PooledProbeRunner | undefined;
+  let probeModern: PooledProbeRunner | undefined;
+  const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
+    probeLegacy ??= new PooledProbeRunner();
+    probeModern ??= new PooledProbeRunner();
+    return { legacy: probeLegacy, modern: probeModern };
+  };
+
+  const server = http.createServer(async (req, res) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
 
@@ -183,14 +314,18 @@ export function createWebServer(): http.Server {
           return;
         }
         const esm = toEsmModule(parsed.legacyCode);
+        const scan = scanLegacyAst(parsed.legacyCode);
+        const schema = parsed.schema ?? (Object.keys(scan.suggestedSchema).length > 0 ? scan.suggestedSchema : undefined);
         const bundle = generateResurrectionBundle({
           specimenName: parsed.specimenName ?? "resurrectedSpecimen",
-          legacyCode: parsed.legacyCode,
+          // The parity oracle runs the extracted expression; the diff shows the file as written.
+          legacyCode: scan.primaryExpression,
+          legacySource: parsed.legacyCode,
           modernCode: parsed.modernCode,
           specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
           fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
           healed: Boolean(parsed.healed),
-          ...(parsed.schema ? { schema: parsed.schema } : {}),
+          ...(schema ? { schema } : {}),
           ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
         });
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -203,9 +338,48 @@ export function createWebServer(): http.Server {
       return;
     }
 
+    if (req.method === "POST" && routePath === "/api/probe") {
+      let raw: unknown;
+      try {
+        raw = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        res.writeHead(tooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: tooLarge ? "Payload too large" : "Invalid JSON body" }));
+        return;
+      }
+      const parsed = ProbeBodySchema.safeParse(raw);
+      if (!parsed.success) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "Invalid probe payload",
+            issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+          })
+        );
+        return;
+      }
+      const { legacyCode, modernCode, context } = parsed.data;
+      const pools = probePools();
+      // Legacy runs exactly what /api/resurrect ran: the extracted specimen expression.
+      const legacyRunnable = scanLegacyAst(legacyCode).primaryExpression;
+      const [legacy, modern] = await Promise.all([
+        probeSide(pools.legacy, legacyRunnable, context),
+        probeSide(pools.modern, modernCode, context),
+      ]);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(compareProbeSides(legacy, modern)));
+      return;
+    }
+
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Not found" }));
   });
+
+  server.on("close", () => {
+    void Promise.all([probeLegacy?.close(), probeModern?.close()]);
+  });
+  return server;
 }
 
 const isMain =

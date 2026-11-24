@@ -39,8 +39,38 @@ const BOOTSTRAP = `(function () {
   }
   var log = sink(out);
   var error = sink(err);
-  var input = parse(g.__lzInput);
+  var TAG = "$lazarus";
+  function mark(kind) { var o = {}; o[TAG] = kind; return o; }
+  function revive(k, v) {
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      var ks = Object.keys(v);
+      if (ks.length === 1 && ks[0] === TAG) {
+        switch (v[TAG]) {
+          case "NaN": return NaN;
+          case "Infinity": return Infinity;
+          case "-Infinity": return -Infinity;
+          case "-0": return -0;
+          case "undefined": return undefined;
+        }
+      }
+    }
+    return v;
+  }
+  function replace(k, v) {
+    if (typeof v === "number") {
+      if (v !== v) return mark("NaN");
+      if (v === Infinity) return mark("Infinity");
+      if (v === -Infinity) return mark("-Infinity");
+      if (v === 0 && 1 / v < 0) return mark("-0");
+    } else if (v === undefined) {
+      return mark("undefined");
+    }
+    return v;
+  }
+  var tagged = g.__lzTagged === true;
+  var input = tagged ? parse(g.__lzInput, revive) : parse(g.__lzInput);
   delete g.__lzInput;
+  delete g.__lzTagged;
   Object.defineProperty(g, "console", { value: { log: log, info: log, debug: log, warn: error, error: error }, writable: true, configurable: true, enumerable: false });
   Object.defineProperty(g, "process", { value: { env: {} }, writable: true, configurable: true, enumerable: false });
   var keys = Object.keys(input);
@@ -50,6 +80,7 @@ const BOOTSTRAP = `(function () {
   Object.defineProperty(g, "__lz", {
     value: Object.freeze({
       stringify: stringify,
+      stringifyTagged: function (v) { return stringify(v, replace); },
       drain: function () { return stringify({ stdout: out.join("\\n"), stderr: err.join("\\n") }); },
       describe: function (e) {
         try {
@@ -76,7 +107,9 @@ export class VmProbeExecutor implements ProbeExecutor {
     const budgetLeft = (): number => Math.max(1, VM_TIMEOUT_MS - (Date.now() - startedAt));
 
     const sandbox: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    const tagged = params.encoding === "tagged";
     sandbox["__lzInput"] = JSON.stringify(params.context ?? {});
+    if (tagged) sandbox["__lzTagged"] = true;
     const ctx = createContext(sandbox, { codeGeneration: { strings: true, wasm: false } });
 
     const describeThrown = (thrown: unknown): string => {
@@ -100,7 +133,9 @@ export class VmProbeExecutor implements ProbeExecutor {
       });
 
       sandbox["__lzOut"] = output;
-      const json: unknown = runInContext("__lz.stringify(__lzOut)", ctx, { timeout: budgetLeft() });
+      const json: unknown = runInContext(tagged ? "__lz.stringifyTagged(__lzOut)" : "__lz.stringify(__lzOut)", ctx, {
+        timeout: budgetLeft(),
+      });
       const drained: unknown = runInContext("__lz.drain()", ctx, { timeout: budgetLeft() });
 
       let stdout = "";

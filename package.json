@@ -8,7 +8,8 @@
         "test:sandbox": "vitest --run src/sandbox",
         "start": "npx tsx src/web/server.ts",
         "mcp": "npx tsx src/mcp/server.ts",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "resurrect": "npx tsx src/cli.ts"
     },
     "repository": {
         "type": "git",

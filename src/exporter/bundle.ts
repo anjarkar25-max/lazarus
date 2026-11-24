@@ -1,4 +1,6 @@
-﻿import { parseProgram, printProgram } from '../crew/ast-modernizer.js';
+import type * as ESTree from 'estree';
+import { parseProgram, printProgram } from '../crew/ast-modernizer.js';
+import { usesOwnThisOrArguments } from '../crew/ast-scope.js';
 
 export interface ResurrectionBundleInput {
   specimenName?: string;
@@ -10,6 +12,11 @@ export interface ResurrectionBundleInput {
   schema?: Record<string, string>;
   /** Complete CommonJS -> ESM conversion of the legacy module (see toEsmModule). */
   esmModule?: { code: string; exports: string[] };
+  /**
+   * The specimen exactly as the developer wrote it. `legacyCode` is the runnable expression used to
+   * build the parity oracle; this is what the diff, SPEC.md and legacy.cjs show. Defaults to `legacyCode`.
+   */
+  legacySource?: string;
 }
 
 export interface ResurrectionBundle {
@@ -32,52 +39,85 @@ export function sanitizeIdentifier(raw?: string): string {
   return /^[a-zA-Z_$]/.test(cleaned) ? cleaned : `_${cleaned}`;
 }
 
-function resolvePrimaryParam(schema?: Record<string, string>): {
+interface ParamSpec {
   paramName: string;
   tsType: string;
   fcArbitrary: string;
-} {
-  const entries = schema ? Object.entries(schema) : [];
-  const first = entries[0];
-  if (!first) {
-    return {
-      paramName: 'n',
-      tsType: 'number',
-      fcArbitrary: 'fc.integer({ min: -10000, max: 10000 })',
-    };
-  }
-  const [rawName, rawType] = first;
+}
+
+function paramFor(rawName: string, rawType: string | undefined): ParamSpec {
   const paramName = sanitizeIdentifier(rawName);
   const normalized = (rawType || 'integer').toLowerCase();
   if (normalized === 'string') {
-    return {
-      paramName,
-      tsType: 'string',
-      fcArbitrary: 'fc.string({ minLength: 0, maxLength: 32 })',
-    };
+    return { paramName, tsType: 'string', fcArbitrary: 'fc.string({ minLength: 0, maxLength: 32 })' };
   }
   if (normalized === 'boolean') {
-    return {
-      paramName,
-      tsType: 'boolean',
-      fcArbitrary: 'fc.boolean()',
-    };
+    return { paramName, tsType: 'boolean', fcArbitrary: 'fc.boolean()' };
   }
-  return {
-    paramName,
-    tsType: 'number',
-    fcArbitrary: 'fc.integer({ min: -10000, max: 10000 })',
-  };
+  if (normalized === 'number') {
+    return { paramName, tsType: 'number', fcArbitrary: 'fc.double({ min: -10000, max: 10000, noNaN: true })' };
+  }
+  if (normalized === 'json') {
+    return { paramName, tsType: 'unknown', fcArbitrary: 'fc.jsonValue()' };
+  }
+  return { paramName, tsType: 'number', fcArbitrary: 'fc.integer({ min: -10000, max: 10000 })' };
+}
+
+/** Every schema entry becomes a parameter, in order; an empty schema means a single integer `n`. */
+function resolveParams(schema?: Record<string, string>): ParamSpec[] {
+  const entries = schema ? Object.entries(schema) : [];
+  if (entries.length === 0) return [paramFor('n', 'integer')];
+  return entries.map(([name, type]) => paramFor(name, type));
+}
+
+/**
+ * The scanner wraps multi-statement specimens as `(function (a, b) { ... })(guarded a, guarded b)`.
+ * When the call just forwards the outer parameters, the body can be inlined into the typed function
+ * (an untyped inner function would not compile under `noImplicitAny`).
+ */
+function unwrapForwardingIife(ast: ESTree.Program, outerNames: ReadonlySet<string>): ESTree.Statement[] | undefined {
+  const only = ast.body.length === 1 ? ast.body[0] : undefined;
+  if (only === undefined || only.type !== 'ExpressionStatement' || only.expression.type !== 'CallExpression') return undefined;
+  const call = only.expression;
+  const fn = call.callee;
+  if (fn.type !== 'FunctionExpression' && fn.type !== 'ArrowFunctionExpression') return undefined;
+  if (fn.async || ('generator' in fn && fn.generator)) return undefined;
+  if (fn.params.some((p) => p.type !== 'Identifier') || call.arguments.length !== fn.params.length) return undefined;
+  if (usesOwnThisOrArguments(fn)) return undefined;
+
+  const forwards = fn.params.every((param, i) => {
+    const arg = call.arguments[i];
+    if (param.type !== 'Identifier' || arg === undefined || !outerNames.has(param.name)) return false;
+    // typeof p !== "undefined" ? p : undefined
+    return (
+      arg.type === 'ConditionalExpression' &&
+      arg.consequent.type === 'Identifier' &&
+      arg.consequent.name === param.name &&
+      arg.alternate.type === 'Identifier' &&
+      arg.alternate.name === 'undefined' &&
+      arg.test.type === 'BinaryExpression' &&
+      arg.test.operator === '!==' &&
+      arg.test.left.type === 'UnaryExpression' &&
+      arg.test.left.operator === 'typeof' &&
+      arg.test.left.argument.type === 'Identifier' &&
+      arg.test.left.argument.name === param.name
+    );
+  });
+  if (!forwards) return undefined;
+  if (fn.body.type === 'BlockStatement') return fn.body.body as ESTree.Statement[];
+  return [{ type: 'ReturnStatement', argument: fn.body }];
 }
 
 /**
  * Statement-aware formatting: parse the snippet, turn a trailing expression statement into the
  * function's return value, and print it. Returns undefined when the snippet does not parse.
  */
-function formatBodyViaAst(source: string): string | undefined {
+function formatBodyViaAst(source: string, outerNames: ReadonlySet<string>): string | undefined {
   const parsed = parseProgram(source);
   if ('error' in parsed) return undefined;
   const { ast } = parsed;
+  const inlined = unwrapForwardingIife(ast, outerNames);
+  if (inlined !== undefined) ast.body = inlined;
   const last = ast.body[ast.body.length - 1];
   const hasReturn = ast.body.some((statement) => statement.type === 'ReturnStatement');
   if (!hasReturn && last !== undefined && last.type === 'ExpressionStatement') {
@@ -89,7 +129,7 @@ function formatBodyViaAst(source: string): string | undefined {
     .join('\n');
 }
 
-function formatFunctionBody(code: string): string {
+function formatFunctionBody(code: string, outerNames: ReadonlySet<string>): string {
   const stripped = code
     .split(/\r?\n/)
     .filter((line) => !line.trim().startsWith('//'))
@@ -98,7 +138,7 @@ function formatFunctionBody(code: string): string {
 
   if (!stripped) return '  return undefined;';
 
-  const viaAst = formatBodyViaAst(stripped);
+  const viaAst = formatBodyViaAst(stripped, outerNames);
   if (viaAst !== undefined) return viaAst;
 
   if (/\breturn\b/.test(stripped)) {
@@ -129,17 +169,23 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
   const modernClean = input.modernCode.trim();
   const fuzzRuns = input.fuzzRuns && input.fuzzRuns > 0 ? input.fuzzRuns : 100;
   const generatedAt = new Date().toISOString();
-  const { paramName, tsType, fcArbitrary } = resolvePrimaryParam(input.schema);
+  const params = resolveParams(input.schema);
+  const signature = params.map((p) => `${p.paramName}: ${p.tsType}`).join(', ');
+  const argNames = params.map((p) => p.paramName).join(', ');
+  const arbitraries = params.map((p) => p.fcArbitrary).join(', ');
+  const firstArbitrary = params[0]?.fcArbitrary ?? 'fc.integer({ min: -10000, max: 10000 })';
+  const sourceClean = (input.legacySource ?? input.legacyCode).trim();
 
-  const modernBody = formatFunctionBody(modernClean);
-  const legacyBody = formatFunctionBody(legacyClean);
+  const outerNames = new Set(params.map((p) => p.paramName));
+  const modernBody = formatFunctionBody(modernClean, outerNames);
+  const legacyBody = formatFunctionBody(legacyClean, outerNames);
 
   const tsFile = [
     `/**`,
     ` * Autonomously resurrected by Lazarus Kiro Crew`,
     ` * Parity verified via fast-check differential fuzzing (${fuzzRuns} runs)`,
     ` */`,
-    `export function ${fnName}(${paramName}: ${tsType}): unknown {`,
+    `export function ${fnName}(${signature}): unknown {`,
     modernBody,
     `}`,
     ``,
@@ -151,11 +197,11 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
     `- **Status:** 100% Behavioral Parity Proven (\`Object.is\`)`,
     `- **Differential Fuzzing Runs:** ${fuzzRuns}`,
     `- **Self-Healed by Necromancer:** ${input.healed ? 'Yes' : 'No (Zero Divergences)'}`,
-    `- **Input Contract:** \`${paramName}: ${tsType}\``,
+    `- **Input Contract:** \`${signature}\``,
     ``,
     `## Legacy Source`,
     '```javascript',
-    legacyClean,
+    sourceClean,
     '```',
     ``,
     `## Modernized ES2022/TypeScript Implementation`,
@@ -173,15 +219,15 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
     `import fc from 'fast-check';`,
     `import { ${fnName} } from './resurrected.js';`,
     ``,
-    `function runLegacy(${paramName}: ${tsType}): unknown {`,
+    `function runLegacy(${signature}): unknown {`,
     legacyBody,
     `}`,
     ``,
     `describe('${fnName} differential parity suite', () => {`,
     `  it('maintains 100% Object.is behavioral parity across ${fuzzRuns} inputs', () => {`,
     `    fc.assert(`,
-    `      fc.property(${fcArbitrary}, (${paramName}) => {`,
-    `        expect(Object.is(${fnName}(${paramName}), runLegacy(${paramName}))).toBe(true);`,
+    `      fc.property(${arbitraries}, (${argNames}) => {`,
+    `        expect(Object.is(${fnName}(${argNames}), runLegacy(${argNames}))).toBe(true);`,
     `      }),`,
     `      { numRuns: ${fuzzRuns} }`,
     `    );`,
@@ -191,7 +237,7 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
   ].join('\n');
 
   const esm = input.esmModule;
-  const legacyLines = legacyClean.split(/\r?\n/);
+  const legacyLines = sourceClean.split(/\r?\n/);
   const esmFile =
     esm === undefined
       ? undefined
@@ -203,17 +249,16 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
         ].join('\n');
   const esmLines = esmFile?.trimEnd().split(/\r?\n/) ?? [];
 
+  const tsLines = tsFile.trimEnd().split(/\r?\n/);
   const prDiff =
     esmFile === undefined
       ? [
           `diff --git a/legacy.cjs b/resurrected.ts`,
           `--- a/legacy.cjs`,
           `+++ b/resurrected.ts`,
-          `@@ -1,3 +1,5 @@`,
+          `@@ -1,${legacyLines.length} +1,${tsLines.length} @@`,
           ...legacyLines.map((line) => `-${line}`),
-          `+export function ${fnName}(${paramName}: ${tsType}): unknown {`,
-          ...modernBody.split(/\r?\n/).map((line) => `+${line}`),
-          `+}`,
+          ...tsLines.map((line) => `+${line}`),
         ].join('\n')
       : [
           `diff --git a/legacy.cjs b/resurrected.mjs`,
@@ -254,7 +299,7 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
           `describe('${fnName} CommonJS -> ESM parity', () => {`,
           `  it.each(exportsUnderTest)('export %s matches the CommonJS original (${fuzzRuns} inputs)', (_name, next, previous) => {`,
           `    fc.assert(`,
-          `      fc.property(fc.array(${fcArbitrary}, { maxLength: 3 }), (args) => {`,
+          `      fc.property(fc.array(${firstArbitrary}, { maxLength: 3 }), (args) => {`,
           `        const a = outcome(next, args);`,
           `        const b = outcome(previous, args);`,
           `        expect(a.ok).toBe(b.ok);`,
@@ -274,7 +319,7 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
       'resurrected.ts': tsFile,
       'SPEC.md': specFile,
       'resurrected.test.ts': testFile,
-      ...(esmFile !== undefined ? { 'resurrected.mjs': esmFile, 'legacy.cjs': `${legacyClean}\n` } : {}),
+      ...(esmFile !== undefined ? { 'resurrected.mjs': esmFile, 'legacy.cjs': `${sourceClean}\n` } : {}),
       ...(esmTestFile !== undefined ? { 'resurrected.esm.test.ts': esmTestFile } : {}),
     },
     prDiff,

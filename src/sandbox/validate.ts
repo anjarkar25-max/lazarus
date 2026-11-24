@@ -90,6 +90,9 @@ export function isProbeParams(v: unknown): v is ProbeParams {
       );
     }
   }
+  if ("encoding" in v && v["encoding"] !== undefined && v["encoding"] !== "json" && v["encoding"] !== "tagged") {
+    throw new SandboxError("INVALID_REQUEST", 'params.encoding must be "json" or "tagged" when provided');
+  }
   return true;
 }
 

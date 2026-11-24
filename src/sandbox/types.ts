@@ -56,6 +56,11 @@ export interface SandboxErrorData {
 export interface ProbeParams {
   readonly code: string;
   readonly context?: Record<string, unknown>;
+  /**
+   * "tagged" exchanges -0, NaN, Infinity and undefined as `{"$lazarus": kind}` markers in both
+   * `context` and the returned `output` (see tagged.ts). Defaults to plain JSON.
+   */
+  readonly encoding?: "json" | "tagged";
 }
 
 export interface ProbeResult {

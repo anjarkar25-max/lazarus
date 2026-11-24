@@ -29,7 +29,7 @@ import {
 
 export const RULE_LADDERS = {
   "var-scoping": ["let-const", "off"],
-  "bitor0-trunc": ["trunc", "trunc-or0", "off"],
+  "bitor0-trunc": ["trunc-or0", "off"],
   "function-arrow": ["arrow", "off"],
   "arguments-rest": ["rest", "off"],
   "apply-spread": ["spread", "spread-proven", "off"],
@@ -705,12 +705,12 @@ function isInt32Typed(node: Node): boolean {
   return node.type === "Literal" && typeof node.value === "number" && Number.isInteger(node.value) && Math.abs(node.value) < 2 ** 31;
 }
 
+// `Math.trunc(x)` alone would turn NaN and -0 results into NaN / -0, where `x | 0` gives 0. The `|| 0`
+// tail restores both, so the rewrite is exact for NaN, -0 and every int32 value.
 const TRUNC_NOTE =
-  "speculative: Math.trunc differs from `| 0` for NaN, +/-Infinity, |x| >= 2^31 and the sign of zero (-0); verified by Exorcist over the fuzz domain only";
-const TRUNC_OR0_NOTE =
-  "speculative: `|| 0` restores NaN and -0 to 0 like `| 0`, but +/-Infinity and |x| >= 2^31 still differ; verified by Exorcist over the fuzz domain only";
+  "speculative: `Math.trunc(x) || 0` matches `x | 0` for NaN, -0 and int32 values; +/-Infinity and |x| >= 2^31 still differ (verified by Exorcist over the fuzz domain only)";
 
-function ruleBitOr0(a: Analysis, level: number, applied: AppliedRewrite[]): void {
+function ruleBitOr0(a: Analysis, applied: AppliedRewrite[]): void {
   if ([...a.scopes].some((s) => s.bindings.has("Math"))) return;
   const sites: ESTree.BinaryExpression[] = [];
   walk(a.program, (n) => {
@@ -723,18 +723,15 @@ function ruleBitOr0(a: Analysis, level: number, applied: AppliedRewrite[]): void
     if (isInt32Typed(operand)) continue;
     const before = gen(node);
     const truncated = call(member(ident("Math"), "trunc"), [operand]);
-    replaceNode(
-      node,
-      level === 0 ? truncated : { type: "LogicalExpression", operator: "||", left: truncated, right: { type: "Literal", value: 0, raw: "0" } }
-    );
+    replaceNode(node, { type: "LogicalExpression", operator: "||", left: truncated, right: { type: "Literal", value: 0, raw: "0" } });
     applied.push({
       rule: "bitor0-trunc",
-      variant: level === 0 ? "trunc" : "trunc-or0",
+      variant: "trunc-or0",
       line: lineOf(node),
       before,
       after: gen(node),
       speculative: true,
-      note: level === 0 ? TRUNC_NOTE : TRUNC_OR0_NOTE,
+      note: TRUNC_NOTE,
     });
   }
 }
@@ -790,7 +787,7 @@ export function modernize(source: string, options: ModernizeOptions = {}): Moder
   if (on("arguments-rest")) ruleArgumentsRest(analyze(ast), applied);
   if (on("apply-spread")) ruleApplySpread(analyze(ast), levels["apply-spread"], applied);
   if (on("function-arrow")) ruleFunctionArrow(analyze(ast), applied);
-  if (on("bitor0-trunc") && options.speculativeTruncation !== false) ruleBitOr0(analyze(ast), levels["bitor0-trunc"], applied);
+  if (on("bitor0-trunc") && options.speculativeTruncation !== false) ruleBitOr0(analyze(ast), applied);
   ruleLooseEquality(analyze(ast), on("loose-equality"), applied, flagged);
 
   return { code: print(ast, comments), parsed: true, levels, applied, flagged };

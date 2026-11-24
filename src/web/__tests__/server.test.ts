@@ -29,6 +29,24 @@ describe("Lazarus Web Telemetry Server", () => {
     expect(html).toContain("LAZARUS // OPERATING TABLE");
   });
 
+  it("ships the Self-Healing Matrix, the probe card with its quick chips, and the existing bundle tabs", async () => {
+    const html = await (await fetch(`${baseUrl}/`)).text();
+    expect(html).toContain('id="healingMatrix"');
+    expect(html).toContain("Attempt 1 &middot; Rejected draft");
+    expect(html).toContain("Final &middot; Verified code");
+    expect(html).toContain("Probe Custom Edge Case");
+    for (const chip of ["-1", "-0", "0", "2147483648", "NaN", "&quot;&quot;"]) {
+      expect(html).toMatch(new RegExp(`class="probe-chip"[^>]*>${chip}</button>`));
+    }
+    for (const tab of ["prDiff", "resurrected.ts", "resurrected.mjs", "resurrected.test.ts", "SPEC.md"]) {
+      expect(html).toContain(`data-tab="${tab}"`);
+    }
+    for (const id of ["copyBundleBtn", "downloadFileBtn", "downloadBundleBtn", "exportBtn"]) expect(html).toContain(`id="${id}"`);
+    // The probe card sits below the code output and bundle panel in the results column.
+    expect(html.indexOf('id="probeCard"')).toBeGreaterThan(html.indexOf('id="bundlePanel"'));
+    expect(html.indexOf('id="healingMatrix"')).toBeLessThan(html.indexOf('id="probeCard"'));
+  });
+
   async function resurrect(body: Record<string, unknown>): Promise<{ result: { success: boolean; attempts: number; fuzzReport: { totalRuns: number } }; ms: number }> {
     const started = Date.now();
     const res = await fetch(`${baseUrl}/api/resurrect`, {

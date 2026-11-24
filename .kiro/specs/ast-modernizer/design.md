@@ -29,7 +29,7 @@ introduces.
 | Rule | Ladder | Risk |
 |------|--------|------|
 | `var-scoping` | `let-const` > `off` | safe by analysis |
-| `bitor0-trunc` | `trunc` > `trunc-or0` (`Math.trunc(x) \|\| 0`: restores `-0` and `NaN` to 0) > `off` | speculative |
+| `bitor0-trunc` | `trunc-or0` (`Math.trunc(x) \|\| 0`: exact for `-0`, `NaN` and int32) > `off` | speculative |
 | `function-arrow` | `arrow` > `off` | safe by analysis |
 | `arguments-rest` | `rest` > `off` | safe by analysis |
 | `apply-spread` | `spread` (also when the argument is only assumed to be an array, speculative) > `spread-proven` > `off` | speculative / proven |
@@ -81,8 +81,4 @@ legacy module through `createRequire`.
   modernizer itself handles arbitrary programs.
 - `| 0` truncation is verified only over the fuzz domain (integers within 1e6). Values outside int32 are
   reported as a caveat, not proved.
-- The default `Math.trunc(x)` differs from `x | 0` in the sign of zero (`halve(-1)` is `0` vs `-0`). Exorcist
-  cannot see it because probe results travel as JSON, where `-0` prints as `0`; a direct `Object.is`
-  comparison (such as the generated PR test) can. `trunc-or0` is exact for every integer and is covered
-  by tests. Making Exorcist sign-of-zero aware would also invalidate the existing demo tests, which treat
-  `Math.trunc(n / 2)` as the correct repair, so it is left as a follow-up.
+- The default `Math.trunc(x) || 0` equals `x | 0` for `NaN`, `-0` and every int32 value. `+/-Infinity` and results beyond int32 still differ, which is why the rewrite stays speculative and rollback-able (the judge-playground probe card makes such inputs easy to try). Exorcist's own fuzz comparison remains JSON-level.

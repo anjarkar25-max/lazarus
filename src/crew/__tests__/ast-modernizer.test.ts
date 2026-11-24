@@ -225,9 +225,9 @@ describe("var scoping", () => {
 // ---------------------------------------------------------------------------
 
 describe("bitwise truncation", () => {
-  it("rewrites `(expr) | 0` to Math.trunc(expr)", () => {
-    expect(modernize("(n / 2) | 0").code).toBe("Math.trunc(n / 2);");
-    expect(modernize("var half = (n / 2) | 0; half;").code).toBe("const half = Math.trunc(n / 2);\nhalf;");
+  it("rewrites `(expr) | 0` to Math.trunc(expr) || 0", () => {
+    expect(modernize("(n / 2) | 0").code).toBe("Math.trunc(n / 2) || 0;");
+    expect(modernize("var half = (n / 2) | 0; half;").code).toBe("const half = Math.trunc(n / 2) || 0;\nhalf;");
   });
 
   it("marks the rewrite speculative and records the domain caveat", () => {
@@ -242,44 +242,31 @@ describe("bitwise truncation", () => {
     expect(modernize("(n / 2) | 0", { speculativeTruncation: false }).code).toBe("n / 2 | 0;");
   });
 
-  it("property: Math.trunc equals `| 0` for every integer, except that the sign of zero can differ", async () => {
+  it("property: the rewrite is Object.is-exact for every integer (no -0 from halving negatives)", async () => {
     await fc.assert(
       fc.asyncProperty(INTS, async (n) => {
-        for (const fixture of [FIXTURES.halve, FIXTURES.quantizeClamp]) {
-          const legacy = await runExport(fixture, [n]);
-          const modern = await runExport(modernize(fixture).code, [n]);
-          if (n < 0 && legacy === 0) expect([0, ZERO_NEGATIVE]).toContainEqual(modern);
-          else expect(modern).toEqual(legacy);
-        }
+        await expectParity(FIXTURES.halve, [n]);
+        await expectParity(FIXTURES.quantizeClamp, [n]);
       }),
       { numRuns: 120 }
     );
   }, 30_000);
 
-  it("documents the sign-of-zero difference: halve(-1) is 0 with `| 0` but -0 with plain Math.trunc", async () => {
-    expect(await runExport(FIXTURES.halve, [-1])).toBe(0);
-    expect(await runExport(modernize(FIXTURES.halve).code, [-1])).toEqual(ZERO_NEGATIVE);
+  it("keeps the sign of zero identical: halving -1, 0 and 1 gives +0 on both sides", async () => {
+    const modern = modernize(FIXTURES.halve).code;
+    for (const n of [-1, 0, 1]) {
+      expect(await runExport(FIXTURES.halve, [n])).toBe(0);
+      expect(await runExport(modern, [n])).toBe(0);
+    }
+    expect(await runExport(modern, [-2])).toBe(await runExport(FIXTURES.halve, [-2]));
+    expect(modern).toContain("Math.trunc(n / 2) || 0");
   });
 
-  it("the trunc-or0 step is Object.is-exact for every integer (restores -0 to 0)", async () => {
-    const exact = { ...defaultLevels(), "bitor0-trunc": 1 };
-    expect(modernize(FIXTURES.halve, { levels: exact }).code).toContain("Math.trunc(n / 2) || 0");
-    await fc.assert(
-      fc.asyncProperty(INTS, async (n) => {
-        await expectParity(FIXTURES.halve, [n], exact);
-        await expectParity(FIXTURES.quantizeClamp, [n], exact);
-      }),
-      { numRuns: 120 }
-    );
-  }, 30_000);
-
-  it("really differs from `| 0` outside int32 and for NaN (why the rule is speculative)", async () => {
+  it("matches `| 0` for NaN-producing input, but not beyond int32 (why the rule stays speculative)", async () => {
     const wrapped = (levels: RuleLevels): string => modernize("module.exports = function (x) { return x | 0; };", { levels }).code;
-    const orZero = { ...defaultLevels(), "bitor0-trunc": 1 };
-    expect(await runExport(wrapped(defaultLevels()), [2 ** 31 + 5])).not.toEqual(await runExport(wrapped(allOff()), [2 ** 31 + 5]));
-    expect(await runExport(wrapped(defaultLevels()), ["abc"])).toEqual({ __: "NaN" });
-    expect(await runExport(wrapped(orZero), ["abc"])).toBe(0);
+    expect(await runExport(wrapped(defaultLevels()), ["abc"])).toBe(0);
     expect(await runExport(wrapped(allOff()), ["abc"])).toBe(0);
+    expect(await runExport(wrapped(defaultLevels()), [2 ** 31 + 5])).not.toEqual(await runExport(wrapped(allOff()), [2 ** 31 + 5]));
   });
 });
 
@@ -550,11 +537,8 @@ describe("counterexample-guided refinement", () => {
     expect(refined.culprit).toBe("bitor0-trunc");
     expect(refined.matched).toBe(true);
     expect(refined.degraded).toBe(false);
-    // `|| 0` cannot repair a 32-bit overflow, so the rule walks its whole ladder down to verbatim.
-    expect(refined.steps).toEqual([
-      { rule: "bitor0-trunc", from: "trunc", to: "trunc-or0" },
-      { rule: "bitor0-trunc", from: "trunc-or0", to: "off" },
-    ]);
+    // `Math.trunc(x) || 0` cannot reproduce a 32-bit wrap-around, so the rule rolls back to verbatim `| 0`.
+    expect(refined.steps).toEqual([{ rule: "bitor0-trunc", from: "trunc-or0", to: "off" }]);
     expect(refined.levels["bitor0-trunc"]).toBe(RULE_LADDERS["bitor0-trunc"].length - 1);
 
     // Every other rule keeps working: only the blamed rule was stepped down.
@@ -581,14 +565,14 @@ describe("counterexample-guided refinement", () => {
     expect(modernize(legacy, { levels: refined.levels }).code).toContain(".apply(null, list)");
   }, 30_000);
 
-  it("stops at the first ladder step that restores parity (|| 0 repairs NaN, so no full rollback)", async () => {
+  it("blames nothing when the default rewrite already reproduces the counterexample (NaN case)", async () => {
     const counterexample = { inputs: { s: "" }, legacy: { ok: true, output: 0, durationMs: 0 }, modern: { ok: true, output: null, durationMs: 0 }, reason: "NaN vs 0" };
     await using pool = new PooledProbeRunner();
-    // charCodeAt("") is NaN: `NaN | 0` is 0 but Math.trunc(NaN) stays NaN.
+    // charCodeAt("") is NaN: `NaN | 0` is 0, and `Math.trunc(NaN) || 0` is 0 too.
     const refined = await refineCandidate({ legacyCode: "s.charCodeAt(0) | 0;", start: defaultLevels(), counterexample, executor: pool });
     expect(refined.matched).toBe(true);
-    expect(refined.culprit).toBe("bitor0-trunc");
-    expect(refined.steps).toEqual([{ rule: "bitor0-trunc", from: "trunc", to: "trunc-or0" }]);
+    expect(refined.culprit).toBeUndefined();
+    expect(refined.steps).toEqual([]);
     expect(modernize("s.charCodeAt(0) | 0;", { levels: refined.levels }).code).toBe("Math.trunc(s.charCodeAt(0)) || 0;");
   }, 20_000);
 
@@ -604,7 +588,7 @@ describe("counterexample-guided refinement", () => {
     await using pool = new PooledProbeRunner();
     const necromancer = new DeterministicModernizer({ executor: pool });
     const first = await necromancer.synthesize({ name: "hash", legacyCode: HASH_SOURCE, schema: HASH_SCHEMA, specMarkdown: "", traces: [], attempt: 1 });
-    expect(first).toMatch(/^\/\/ ast-rules: var-scoping=let-const .*bitor0-trunc=trunc /m);
+    expect(first).toMatch(/^\/\/ ast-rules: var-scoping=let-const .*bitor0-trunc=trunc-or0 /m);
     expect(first).toContain("// ast-speculative:");
 
     const report = await new DifferentialFuzzer(pool).fuzz(HASH_SOURCE, first, HASH_SCHEMA, { numRuns: 60, seed: 5 });
@@ -619,7 +603,7 @@ describe("counterexample-guided refinement", () => {
       counterexample: report.counterexample!,
     });
     expect(second).toContain("// ast-refine: attempt 2 blamed bitor0-trunc");
-    expect(second).toContain("rolled back bitor0-trunc (trunc -> ");
+    expect(second).toContain("rolled back bitor0-trunc (trunc-or0 -> off)");
     expect(second).toContain("let h = 0;");
     expect(readHeaderLevels(second)?.["bitor0-trunc"]).toBeGreaterThan(0);
   }, 30_000);

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -85,12 +85,14 @@
     .agent-card.done { border-color: var(--emerald); }
     .agent-title { font-size: 12px; font-weight: 700; text-transform: uppercase; display: flex; justify-content: space-between; }
     .agent-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    [hidden] { display: none !important; }
     main {
       flex: 1;
       display: grid;
-      grid-template-columns: 1fr 1.15fr 1.15fr;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.45fr) minmax(0, 1fr);
       gap: 16px;
       padding: 16px 24px 24px;
+      align-items: start;
     }
     .panel {
       background: var(--panel);
@@ -156,9 +158,91 @@
     .log-item.counterexample_found { border-left-color: var(--crimson); background: rgba(239, 68, 68, 0.08); }
     .log-item.self_healed, .log-item.completed { border-left-color: var(--emerald); }
     .log-meta { font-size: 10px; color: var(--muted); margin-bottom: 3px; text-transform: uppercase; }
-    @media (max-width: 1024px) {
-      main { grid-template-columns: 1fr; }
+    /* ---- Self-Healing Matrix ------------------------------------------------ */
+    .matrix {
+      border: 1px solid rgba(139, 92, 246, 0.45);
+      background: linear-gradient(180deg, rgba(139, 92, 246, 0.08), rgba(7, 11, 20, 0));
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .matrix-head, .probe-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    }
+    .matrix-head { color: #c4b5fd; }
+    .matrix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    .matrix-col {
+      min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px;
+      background: #070b14; border: 1px solid var(--border); border-radius: 8px;
+    }
+    .matrix-col.rejected { border-color: rgba(239, 68, 68, 0.55); box-shadow: inset 3px 0 0 var(--crimson); }
+    .matrix-col.verified { border-color: rgba(16, 185, 129, 0.55); box-shadow: inset 3px 0 0 var(--emerald); }
+    .matrix-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+    .rejected .matrix-title { color: var(--crimson); }
+    .verified .matrix-title { color: var(--emerald); }
+    .matrix pre { max-height: 190px; overflow: auto; font-size: 11px; white-space: pre; word-break: normal; }
+    .cx { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 11px; }
+    .cx dt { color: var(--muted); }
+    .cx dd { margin: 0; word-break: break-word; }
+    .cx .bad { color: #fca5a5; }
+    .cx .ok { color: #6ee7b7; }
+    .reason { font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .rule-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip-rule { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid; max-width: 100%; overflow-wrap: anywhere; }
+    .chip-rule.blamed { color: #fca5a5; border-color: var(--crimson); background: rgba(239, 68, 68, 0.12); }
+    .chip-rule.repaired { color: #fcd34d; border-color: var(--amber); background: rgba(245, 158, 11, 0.12); }
+    .chip-rule.active { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.6); background: rgba(16, 185, 129, 0.1); }
+
+    /* ---- Probe Custom Edge Case ---------------------------------------------- */
+    .probe-card {
+      border: 1px solid rgba(6, 182, 212, 0.45);
+      background: linear-gradient(180deg, rgba(6, 182, 212, 0.07), rgba(7, 11, 20, 0));
+      border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .probe-head { color: #67e8f9; }
+    .probe-head small { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 11px; }
+    .probe-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+    .probe-inputs label { margin: 0; }
+    .probe-inputs .k { color: #67e8f9; font-weight: 700; }
+    .probe-inputs input { padding: 8px 10px; font-size: 13px; }
+    .probe-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .probe-chips .lead { font-size: 11px; color: var(--muted); margin-right: 2px; }
+    .probe-chip {
+      padding: 4px 10px; font-size: 12px; border-radius: 999px; background: #0b1324;
+      border: 1px solid #334155; color: #cbd5e1;
+    }
+    .probe-chip:hover { border-color: var(--cyan); color: #fff; }
+    .probe-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .probe-actions button.primary { padding: 7px 14px; }
+    .muted { color: var(--muted); font-size: 11px; }
+    .probe-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .probe-side { min-width: 0; padding: 10px; background: #070b14; border: 1px solid var(--border); border-radius: 8px; }
+    .probe-side h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+    .probe-side .val { display: block; font-size: 16px; font-weight: 700; word-break: break-word; }
+    .probe-side .meta { display: block; margin-top: 4px; font-size: 10px; color: var(--muted); }
+    .probe-side.error .val { color: #fca5a5; font-size: 12px; }
+    .probe-side.differs { border-color: var(--crimson); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.35); }
+    .verdict { padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; border: 1px solid; }
+    .verdict.pass { color: #6ee7b7; border-color: var(--emerald); background: rgba(16, 185, 129, 0.1); }
+    .verdict.fail { color: #fca5a5; border-color: var(--crimson); background: rgba(239, 68, 68, 0.1); }
+    .verdict strong { letter-spacing: 0.5px; }
+
+    /* ---- Responsive ------------------------------------------------------------ */
+    @media (max-width: 1440px) {
+      header { padding: 12px 18px; }
+      .crew-bar { padding: 10px 18px; gap: 10px; }
+      main { gap: 12px; padding: 12px 18px 20px; }
+      .panel-body { padding: 12px; }
+      .brand h1 { font-size: 16px; }
+      .log-list { max-height: 380px; }
+    }
+    @media (max-width: 1100px) {
+      main { grid-template-columns: minmax(0, 1fr); }
       .crew-bar { grid-template-columns: repeat(2, 1fr); }
+      header { flex-direction: column; align-items: flex-start; gap: 10px; }
     }
   </style>
 </head>
@@ -259,6 +343,52 @@
   <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
 </div>
         </div>
+
+        <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
+        <div id="healingMatrix" class="matrix" hidden>
+          <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
+          <div class="matrix-grid">
+            <section class="matrix-col rejected">
+              <div class="matrix-title">Attempt 1 &middot; Rejected draft</div>
+              <pre id="matrixDraft"></pre>
+              <dl class="cx">
+                <dt>shrunk input</dt><dd id="cxInput"></dd>
+                <dt>legacy output</dt><dd id="cxLegacy" class="ok"></dd>
+                <dt>draft output</dt><dd id="cxDraft" class="bad"></dd>
+              </dl>
+              <div id="cxReason" class="reason"></div>
+            </section>
+            <section class="matrix-col verified">
+              <div class="matrix-title" id="matrixFinalTitle">Final &middot; Verified code</div>
+              <pre id="matrixFinal"></pre>
+              <div id="matrixRules" class="rule-chips"></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- Probe Custom Edge Case: judge-driven Object.is parity against the sandbox -->
+        <div id="probeCard" class="probe-card">
+          <div class="probe-head"><span>Probe Custom Edge Case</span><small>Object.is parity &middot; sandboxed &middot; 3 s limit</small></div>
+          <div id="probeInputs" class="probe-inputs"></div>
+          <div class="probe-chips" id="probeChips">
+            <span class="lead">Quick inputs:</span>
+            <button type="button" class="probe-chip" data-value="-1">-1</button>
+            <button type="button" class="probe-chip" data-value="-0">-0</button>
+            <button type="button" class="probe-chip" data-value="0">0</button>
+            <button type="button" class="probe-chip" data-value="2147483648">2147483648</button>
+            <button type="button" class="probe-chip" data-value="NaN">NaN</button>
+            <button type="button" class="probe-chip" data-value='""'>&quot;&quot;</button>
+          </div>
+          <div class="probe-actions">
+            <button id="probeBtn" type="button" class="primary">PROBE BOTH</button>
+            <span id="probeStatus" class="muted">Run RESURRECT SPECIMEN, then try your own adversarial input. Fields accept JSON plus NaN, -0, Infinity and undefined.</span>
+          </div>
+          <div id="probeResults" class="probe-results" hidden>
+            <div class="probe-side" id="probeLegacySide"><h4>Legacy</h4><code class="val" id="probeLegacyVal"></code><span class="meta" id="probeLegacyMeta"></span></div>
+            <div class="probe-side" id="probeModernSide"><h4>Resurrected</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
+          </div>
+          <div id="probeVerdict" class="verdict" hidden></div>
+        </div>
       </div>
     </section>
 
@@ -344,6 +474,7 @@
       runBtn.disabled = true;
       logList.innerHTML = "";
       resetCards();
+      if (window.LazarusUI) window.LazarusUI.onRunStart();
       parityBadge.className = "badge badge-idle";
       parityBadge.textContent = "RUNNING...";
 
@@ -400,6 +531,7 @@
               modernOut.textContent = r.modernCode;
               runStats.textContent = `${r.fuzzReport.totalRuns} fuzz runs (${r.attempts} attempt${r.attempts > 1 ? "s" : ""})`;
               window.lastFuzzRuns = r.fuzzReport.totalRuns;
+              if (window.LazarusUI) window.LazarusUI.onResult(r);
               if (r.success) {
                 parityBadge.className = "badge badge-pass";
                 parityBadge.textContent = "100% PARITY PROVEN";
@@ -506,6 +638,24 @@
     }
   ];
 
+  extraPresets.push(
+    {
+      value: "es5-string-hash",
+      label: "Preset 7: 32-bit String Hash (AST rule rolled back live)",
+      name: "stringHash32",
+      code: "var h = 0; for (var i = 0; i < text.length; i++) { h = (h * 31 + text.charCodeAt(i)) | 0; } h;",
+      schema: '{"text": "string"}',
+      bug: false
+    },
+    {
+      value: "commonjs-multi-param",
+      label: "Preset 8: Multi-parameter CommonJS (a, b)",
+      name: "mixAB",
+      code: "module.exports = function mix(a, b) {\n  var s = a * 3 + b;\n  return (s / 2) | 0;\n};",
+      schema: '{"a": "integer", "b": "integer"}',
+      bug: false
+    }
+  );
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -549,6 +699,11 @@
         legacyCode.value = data.source;
         const fileName = (data.normalizedUrl || "").split("/").pop() || "githubSpecimen";
         modName.value = fileName.replace(/\.(c?js)$/i, "");
+        if (data.functionName) modName.value = data.functionName;
+        if (data.suggestedSchema && Object.keys(data.suggestedSchema).length > 0) {
+          schemaJson.value = JSON.stringify(data.suggestedSchema);
+          if (window.LazarusUI) window.LazarusUI.refreshProbeInputs();
+        }
         const idioms = Array.isArray(data.detectedIdioms) && data.detectedIdioms.length > 0
           ? data.detectedIdioms.join(", ")
           : "Standard ES5";
@@ -645,6 +800,225 @@
       a.click();
     });
   }
+})();
+</script>
+<script>
+/* Judge Playground: Self-Healing Matrix + Probe Custom Edge Case (no frameworks, textContent only). */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const TAG = "$lazarus";
+  const SPECIAL_LITERALS = { "NaN": "NaN", "Infinity": "Infinity", "-Infinity": "-Infinity", "-0": "-0", "undefined": "undefined" };
+  const KIND_DEFAULTS = { integer: "-1", number: "0.5", string: '"abc"', boolean: "true", json: "[1, 2]" };
+
+  const schemaJson = $("schemaJson");
+  const legacyCode = $("legacyCode");
+  const modernOut = $("modernOut");
+  const matrix = $("healingMatrix");
+  const probeInputs = $("probeInputs");
+  const probeBtn = $("probeBtn");
+  const probeStatus = $("probeStatus");
+  const probeResults = $("probeResults");
+  const probeVerdict = $("probeVerdict");
+  let activeInput = null;
+  let busy = false;
+
+  // ---- value helpers ---------------------------------------------------
+  function tag(kind) { const o = {}; o[TAG] = kind; return o; }
+  function isTagged(v) {
+    return v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v[TAG] === "string";
+  }
+  /** Display a JSON-level value (fuzz traces) or a tagged value (probe results). */
+  function show(value) {
+    if (isTagged(value)) return value[TAG];
+    if (value === undefined) return "undefined";
+    try { const s = JSON.stringify(value); return s === undefined ? String(value) : s; } catch (e) { return String(value); }
+  }
+  /** Probe field text -> value. NaN, -0, Infinity and undefined become tagged markers; the rest is JSON. */
+  function parseInput(text) {
+    const t = text.trim();
+    if (t === "") return tag("undefined");
+    if (/^-0(\.0+)?$/.test(t)) return tag("-0");
+    if (Object.prototype.hasOwnProperty.call(SPECIAL_LITERALS, t)) return tag(SPECIAL_LITERALS[t]);
+    try { return JSON.parse(t); } catch (e) { return t; }
+  }
+
+  // ---- Self-Healing Matrix ----------------------------------------------
+  function activeRules(code) {
+    const m = /^\/\/ ast-rules: (.+)$/m.exec(code || "");
+    if (!m) return [];
+    return m[1].trim().split(/\s+/).map((t) => t.split("=")).filter((p) => p.length === 2 && p[1] !== "off");
+  }
+  function refineInfo(code) {
+    const m = /\/\/ ast-refine: .*?blamed (\S+); rolled back ([^;]+);/.exec(code || "");
+    return m ? { blamed: m[1], rolledBack: m[2].trim() } : null;
+  }
+  function outcomeText(o) {
+    if (!o) return "n/a";
+    return o.ok ? show(o.output) : "threw " + (o.errorMessage || o.errorCode || "error");
+  }
+  function chip(kind, text) {
+    const el = document.createElement("span");
+    el.className = "chip-rule " + kind;
+    el.textContent = text;
+    return el;
+  }
+  function renderMatrix(r) {
+    const events = Array.isArray(r.events) ? r.events : [];
+    const synthesized = events.filter((e) => e.type === "code_synthesized" && e.payload);
+    const draft = synthesized.length > 0 ? synthesized[0].payload.modernCode : "";
+    const cxEvent = events.find((e) => e.type === "counterexample_found" && e.payload);
+    const cx = cxEvent ? cxEvent.payload.counterexample : null;
+    const refine = refineInfo(r.modernCode);
+    if (!(r.attempts > 1 || refine) || !draft) { matrix.hidden = true; return; }
+
+    $("matrixDraft").textContent = String(draft).trim();
+    $("matrixFinal").textContent = String(r.modernCode || "").trim();
+    $("cxInput").textContent = cx ? Object.entries(cx.inputs).map((kv) => kv[0] + " = " + show(kv[1])).join(", ") : "n/a";
+    $("cxLegacy").textContent = cx ? outcomeText(cx.legacy) : "n/a";
+    $("cxDraft").textContent = cx ? outcomeText(cx.modern) : "n/a";
+    $("cxReason").textContent = cx && cx.reason ? cx.reason : "";
+
+    const summary = $("matrixSummary");
+    summary.className = "badge " + (r.success ? "badge-pass" : "badge-fail");
+    summary.textContent = r.success ? "HEALED IN " + r.attempts + " ATTEMPTS" : "UNRESOLVED AFTER " + r.attempts;
+    $("matrixFinalTitle").textContent = r.success
+      ? "Final \u00b7 Verified code (attempt " + r.attempts + ")"
+      : "Last attempt \u00b7 NOT verified";
+
+    const chips = $("matrixRules");
+    chips.textContent = "";
+    if (refine) {
+      chips.append(chip("blamed", "AST rule blamed: " + refine.blamed), chip("repaired", "rolled back " + refine.rolledBack));
+    } else {
+      const naive = /Math\.floor/.test(draft) ? "Math.floor truncation (naive draft)" : "first draft";
+      chips.append(chip("blamed", "Blamed: " + naive), chip("repaired", "Repaired: re-derived by the AST rules"));
+    }
+    activeRules(r.modernCode).forEach((p) => chips.append(chip("active", p[0] + " \u00b7 " + p[1])));
+    matrix.hidden = false;
+  }
+
+  // ---- Probe Custom Edge Case ---------------------------------------------
+  function setStatus(text, isError) {
+    probeStatus.textContent = text;
+    probeStatus.style.color = isError ? "#fca5a5" : "";
+  }
+  function schemaObject() {
+    try {
+      const parsed = JSON.parse(schemaJson.value || "{}");
+      return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch (e) { return null; }
+  }
+  function renderProbeInputs() {
+    const schema = schemaObject();
+    if (!schema) { setStatus("Fix the Input Fuzz Schema JSON to edit probe inputs.", true); return; }
+    const previous = {};
+    probeInputs.querySelectorAll("input").forEach((i) => { previous[i.dataset.key] = i.value; });
+    probeInputs.textContent = "";
+    activeInput = null;
+    Object.keys(schema).forEach((key) => {
+      const label = document.createElement("label");
+      const name = document.createElement("span");
+      name.className = "k";
+      name.textContent = key;
+      label.append(name, " (" + schema[key] + ")");
+      const input = document.createElement("input");
+      input.dataset.key = key;
+      input.spellcheck = false;
+      input.autocomplete = "off";
+      input.value = Object.prototype.hasOwnProperty.call(previous, key) ? previous[key] : (KIND_DEFAULTS[schema[key]] || "0");
+      input.addEventListener("focus", () => { activeInput = input; });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") runProbe(); });
+      label.append(input);
+      probeInputs.append(label);
+    });
+  }
+  function fillSide(prefix, side, differs) {
+    const box = $(prefix + "Side");
+    box.className = "probe-side" + (side.ok ? "" : " error") + (differs ? " differs" : "");
+    $(prefix + "Val").textContent = side.display;
+    const bits = [side.durationMs + " ms"];
+    if (side.stdout) bits.push("stdout: " + side.stdout);
+    if (side.stderr) bits.push("stderr: " + side.stderr);
+    $(prefix + "Meta").textContent = bits.join(" \u00b7 ");
+  }
+  function renderProbe(data, context) {
+    const differs = !data.exactParity && data.legacy.ok && data.modern.ok;
+    fillSide("probeLegacy", data.legacy, differs);
+    fillSide("probeModern", data.modern, differs);
+    probeResults.hidden = false;
+    probeVerdict.hidden = false;
+    probeVerdict.className = "verdict " + (data.exactParity ? "pass" : "fail");
+    probeVerdict.textContent = "";
+    const head = document.createElement("strong");
+    head.textContent = data.exactParity ? "Object.is PARITY \u2713 " : "MISMATCH \u2717 ";
+    probeVerdict.append(head, data.reason);
+    setStatus("Probed " + Object.keys(context).map((k) => k + " = " + show(context[k])).join(", "));
+  }
+  async function runProbe() {
+    if (busy) return;
+    const modern = (modernOut.textContent || "").trim();
+    if (!modern || modern.startsWith("// Modernized code will appear")) {
+      setStatus("Run RESURRECT SPECIMEN first, so there is resurrected code to probe.", true);
+      return;
+    }
+    const context = {};
+    probeInputs.querySelectorAll("input").forEach((i) => { context[i.dataset.key] = parseInput(i.value); });
+    busy = true;
+    probeBtn.disabled = true;
+    setStatus("Probing both sides in the sandbox...");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const res = await fetch("/api/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: modern, context }),
+        signal: controller.signal
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = Array.isArray(data.issues) ? data.issues.map((i) => i.path + " " + i.message).join("; ") : data.error;
+        setStatus("Probe rejected: " + detail, true);
+        return;
+      }
+      renderProbe(data, context);
+    } catch (err) {
+      setStatus(err && err.name === "AbortError" ? "Probe timed out." : "Probe failed: " + (err && err.message ? err.message : err), true);
+    } finally {
+      clearTimeout(timer);
+      busy = false;
+      probeBtn.disabled = false;
+    }
+  }
+
+  probeBtn.addEventListener("click", runProbe);
+  $("probeChips").querySelectorAll(".probe-chip").forEach((chipButton) => {
+    chipButton.addEventListener("click", () => {
+      const target = activeInput && probeInputs.contains(activeInput) ? activeInput : probeInputs.querySelector("input");
+      if (!target) return;
+      target.value = chipButton.dataset.value;
+      runProbe();
+    });
+  });
+  schemaJson.addEventListener("input", renderProbeInputs);
+  $("presetSelect").addEventListener("change", () => setTimeout(renderProbeInputs, 0));
+
+  window.LazarusUI = {
+    onRunStart() {
+      matrix.hidden = true;
+      probeResults.hidden = true;
+      probeVerdict.hidden = true;
+      setStatus("Resurrecting...");
+    },
+    onResult(r) {
+      renderMatrix(r);
+      renderProbeInputs();
+      setStatus("Resurrection complete. Click a quick input, or type your own adversarial value and press PROBE BOTH.");
+    },
+    refreshProbeInputs: renderProbeInputs
+  };
+  renderProbeInputs();
 })();
 </script>
 </body>

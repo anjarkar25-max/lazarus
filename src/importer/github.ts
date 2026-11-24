@@ -88,6 +88,8 @@ export async function fetchGitHubSpecimen(rawUrl: string): Promise<{
   byteLength: number;
   extractedExpression: string;
   detectedIdioms: string[];
+  suggestedSchema: Record<string, string>;
+  functionName?: string;
 }> {
   const validation = validateAndNormalizeGitHubUrl(rawUrl);
   if (!validation.valid || !validation.normalizedUrl) {
@@ -117,6 +119,8 @@ export async function fetchGitHubSpecimen(rawUrl: string): Promise<{
       byteLength: cap.byteLength,
       extractedExpression: ast.primaryExpression,
       detectedIdioms: ast.detectedIdioms,
+      suggestedSchema: ast.suggestedSchema,
+      ...(ast.primary !== undefined ? { functionName: ast.primary.name } : {}),
     };
   } finally {
     clearTimeout(timer);
