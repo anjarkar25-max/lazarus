@@ -1,6 +1,7 @@
 ﻿import * as fc from "fast-check";
 import { SandboxError } from "../sandbox/errors.js";
-import { ProbeRunner } from "../sandbox/runner.js";
+import { PooledProbeRunner } from "../sandbox/pool.js";
+import type { ProbeExecutor } from "../sandbox/types.js";
 import type {
   CounterexampleReport,
   FuzzOptions,
@@ -102,17 +103,37 @@ function formatValue(val: unknown): string {
   }
 }
 
-export class DifferentialFuzzer {
-  private readonly runner: ProbeRunner;
+/** Separate executors for each side of the comparison (e.g. two warm pools). */
+export interface DifferentialExecutors {
+  readonly legacy: ProbeExecutor;
+  readonly modern: ProbeExecutor;
+}
 
-  constructor(runner: ProbeRunner = new ProbeRunner()) {
-    this.runner = runner;
+export class DifferentialFuzzer {
+  private readonly executors: DifferentialExecutors | null;
+
+  /**
+   * @param runner Executor(s) to use. When omitted, every fuzz() call creates one warm
+   *               PooledProbeRunner per side and disposes both when the call finishes.
+   */
+  constructor(runner?: ProbeExecutor | DifferentialExecutors) {
+    if (runner === undefined) {
+      this.executors = null;
+    } else if ("run" in runner) {
+      this.executors = { legacy: runner, modern: runner };
+    } else {
+      this.executors = runner;
+    }
   }
 
-  private async runSingle(code: string, context: Record<string, unknown>): Promise<ProbeOutcome> {
+  private async runSingle(
+    executor: ProbeExecutor,
+    code: string,
+    context: Record<string, unknown>
+  ): Promise<ProbeOutcome> {
     const start = Date.now();
     try {
-      const res = await this.runner.run({ code, context });
+      const res = await executor.run({ code, context });
       return {
         ok: true,
         output: res.output,
@@ -136,6 +157,22 @@ export class DifferentialFuzzer {
     schema: InputSchema,
     options: FuzzOptions = {}
   ): Promise<FuzzReport> {
+    if (this.executors !== null) {
+      return this.fuzzWith(this.executors, legacyCode, modernCode, schema, options);
+    }
+    await using legacy = new PooledProbeRunner();
+    await using modern = new PooledProbeRunner();
+    // `return await` keeps both pools alive until the run finishes (see orchestrator.ts).
+    return await this.fuzzWith({ legacy, modern }, legacyCode, modernCode, schema, options);
+  }
+
+  private async fuzzWith(
+    executors: DifferentialExecutors,
+    legacyCode: string,
+    modernCode: string,
+    schema: InputSchema,
+    options: FuzzOptions
+  ): Promise<FuzzReport> {
     const startedAt = Date.now();
     const numRuns = options.numRuns ?? 25;
     const maxTraces = options.maxTraces ?? 15;
@@ -146,8 +183,8 @@ export class DifferentialFuzzer {
 
     const property = fc.asyncProperty(recordArb, async (inputs) => {
       const [legacy, modern] = await Promise.all([
-        this.runSingle(legacyCode, inputs),
-        this.runSingle(modernCode, inputs),
+        this.runSingle(executors.legacy, legacyCode, inputs),
+        this.runSingle(executors.modern, modernCode, inputs),
       ]);
 
       const { matched, reason } = compareOutcomes(legacy, modern);

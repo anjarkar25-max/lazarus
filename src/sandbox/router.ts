@@ -11,6 +11,7 @@ import type {
   JsonRpcId,
   JsonRpcSuccess,
   PingResult,
+  ProbeExecutor,
   ProbeResult,
   SandboxRequest,
   ShutdownResult,
@@ -24,14 +25,14 @@ export interface RouterDeps {
   /** Override for testing — defaults to process.exit */
   exit?: (code: number) => never | void;
   /** Override for testing */
-  runner?: ProbeRunner | undefined;
+  runner?: ProbeExecutor | undefined;
 }
 
 export class RpcRouter {
   private readonly rl: readline.Interface;
   private readonly output: NodeJS.WritableStream;
   private readonly exit: (code: number) => never | void;
-  private readonly runner: ProbeRunner;
+  private readonly runner: ProbeExecutor;
 
   constructor(deps: RouterDeps = {}) {
     const input = deps.input ?? process.stdin;

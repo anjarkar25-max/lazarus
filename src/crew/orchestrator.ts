@@ -1,7 +1,8 @@
-﻿import * as fc from "fast-check";
+import * as fc from "fast-check";
 import { DifferentialFuzzer, buildRecordArbitrary } from "../fuzzer/differential.js";
 import type { FuzzTrace } from "../fuzzer/types.js";
-import { ProbeRunner } from "../sandbox/runner.js";
+import { PooledProbeRunner } from "../sandbox/pool.js";
+import type { ProbeExecutor } from "../sandbox/types.js";
 import { DeterministicModernizer } from "./synthesizer.js";
 import type {
   AgentRole,
@@ -12,22 +13,40 @@ import type {
   ResurrectionResult,
 } from "./types.js";
 
+interface SessionDeps {
+  readonly runner: ProbeExecutor;
+  readonly fuzzer: DifferentialFuzzer;
+}
+
 export class ResurrectionOrchestrator {
-  private readonly runner: ProbeRunner;
-  private readonly fuzzer: DifferentialFuzzer;
+  private readonly runner: ProbeExecutor | undefined;
+  private readonly fuzzer: DifferentialFuzzer | undefined;
   private readonly synthesizer: CodeSynthesizer;
 
   constructor(options?: {
-    runner?: ProbeRunner;
+    runner?: ProbeExecutor;
     fuzzer?: DifferentialFuzzer;
     synthesizer?: CodeSynthesizer;
   }) {
-    this.runner = options?.runner ?? new ProbeRunner();
-    this.fuzzer = options?.fuzzer ?? new DifferentialFuzzer(this.runner);
+    this.runner = options?.runner;
+    this.fuzzer = options?.fuzzer ?? (this.runner !== undefined ? new DifferentialFuzzer(this.runner) : undefined);
     this.synthesizer = options?.synthesizer ?? new DeterministicModernizer();
   }
 
   async resurrect(request: ResurrectionRequest): Promise<ResurrectionResult> {
+    if (this.runner !== undefined && this.fuzzer !== undefined) {
+      return this.resurrectWith({ runner: this.runner, fuzzer: this.fuzzer }, request);
+    }
+    // One warm worker per side for the whole session, always torn down on exit.
+    await using legacyPool = new PooledProbeRunner();
+    await using modernPool = new PooledProbeRunner();
+    const fuzzer = this.fuzzer ?? new DifferentialFuzzer({ legacy: legacyPool, modern: modernPool });
+    // `return await` is required: a bare `return` would leave the `await using` scope (and
+    // close both pools) before the session has finished.
+    return await this.resurrectWith({ runner: this.runner ?? legacyPool, fuzzer }, request);
+  }
+
+  private async resurrectWith(deps: SessionDeps, request: ResurrectionRequest): Promise<ResurrectionResult> {
     const events: CrewEvent[] = [];
     const emit = (
       agent: AgentRole,
@@ -57,7 +76,7 @@ export class ResurrectionOrchestrator {
     for (const inputs of sampleInputs) {
       const start = Date.now();
       try {
-        const res = await this.runner.run({ code: request.legacyCode, context: inputs });
+        const res = await deps.runner.run({ code: request.legacyCode, context: inputs });
         const outcome = { ok: true, output: res.output, durationMs: res.durationMs };
         baselineTraces.push({ inputs, legacy: outcome, modern: outcome, matched: true });
       } catch (err: unknown) {
@@ -107,7 +126,7 @@ export class ResurrectionOrchestrator {
     const maxAttempts = request.maxHealingAttempts ?? 3;
     const fuzzRuns = request.fuzzRuns ?? 20;
     let modernCode = "";
-    let lastReport = await this.fuzzer.fuzz(request.legacyCode, request.legacyCode, request.schema, {
+    let lastReport = await deps.fuzzer.fuzz(request.legacyCode, request.legacyCode, request.schema, {
       numRuns: 1,
       ...(request.seed !== undefined ? { seed: request.seed } : {}),
     });
@@ -138,7 +157,7 @@ export class ResurrectionOrchestrator {
       });
 
       emit("exorcist", "agent_started", `Fuzzing candidate #${attempt} across ${fuzzRuns} generated inputs`);
-      lastReport = await this.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
+      lastReport = await deps.fuzzer.fuzz(request.legacyCode, modernCode, request.schema, {
         numRuns: fuzzRuns,
         ...(request.seed !== undefined ? { seed: request.seed + attempt } : {}),
       });

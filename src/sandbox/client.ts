@@ -51,15 +51,79 @@ type InFlight = {
   reject: (err: SandboxError) => void;
 };
 
+export interface SandboxClientOptions {
+  /** Extra node flags placed before the entry script, e.g. ["--max-old-space-size=256"]. */
+  readonly execArgv?: readonly string[];
+  /** Environment for the child process (defaults to the parent's). */
+  readonly env?: NodeJS.ProcessEnv;
+  /** Forward the child's stderr to this process's stderr. Defaults to true. */
+  readonly pipeStderr?: boolean;
+}
+
+const STDERR_TAIL_BYTES = 4096;
+
 export class SandboxClient {
   private child: ChildProcess | null = null;
   private rl: readline.Interface | null = null;
   private nextId = 1;
   private inflight = new Map<number, InFlight>();
   private readonly hostPath: string;
+  private readonly options: SandboxClientOptions;
+  private stderrBuffer = "";
 
-  constructor(hostPath?: string) {
+  constructor(hostPath?: string, options: SandboxClientOptions = {}) {
     this.hostPath = resolveHostPath(hostPath);
+    this.options = options;
+  }
+
+  /**
+   * True while the child process is running. Also asks the OS, because the `exit` event can be
+   * delivered after the process is already gone (observed on Windows).
+   */
+  get isAlive(): boolean {
+    const child = this.child;
+    if (child === null || child.exitCode !== null || child.signalCode !== null || child.pid === undefined) {
+      return false;
+    }
+    try {
+      process.kill(child.pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** PID of the current child process, if any. */
+  get pid(): number | undefined {
+    return this.child?.pid;
+  }
+
+  /** Last few KB of the child's stderr (used to recognise V8 out-of-memory aborts). */
+  get stderrTail(): string {
+    return this.stderrBuffer;
+  }
+
+  /**
+   * Hard-stop the child and wait for it to exit. Pending requests are rejected.
+   * Safe to call when nothing is running.
+   */
+  async kill(): Promise<void> {
+    const child = this.child;
+    this.rejectAll(new SandboxError("INTERNAL_ERROR", "Sandbox host was killed"));
+    if (child === null) return;
+    const exited =
+      child.exitCode !== null || child.signalCode !== null
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            child.once("exit", () => resolve());
+          });
+    this.cleanup();
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already dead */
+    }
+    await exited;
   }
 
   // ---------------------------------------------------------------------------
@@ -72,6 +136,7 @@ export class SandboxClient {
     }
 
     const isTs = this.hostPath.endsWith(".ts");
+    const execArgv = [...(this.options.execArgv ?? [])];
     let spawnCmd: string;
     let spawnArgs: string[];
 
@@ -79,23 +144,36 @@ export class SandboxClient {
       const tsx = findTsx();
       if (tsx !== undefined) {
         spawnCmd = tsx;
-        spawnArgs = [this.hostPath];
+        spawnArgs = [...execArgv, this.hostPath];
       } else {
         // Fall back to node with --import tsx/esm (Node 22+ supports this)
         spawnCmd = process.execPath;
-        spawnArgs = ["--import", "tsx/esm", this.hostPath];
+        spawnArgs = [...execArgv, "--import", "tsx/esm", this.hostPath];
       }
     } else {
       spawnCmd = process.execPath;
-      spawnArgs = [this.hostPath];
+      spawnArgs = [...execArgv, this.hostPath];
     }
 
+    this.stderrBuffer = "";
     this.child = spawn(spawnCmd, spawnArgs, {
       stdio: ["pipe", "pipe", "pipe"],
+      ...(this.options.env !== undefined ? { env: this.options.env } : {}),
+    });
+
+    // A child that dies mid-write must not crash this process with an unhandled EPIPE.
+    this.child.stdin?.on("error", () => {
+      /* the exit handler rejects in-flight requests */
+    });
+
+    this.child.stderr?.on("data", (chunk: Buffer) => {
+      this.stderrBuffer = (this.stderrBuffer + chunk.toString("utf8")).slice(-STDERR_TAIL_BYTES);
     });
 
     // Pipe stderr to our stderr for debugging
-    this.child.stderr?.pipe(process.stderr, { end: false });
+    if (this.options.pipeStderr !== false) {
+      this.child.stderr?.pipe(process.stderr, { end: false });
+    }
 
     this.rl = readline.createInterface({
       input: this.child.stdout!,
@@ -203,7 +281,7 @@ export class SandboxClient {
       const errData = response.error;
       const sandboxCode =
         (errData.data?.sandboxCode) ?? "INTERNAL_ERROR";
-      pending.reject(new SandboxError(sandboxCode, errData.message));
+      pending.reject(new SandboxError(sandboxCode, errData.data?.detail ?? errData.message));
     }
   }
 

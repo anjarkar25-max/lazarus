@@ -62,6 +62,15 @@ export interface ProbeResult {
   readonly output: unknown;
   readonly durationMs: number;
   readonly memoryUsedBytes: number;
+  /** Captured console.log/info/debug output (only produced by the pooled worker). */
+  readonly stdout?: string;
+  /** Captured console.warn/error output (only produced by the pooled worker). */
+  readonly stderr?: string;
+}
+
+/** Anything that can execute a probe: ProbeRunner, VmProbeExecutor, PooledProbeRunner. */
+export interface ProbeExecutor {
+  run(params: ProbeParams): Promise<ProbeResult>;
 }
 
 export interface PingResult {

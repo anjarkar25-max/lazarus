@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it } from "vitest";
+import { PooledProbeRunner } from "../../sandbox/pool.js";
 import { ProbeRunner } from "../../sandbox/runner.js";
-import { createLazarusMcpServer, executeLegacyProbe } from "../server.js";
+import { createLazarusMcpServer, executeLegacyProbe, type LegacyProbeReport } from "../server.js";
 
 describe("Lazarus MCP Server", () => {
   it("instantiates the MCP server cleanly", () => {
@@ -20,6 +21,33 @@ describe("Lazarus MCP Server", () => {
     const parsed = JSON.parse(res.content[0]!.text) as { output: number };
     expect(parsed.output).toBe(42);
   }, 10_000);
+
+  it("returns returnValue, captured stdout/stderr, and metrics from the pooled worker", async () => {
+    await using pool = new PooledProbeRunner();
+    const res = await executeLegacyProbe(pool, {
+      code: "console.log('sum is', a + b); console.warn('legacy warning'); a + b",
+      context: { a: 2, b: 3 },
+    });
+
+    expect("isError" in res && res.isError).toBeFalsy();
+    const parsed = JSON.parse(res.content[0]!.text) as LegacyProbeReport;
+    expect(parsed.returnValue).toBe(5);
+    expect(parsed.stdout).toBe("sum is 5");
+    expect(parsed.stderr).toBe("legacy warning");
+    expect(parsed.metrics.durationMs).toBeGreaterThanOrEqual(0);
+    expect(parsed.metrics.memoryUsedBytes).toBeGreaterThanOrEqual(0);
+  }, 15_000);
+
+  it("reports the thrown message and TIMEOUT through the pooled worker", async () => {
+    await using pool = new PooledProbeRunner();
+    const boom = await executeLegacyProbe(pool, { code: "(() => { throw new Error('legacy boom'); })()" });
+    expect(boom.isError).toBe(true);
+    expect(JSON.parse(boom.content[0]!.text)).toEqual({ error: { code: "EXECUTION_ERROR", message: "legacy boom" } });
+
+    const hang = await executeLegacyProbe(pool, { code: "while (true) {}" });
+    expect(hang.isError).toBe(true);
+    expect(hang.content[0]?.text).toContain("TIMEOUT");
+  }, 20_000);
 
   it("returns structured isError payload when legacy code throws", async () => {
     const runner = new ProbeRunner();
