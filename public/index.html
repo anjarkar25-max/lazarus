@@ -273,6 +273,25 @@
 .cert-row .warn { color: #fca5a5; }
 .cert-copy { background: #1e1b4b; border: 1px solid var(--violet); color: #e9d5ff; padding: 5px 9px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; }
 .cert-copy.done { border-color: var(--emerald); color: var(--emerald); }
+.redteam { margin-top: 10px; border: 1px solid #1e293b; border-radius: 8px; background: #090d16; }
+.redteam > summary { cursor: pointer; padding: 8px 10px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--crimson); font-weight: 700; list-style: none; }
+.redteam > summary::before { content: "\25B8  "; color: var(--violet); }
+.redteam[open] > summary::before { content: "\25BE  "; }
+.rt-body { padding: 0 10px 10px 10px; }
+.rt-note { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+.rt-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.rt-btn { background: #111827; color: #fecaca; border: 1px solid #7f1d1d; border-radius: 6px; padding: 5px 9px; font-size: 11px; font-family: ui-monospace, Consolas, monospace; cursor: pointer; }
+.rt-btn:hover:not(:disabled) { border-color: var(--crimson); color: #fff; }
+.rt-btn:disabled { opacity: .5; cursor: wait; }
+.rt-log { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.rt-row { padding: 6px 8px; border-radius: 6px; background: #111827; border-left: 3px solid var(--emerald); font-size: 11px; color: #cbd5e1; line-height: 1.7; }
+.rt-row.bad { border-left-color: var(--crimson); }
+.rt-row .badge-line { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.rt-pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .5px; border: 1px solid; }
+.rt-pill.ok { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.12); }
+.rt-pill.bad { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.15); }
+.rt-pill.info { color: #ddd6fe; border-color: var(--violet); background: rgba(139, 92, 246, 0.12); }
+.rt-row code { color: #e2e8f0; }
 </style>
 </head>
 <body>
@@ -377,11 +396,13 @@
       <button type="button" class="bundle-tab" data-tab="resurrected.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.ts</button>
       <button type="button" class="bundle-tab" data-tab="resurrected.mjs" style="display:none;background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.mjs (ESM)</button>
       <button type="button" class="bundle-tab" data-tab="resurrected.test.ts" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">resurrected.test.ts</button>
+      <button type="button" class="bundle-tab" data-tab=".github/workflows/lazarus-parity.yml" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">lazarus-parity.yml (CI)</button>
       <button type="button" class="bundle-tab" data-tab="SPEC.md" style="background:#0f172a;color:#94a3b8;border:1px solid #334155;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">SPEC.md</button>
     </div>
     <div style="display:flex;gap:6px;">
       <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
       <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
+      <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
       <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
     </div>
   </div>
@@ -389,6 +410,19 @@
 </div>
         </div>
 
+        <details class="redteam" id="redteamCard">
+          <summary>Red-Team the Sandbox</summary>
+          <div class="rt-body">
+            <div class="rt-note">Real attacks run inside the pooled sandbox worker. Each one is followed by a canary probe (1 + 1) on the same pool.</div>
+            <div class="rt-buttons" id="rtButtons">
+              <button type="button" class="rt-btn" data-attack="infinite-loop">Infinite Loop</button>
+              <button type="button" class="rt-btn" data-attack="process-exit">process.exit(1)</button>
+              <button type="button" class="rt-btn" data-attack="heap-bomb">256MB Heap Bomb</button>
+              <button type="button" class="rt-btn" data-attack="prototype-escape">Hostile Escape</button>
+            </div>
+            <div class="rt-log" id="rtLog" aria-live="polite"></div>
+          </div>
+        </details>
         <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
         <div id="healingMatrix" class="matrix" hidden>
           <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
@@ -617,6 +651,7 @@
   const tabButtons = Array.from(document.querySelectorAll(".bundle-tab"));
 
   let lastBundle = null;
+  let lastBundleBody = null;
   let activeTab = "prDiff";
 
   function showStatus(message, isError) {
@@ -799,10 +834,7 @@
       parsedSchema = undefined;
     }
 
-    const res = await fetch("/api/export-bundle", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const payload = {
         specimenName: modName.value || "resurrectedSpecimen",
         legacyCode: legacyCode.value,
         modernCode: modernText,
@@ -813,8 +845,9 @@
         functions: (window.lastModuleFunctions || []).map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
         provenance: window.lazarusProvenance,
         attempts: window.lastAttempts
-      })
-    });
+    };
+    lastBundleBody = JSON.stringify(payload);
+    const res = await fetch("/api/export-bundle", { method: "POST", headers: { "Content-Type": "application/json" }, body: lastBundleBody });
     const bundle = await res.json();
     if (!res.ok) {
       showStatus("Bundle export error: " + (bundle.error || "Unknown error"), true);
@@ -829,7 +862,37 @@
 
   if (exportBtn) {
     exportBtn.addEventListener("click", async () => {
-      await buildBundleFromCurrentUI();
+      const bundle = await buildBundleFromCurrentUI();
+      if (bundle && bundlePanel) bundlePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+  const downloadZipBtn = document.getElementById("downloadZipBtn");
+  if (downloadZipBtn) {
+    downloadZipBtn.addEventListener("click", async () => {
+      const bundle = await buildBundleFromCurrentUI();
+      if (!bundle || !lastBundleBody) return;
+      const original = downloadZipBtn.textContent;
+      downloadZipBtn.disabled = true;
+      downloadZipBtn.textContent = "Zipping...";
+      try {
+        const res = await fetch("/api/export-zip", { method: "POST", headers: { "Content-Type": "application/json" }, body: lastBundleBody });
+        if (!res.ok) {
+          let detail = "HTTP " + res.status;
+          try { detail = (await res.json()).error || detail; } catch (e) { /* keep status text */ }
+          showStatus("Zip export error: " + detail, true);
+          return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "lazarus-pr-bundle.zip";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        showStatus("Downloaded lazarus-pr-bundle.zip (" + blob.size + " bytes) with the CI workflow.", false);
+      } finally {
+        downloadZipBtn.disabled = false;
+        downloadZipBtn.textContent = original;
+      }
     });
   }
 
@@ -850,7 +913,7 @@
       const content = getTabContent(bundle, activeTab);
       const filename = activeTab === "prDiff"
         ? bundle.specimenName + ".patch"
-        : activeTab;
+        : activeTab.split("/").pop();
       const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -1243,6 +1306,64 @@
     }
   };
   runBtn.addEventListener("click", () => window.LazarusCertificate.hide());
+})();
+</script>
+<script>
+/* Red-Team the Sandbox: one-click containment proofs (textContent only, no frameworks). */
+(function () {
+  "use strict";
+  const buttons = Array.from(document.querySelectorAll("#rtButtons .rt-btn"));
+  const log = document.getElementById("rtLog");
+  if (!log || buttons.length === 0) return;
+  function pill(parent, text, cls) { const s = document.createElement("span"); s.className = "rt-pill " + cls; s.textContent = text; parent.append(s); }
+  function renderResult(r) {
+    const row = document.createElement("div");
+    row.className = "rt-row" + (r.contained && r.recovered ? "" : " bad");
+    const head = document.createElement("div"); head.className = "badge-line";
+    const name = document.createElement("strong"); name.textContent = r.label; head.append(name);
+    pill(head, r.contained ? "CONTAINED" : "ESCAPED", r.contained ? "ok" : "bad");
+    const code = r.outcome.ok ? "returned " + String(r.outcome.output) : (r.outcome.errorCode || "ERROR");
+    pill(head, code, "info");
+    pill(head, r.elapsedMs + " ms", "info");
+    row.append(head);
+    const detail = document.createElement("div");
+    detail.textContent = r.outcome.ok ? r.description : (r.outcome.message || r.description);
+    row.append(detail);
+    const canary = document.createElement("div"); canary.className = "badge-line";
+    const c = document.createElement("span"); c.textContent = "canary 1 + 1 = "; const v = document.createElement("code"); v.textContent = String(r.canaryResult); c.append(v);
+    canary.append(c);
+    pill(canary, r.recovered ? (r.respawned ? "WORKER RESPAWNED & HEALTHY" : "WORKER HEALTHY (NO RESPAWN NEEDED)") : "WORKER NOT RECOVERED", r.recovered ? "ok" : "bad");
+    row.append(canary);
+    log.prepend(row);
+  }
+  async function attack(name, button) {
+    buttons.forEach((b) => { b.disabled = true; });
+    const original = button.textContent;
+    button.textContent = "attacking...";
+    const pending = document.createElement("div"); pending.className = "rt-row"; pending.textContent = "Running " + name + " inside the sandbox worker...";
+    log.prepend(pending);
+    try {
+      const res = await fetch("/api/redteam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attack: name }) });
+      const data = await res.json();
+      pending.remove();
+      if (!res.ok) {
+        const row = document.createElement("div"); row.className = "rt-row bad";
+        row.textContent = "Red-team request refused: " + (data.error || "HTTP " + res.status);
+        log.prepend(row);
+        return;
+      }
+      renderResult(data);
+    } catch (err) {
+      pending.remove();
+      const row = document.createElement("div"); row.className = "rt-row bad";
+      row.textContent = "Red-team request failed: " + (err && err.message ? err.message : err);
+      log.prepend(row);
+    } finally {
+      button.textContent = original;
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+  buttons.forEach((b) => b.addEventListener("click", () => attack(b.dataset.attack, b)));
 })();
 </script>
 </body>

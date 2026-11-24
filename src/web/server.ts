@@ -1,5 +1,7 @@
 import { validateAndNormalizeGitHubUrl, fetchGitHubSpecimen } from "../importer/github.js";
-import { generateResurrectionBundle } from "../exporter/bundle.js";
+import { bundleToZipEntries, generateResurrectionBundle } from "../exporter/bundle.js";
+import { createZip } from "../exporter/zip.js";
+import { RedTeamBodySchema, runRedTeam } from "../sandbox/redteam.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
 import { generateCertificate, sanitizeProvenance } from "../exporter/certificate.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
@@ -199,6 +201,9 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   // Two warm sandbox workers for interactive probing. Created on first use, closed with the server.
   let probeLegacy: PooledProbeRunner | undefined;
   let probeModern: PooledProbeRunner | undefined;
+  // Dedicated worker for the Red-Team card, so attacks never touch probe or resurrection pools.
+  let redTeamPool: PooledProbeRunner | undefined;
+  let redTeamBusy = false;
   const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
     probeLegacy ??= new PooledProbeRunner();
     probeModern ??= new PooledProbeRunner();
@@ -378,7 +383,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       return;
     }
 
-    if (req.method === "POST" && routePath === "/api/export-bundle") {
+    if (req.method === "POST" && (routePath === "/api/export-bundle" || routePath === "/api/export-zip")) {
       let raw = "";
       for await (const chunk of req) {
         raw += chunk;
@@ -441,6 +446,17 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             esmComplete: esm.complete,
           }).markdown,
         });
+        if (routePath === "/api/export-zip") {
+          const archive = createZip(bundleToZipEntries(bundle));
+          res.writeHead(200, {
+            "Content-Type": "application/zip",
+            "Content-Disposition": "attachment; filename=\"lazarus-pr-bundle.zip\"",
+            "Content-Length": archive.length,
+            "Cache-Control": "no-store",
+          });
+          res.end(archive);
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(bundle));
       } catch (err: unknown) {
@@ -479,6 +495,39 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         } else {
           fail(500, { error: "Unexpected importer failure", code: "UPSTREAM_ERROR" });
         }
+      }
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/redteam") {
+      const reply = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        reply(err instanceof PayloadTooLarge ? 413 : 400, { error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" });
+        return;
+      }
+      const checked = RedTeamBodySchema.safeParse(rawBody);
+      if (!checked.success) {
+        reply(400, { error: "attack must be one of: infinite-loop, process-exit, heap-bomb, prototype-escape" });
+        return;
+      }
+      // One attack at a time, so this endpoint cannot be used to stack heap bombs.
+      if (redTeamBusy) {
+        reply(429, { error: "Another red-team attack is still running", code: "BUSY" });
+        return;
+      }
+      redTeamBusy = true;
+      try {
+        redTeamPool ??= new PooledProbeRunner();
+        reply(200, { ...(await runRedTeam(redTeamPool, checked.data.attack)) });
+      } catch (err: unknown) {
+        reply(500, { error: err instanceof Error ? err.message : "Red-team run failed", code: "INTERNAL_ERROR" });
+      } finally {
+        redTeamBusy = false;
       }
       return;
     }
@@ -521,7 +570,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close()]);
   });
   return server;
 }

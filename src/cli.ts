@@ -243,7 +243,10 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
     ...Object.entries(bundle.files).flatMap(([file, content]) => (content === undefined ? [] : [[file, content] as [string, string]])),
     ["resurrection.patch", `${bundle.prDiff}\n`],
   ];
-  for (const [file, content] of files) fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+  for (const [file, content] of files) {
+    fs.mkdirSync(nodePath.dirname(nodePath.join(outDir, file)), { recursive: true });
+    fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+  }
 
   io.stdout(`\nParity proven: ${result.fuzzReport.totalRuns} fuzz runs, ${result.attempts} attempt(s)${result.attempts > 1 ? " (self-healed)" : ""}.\n`);
   io.stdout(`Wrote ${files.length} files to ${outDir}:\n`);
@@ -299,7 +302,10 @@ async function runModule(source: string, idioms: string[], args: ParsedArgs, inp
     ...Object.entries(bundle.files).flatMap(([file, content]) => (content === undefined ? [] : [[file, content] as [string, string]])),
     ["resurrection.patch", `${bundle.prDiff}\n`],
   ];
-  for (const [file, content] of files) fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+  for (const [file, content] of files) {
+    fs.mkdirSync(nodePath.dirname(nodePath.join(outDir, file)), { recursive: true });
+    fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+  }
   io.stdout(`\nParity proven for ${result.functions.length} functions: ${result.fuzzReport.totalRuns} fuzz runs in total, up to ${result.attempts} attempt(s).\n`);
   io.stdout(`Wrote ${files.length} files to ${outDir}:\n`);
   for (const [file, content] of files) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
