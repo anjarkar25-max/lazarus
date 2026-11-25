@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Strict Typecheck on Crew",
+      "description": "Runs the strict TypeScript compiler whenever crew or exporter code is saved; the change is only done at zero errors.",
+      "trigger": "PostFileSave",
+      "matcher": "src[\\\\/](crew|exporter)[\\\\/].*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "npx tsc --noEmit"
+      },
+      "timeout": 180
+    }
+  ]
+}

@@ -161,7 +161,8 @@ export function analyzeGraph(files: Readonly<Record<string, string>>, entryHint?
     problems.push({ file: cycle[0] ?? "", kind: "cycle", message: `circular require chain: ${[...cycle, cycle[0]].join(" -> ")}` });
   }
 
-  // Entry: the requested one, otherwise the single file nobody requires (preferring index/main, then the widest).
+  // Entry: the requested one, otherwise a root (required by nobody) that itself requires project files, preferring
+  // index/main, then the widest reach, then by name. Without such a root: index.cjs, index.js, then the first root.
   const required = new Set(edges.map((e) => e.to));
   const roots = names.filter((f) => !required.has(f));
   const reach = (start: string): number => {
@@ -179,8 +180,12 @@ export function analyzeGraph(files: Readonly<Record<string, string>>, entryHint?
     if (known.has(entryHint)) entry = entryHint;
     else problems.push({ file: entryHint, kind: "no-entry", message: `entry ${entryHint} is not one of the project's .js/.cjs files` });
   } else {
-    const preferred = roots.find((f) => /(^|\/)(index|main)\.c?js$/i.test(f));
-    entry = preferred ?? [...roots].sort((x, y) => reach(y) - reach(x) || x.localeCompare(y))[0];
+    const linked = roots.filter((f) => (deps.get(f) ?? []).length > 0);
+    if (linked.length > 0) {
+      entry = linked.find((f) => /(^|\/)(index|main)\.c?js$/i.test(f)) ?? [...linked].sort((x, y) => reach(y) - reach(x) || x.localeCompare(y))[0];
+    } else {
+      entry = roots.find((f) => /(^|\/)index\.cjs$/i.test(f)) ?? roots.find((f) => /(^|\/)index\.js$/i.test(f)) ?? roots[0];
+    }
     if (entry === undefined && names.length > 0) problems.push({ file: names[0] ?? "", kind: "no-entry", message: "every file is required by another one, so there is no entry module" });
   }
 

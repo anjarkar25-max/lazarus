@@ -57,6 +57,11 @@ export class FakeElement {
   dispatch(type: string, detail?: unknown): void {
     for (const fn of this.listeners.get(type) ?? []) fn({ type, detail });
   }
+  /** DOM-style dispatch, for scripts that call `el.dispatchEvent(new Event("input"))`. */
+  dispatchEvent(event: FakeEvent): boolean {
+    this.dispatch(event.type, event.detail);
+    return true;
+  }
   /** Like a user click: ignored while disabled, as in a real browser. */
   click(): void {
     if (this.disabled) return;

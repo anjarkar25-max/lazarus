@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Sandbox Security Guard",
+      "description": "Reviews every saved file under src/sandbox/ for host escapes and process leaks before the change is accepted.",
+      "trigger": "PostFileSave",
+      "matcher": "src[\\\\/]sandbox[\\\\/].*\\.ts$",
+      "action": {
+        "type": "agent",
+        "prompt": "A file under src/sandbox/ was just saved. Review the change against .kiro/steering/sandbox-security.md and report any finding with file and line: (1) no host `fs`, `child_process`, `node:*` module, `process` or `require` object is reachable from legacy code inside the vm context, and the virtual require() still resolves only relative paths inside the in-memory module map; (2) the 256 MB heap cap and the 3000 ms per-probe watchdog are still enforced; (3) every spawned worker or child process is killed on timeout, crash and pool close, so no process can leak; (4) messages to and from workers are still typed JSON-RPC 2.0 validated at runtime. Then run `npx vitest run src/sandbox` and report the result. Do not weaken a limit or a test to make it pass."
+      }
+    }
+  ]
+}

@@ -18,6 +18,7 @@ import { readKiroDna, resolveKiroDocument, SPEC_DOCUMENTS } from "./kiro-dna.js"
 import { describePaste } from "./smart-paste.js";
 import { buildGitHubPrSummary } from "../exporter/pr-summary.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
+import { GitHubDirError, importGitHubFolder, statusForGitHubDir } from "../importer/github-dir.js";
 import type { ResurrectionResult } from "../crew/types.js";
 import { readHeaderLevels } from "../crew/ast-modernizer.js";
 import { listModuleFunctions, mergeLevels, resurrectModule } from "../crew/module-resurrection.js";
@@ -284,8 +285,11 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
 export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
   npmFetch?: FetchLike;
+  /** `fetch` used by POST /api/import/github-dir (api.github.com + raw.githubusercontent.com). Injected by tests. */
+  githubFetch?: FetchLike;
 }
 const NpmImportBody = z.object({ packageSpec: z.string().max(300) }).strict();
+const GitHubDirBody = z.object({ url: z.string().max(500) }).strict();
 const KindSchema = z.enum(["integer", "number", "string", "boolean", "json"]);
 const GraphSchemaArg = z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/), KindSchema);
 export const GraphBodySchema = z
@@ -665,6 +669,37 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       } catch (err: unknown) {
         if (err instanceof NpmImportError) {
           fail(statusFor(err.code), { error: err.message, code: err.code, ...(err.details !== undefined ? { details: err.details } : {}) });
+        } else {
+          fail(500, { error: "Unexpected importer failure", code: "UPSTREAM_ERROR" });
+        }
+      }
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/import/github-dir") {
+      const fail = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        fail(tooLarge ? 413 : 400, { error: tooLarge ? "Payload too large" : "Invalid JSON body", code: tooLarge ? "TOO_LARGE" : "INVALID_URL" });
+        return;
+      }
+      const checked = GitHubDirBody.safeParse(rawBody);
+      if (!checked.success) {
+        fail(400, { error: "Body must be exactly { url: string }", code: "INVALID_URL" });
+        return;
+      }
+      try {
+        const imported = await importGitHubFolder(checked.data.url, options.githubFetch === undefined ? {} : { fetch: options.githubFetch });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(imported));
+      } catch (err: unknown) {
+        if (err instanceof GitHubDirError) {
+          fail(statusForGitHubDir(err.code), { error: err.message, code: err.code, ...(err.details !== undefined ? { details: err.details } : {}) });
         } else {
           fail(500, { error: "Unexpected importer failure", code: "UPSTREAM_ERROR" });
         }

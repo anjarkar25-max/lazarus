@@ -1,1 +1,16 @@
-{"name":"Run Tests on Save","version":"1.0.0","description":"Runs Vitest when TypeScript files in src/ change","when":{"type":"fileEdited","patterns":["src/**/*.ts"]},"then":{"type":"runCommand","command":"npx vitest run"}}
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run Tests on Save",
+      "description": "Runs Vitest when TypeScript files in src/ change",
+      "trigger": "PostFileSave",
+      "matcher": "src[\\\\/].*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "npx vitest run"
+      },
+      "timeout": 300
+    }
+  ]
+}

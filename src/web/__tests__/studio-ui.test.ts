@@ -7,6 +7,7 @@ import { parse } from "acorn";
 import * as fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MAX_LCS_CELLS, diffLines, diffStats, splitLines, type DiffLine } from "../line-diff.js";
+import { analyzeGraph } from "../../crew/graph-resurrector.js";
 import { FakeDocument, runInlineScript, type FakeElement } from "./fake-dom.js";
 import { createWebServer } from "../server.js";
 
@@ -728,5 +729,258 @@ describe("stale exports (shipped lz-stale script, minimal DOM): exports belong t
     expect(pageHtml.lastIndexOf("<script>")).toBeLessThan(pageHtml.indexOf("/* lz-stale:start */"));
     // Tab 3 is out of scope: the stale script never references the Red-Team controls.
     expect(script()).not.toMatch(/redteam|redTeam|rt-/i);
+  });
+});
+
+describe("repo intake and lab link (shipped lz-intake helpers and link script, minimal DOM)", () => {
+  const region = (): string => {
+    const start = pageHtml.indexOf("/* lz-intake:start */");
+    const end = pageHtml.indexOf("/* lz-intake:end */");
+    expect(start, "lz-intake markers in public/index.html").toBeGreaterThan(0);
+    return pageHtml.slice(start, end);
+  };
+  interface Accepted { name: string; item: { name: string; size: number } }
+  interface Helpers {
+    check(list: Array<{ name: string; size: number }>): { accepted: Accepted[]; rejected: Array<{ name: string; reason: string }>; error: string | null };
+    edges(files: Record<string, string>): Array<{ from: string; to: string }>;
+    pick(files: Record<string, string>): string;
+    encode(s: { name: string; code: string }): { ok: boolean; hash?: string; length: number; error?: string };
+    decode(hash: unknown): { ok: boolean; name?: string; code?: string; error?: string };
+    limits: { maxFiles: number; maxFileBytes: number; maxTotalBytes: number; maxHash: number };
+  }
+  const load = (): Helpers =>
+    runInlineScript(`${region()}; ({ check: lzIntakeCheck, edges: lzRequireEdges, pick: lzPickEntry, encode: lzEncodeSpecimen, decode: lzDecodeSpecimen, limits: LZ_INTAKE })`, { atob, btoa }) as Helpers;
+  /** Plain-data copy, so vm-realm arrays compare with toEqual. */
+  const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+  it("uses the same caps as the GitHub folder importer", () => {
+    expect(plain(load().limits)).toEqual({ maxFiles: 8, maxFileBytes: 32 * 1024, maxTotalBytes: 128 * 1024, maxHash: 4096 });
+  });
+
+  it("accepts .js/.cjs files and rejects the rest with a reason", () => {
+    const r = load().check([
+      { name: "money.cjs", size: 120 },
+      { name: "invoice.JS", size: 300 },
+      { name: "logo.png", size: 10 },
+      { name: "notes.txt", size: 10 },
+      { name: ".hidden.js", size: 10 },
+      { name: "a b.js", size: 10 },
+      { name: "MONEY.cjs", size: 5 },
+      { name: "empty.js", size: 0 },
+      { name: "C:\\fakepath\\tax.cjs", size: 40 },
+    ]);
+    expect(r.error).toBeNull();
+    expect(r.accepted.map((a) => a.name)).toEqual(["money.cjs", "invoice.JS", "tax.cjs"]);
+    expect(plain(r.rejected)).toEqual([
+      { name: "logo.png", reason: "not a .js or .cjs file" },
+      { name: "notes.txt", reason: "not a .js or .cjs file" },
+      { name: ".hidden.js", reason: "unsafe file name (letters, digits, dot, dash, underscore)" },
+      { name: "a b.js", reason: "unsafe file name (letters, digits, dot, dash, underscore)" },
+      { name: "MONEY.cjs", reason: "duplicate file name" },
+      { name: "empty.js", reason: "empty file" },
+    ]);
+  });
+
+  it("loads nothing when a cap is exceeded", () => {
+    const shipped = load();
+    const h = { check: (l: Array<{ name: string; size: number }>) => plain(shipped.check(l)) };
+    const many = Array.from({ length: 9 }, (_, i) => ({ name: `m${i}.js`, size: 10 }));
+    expect(h.check(many)).toMatchObject({ error: expect.stringContaining("the limit is 8") as unknown, accepted: [] });
+    expect(h.check(many.slice(0, 8)).accepted).toHaveLength(8);
+    expect(h.check([{ name: "big.js", size: 32 * 1024 + 1 }])).toMatchObject({ error: expect.stringContaining("per-file limit") as unknown, accepted: [] });
+    expect(h.check([{ name: "edge.js", size: 32 * 1024 }]).error).toBeNull();
+    const heavy = Array.from({ length: 5 }, (_, i) => ({ name: `h${i}.js`, size: 32 * 1024 }));
+    expect(h.check(heavy)).toMatchObject({ error: expect.stringContaining("131072") as unknown, accepted: [] });
+    expect(h.check(heavy.slice(0, 4)).error).toBeNull();
+    expect(h.check([{ name: "x.png", size: 1 }]).error).toBe("No .js or .cjs files to load.");
+  });
+
+  it("auto-selects the entry module the way the server analyzer does", () => {
+    const h = load();
+    const invoice = { "money.cjs": "exports.a = 1;", "tax.cjs": "var m = require('./money.cjs');", "invoice.cjs": "var m = require('./money.cjs'); var t = require('./tax.cjs');" };
+    expect(h.pick(invoice)).toBe("invoice.cjs");
+    expect(plain(h.edges(invoice)).map((e) => e.from + ">" + e.to).sort()).toEqual(["invoice.cjs>money.cjs", "invoice.cjs>tax.cjs", "tax.cjs>money.cjs"]);
+    // A root with outgoing require() edges wins over an isolated index/main; among linked roots index/main wins.
+    expect(h.pick({ "a.js": "require('./b')", "b.js": "", "main.js": "" })).toBe("a.js");
+    expect(h.pick({ "a.js": "require('./b')", "b.js": "", "main.js": "require('./b')" })).toBe("main.js");
+    expect(h.pick({ "a.js": "", "index.js": "", "index.cjs": "" })).toBe("index.cjs");
+    expect(h.pick({ "b.js": "", "a.js": "", "index.js": "" })).toBe("index.js");
+    expect(h.pick({ "b.js": "", "a.js": "" })).toBe("a.js");
+    expect(h.pick({ "z.js": "require('./lib/util.js')", "lib/util.js": "", "a.js": "" })).toBe("z.js");
+    const shapes = fc.array(fc.array(fc.nat(7), { maxLength: 3 }), { minLength: 1, maxLength: 7 });
+    const special = fc.constantFrom("main.js", "index.js", "index.cjs", "main.cjs");
+    fc.assert(
+      fc.property(shapes, fc.option(special), (deps, last) => {
+        // File i may only require files with a higher index, so the graph is acyclic.
+        const names = deps.map((_, i) => (last !== null && i === deps.length - 1 ? last : `m${i}.js`));
+        const files: Record<string, string> = {};
+        deps.forEach((ds, i) => {
+          files[names[i] ?? ""] = ds.filter((d) => d > i && d < deps.length).map((d) => `var x${d} = require('./${names[d] ?? ""}');`).join("\n") + "\nmodule.exports = 1;\n";
+        });
+        expect(h.pick(files)).toBe(analyzeGraph(files).entry ?? "");
+      }),
+      { numRuns: 150 }
+    );
+  });
+
+  it("round-trips any specimen through a #specimen= base64url link", () => {
+    const h = load();
+    fc.assert(
+      fc.property(fc.string({ unit: "grapheme", minLength: 1, maxLength: 200 }).filter((c) => c.trim() !== ""), fc.stringMatching(/^[A-Za-z0-9_$.-]{0,30}$/), (code, name) => {
+        const enc = h.encode({ name, code });
+        expect(enc.ok).toBe(true);
+        expect(enc.hash).toMatch(/^#specimen=[A-Za-z0-9_-]+$/);
+        expect(plain(h.decode(enc.hash))).toEqual({ ok: true, name, code });
+      }),
+      { numRuns: 200 }
+    );
+  });
+
+  it("refuses a specimen that does not fit in 4 KB instead of truncating it", () => {
+    const h = load();
+    const big = h.encode({ name: "big", code: "var x = 1;\n".repeat(400) });
+    expect(big.ok).toBe(false);
+    expect(big.length).toBeGreaterThan(4096);
+    expect(big.error).toContain("the limit is 4096");
+    expect(big.hash).toBeUndefined();
+  });
+
+  it("rejects malformed, oversized or hostile links without throwing", () => {
+    const h = load();
+    const b64 = (s: string): string => Buffer.from(s, "utf8").toString("base64url");
+    for (const hash of [
+      undefined,
+      "",
+      "#single",
+      "#specimen=",
+      "#specimen=not*base64",
+      "#specimen=" + b64("not json"),
+      "#specimen=" + b64(JSON.stringify({ v: 2, name: "a", code: "x" })),
+      "#specimen=" + b64(JSON.stringify({ v: 1, name: "a", code: "   " })),
+      "#specimen=" + b64(JSON.stringify({ v: 1, name: "<img src=x onerror=alert(1)>", code: "x" })),
+      "#specimen=" + b64(JSON.stringify({ v: 1, name: "a", code: 5 })),
+      "#specimen=" + Buffer.from([0xff, 0xfe, 0x00]).toString("base64url"),
+      "#specimen=" + "A".repeat(5000),
+    ]) {
+      const r = h.decode(hash);
+      expect(r.ok, String(hash).slice(0, 40)).toBe(false);
+      expect(typeof r.error).toBe("string");
+    }
+  });
+
+  function linkPage(hash: string): { doc: FakeDocument; code: FakeElement; name: FakeElement; note: FakeElement; btn: FakeElement; run: FakeElement; inputs: number; clipboard: string[]; win: Record<string, unknown> } {
+    const doc = new FakeDocument();
+    const code = doc.element("textarea", "legacyCode");
+    const name = doc.element("input", "modName");
+    const note = doc.element("span", "linkNote");
+    const btn = doc.element("button", "copyLinkBtn");
+    const run = doc.element("button", "runBtn");
+    let runs = 0;
+    run.addEventListener("click", () => { runs++; });
+    code.value = "var half = (n / 2) | 0; half;";
+    name.value = "legacy-int-halve";
+    const clipboard: string[] = [];
+    const out = { doc, code, name, note, btn, run, inputs: 0, clipboard, win: {} as Record<string, unknown> };
+    code.addEventListener("input", () => { out.inputs++; });
+    const win: Record<string, unknown> = {
+      addEventListener: () => undefined,
+      isSecureContext: true,
+    };
+    out.win = win;
+    const source = scriptWith("/* Tab 1 lab link:");
+    runInlineScript(`${region()};\n${source}`, {
+      document: doc,
+      window: win,
+      atob,
+      btoa,
+      location: { hash, origin: "https://lazarus.example", pathname: "/" },
+      history: { replaceState: () => undefined },
+      navigator: { clipboard: { writeText: async (t: string) => { clipboard.push(t); } } },
+      Event: class { constructor(readonly type: string) {} },
+    });
+    expect(runs, "opening a link never starts a resurrection").toBe(0);
+    return out;
+  }
+  const scriptWith = (marker: string): string => {
+    const found = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((s) => s.includes(marker));
+    expect(found, marker).toBeDefined();
+    return found ?? "";
+  };
+
+  it("Copy Lab Link copies origin + #specimen= for the current code and name", async () => {
+    const page = linkPage("");
+    expect(page.inputs).toBe(0);
+    page.btn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(page.clipboard).toHaveLength(1);
+    const link = page.clipboard[0] ?? "";
+    expect(link.startsWith("https://lazarus.example/#specimen=")).toBe(true);
+    expect(plain(load().decode(link.slice(link.indexOf("#"))))).toEqual({ ok: true, name: "legacy-int-halve", code: "var half = (n / 2) | 0; half;" });
+    expect(page.note.hidden).toBe(false);
+    expect(page.note.textContent).toContain("Lab link copied");
+  });
+
+  it("Copy Lab Link refuses an oversized specimen with a visible note", async () => {
+    const page = linkPage("");
+    page.code.value = "var x = 1;\n".repeat(400);
+    page.btn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(page.clipboard).toEqual([]);
+    expect(page.note.textContent).toContain("the limit is 4096");
+  });
+
+  it("opening a #specimen= link loads the code and name and fires input (smart paste), without running", () => {
+    const hash = load().encode({ name: "stringHash32", code: "function stringHash32(s) { return s.length | 0; }" }).hash ?? "";
+    const page = linkPage(hash);
+    expect(page.code.value).toBe("function stringHash32(s) { return s.length | 0; }");
+    expect(page.name.value).toBe("stringHash32");
+    expect(page.inputs).toBe(1);
+    expect(plain(page.win["lazarusProvenance"])).toEqual({ kind: "paste", label: "shared lab link" });
+    expect(page.note.textContent).toContain("Click RESURRECT SPECIMEN");
+  });
+
+  it("an invalid link leaves the editor alone and says why", () => {
+    const page = linkPage("#specimen=%%%");
+    expect(page.code.value).toBe("var half = (n / 2) | 0; half;");
+    expect(page.inputs).toBe(0);
+    expect(page.note.textContent).toContain("Lab link ignored");
+  });
+
+  it("ships the Tab 2 intake (dropzone, picker, GitHub folder bar) without new tabs, and the Tab 1 link button", () => {
+    const graphPane = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'), pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
+    expect(graphPane).toContain('<input type="file" id="graphFiles" multiple accept=".js,.cjs"');
+    expect(graphPane).toContain('<label class="gi-drop" id="graphDrop" for="graphFiles" tabindex="0">');
+    expect(graphPane).toContain('id="graphRepoUrl"');
+    expect(graphPane).toContain('id="graphRepoBtn"');
+    expect(graphPane).toContain("legacy-invoice-engine");
+    expect(graphPane).toContain("legacy-text-pipeline");
+    // The intake bar sits between the header and the editor/graph body.
+    expect(graphPane.indexOf('id="graphIntake"')).toBeGreaterThan(graphPane.indexOf('id="graphRunBtn"'));
+    expect(graphPane.indexOf('id="graphIntake"')).toBeLessThan(graphPane.indexOf('class="graph-body"'));
+    expect(pageHtml.match(/class="studio-tab"/g)).toHaveLength(3);
+    const single = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-single"'), pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(single).toContain('<button id="copyLinkBtn" type="button" class="link-btn"');
+    const graph = scriptWith("Multi-File Project (Stitch Graph): file-tab editor");
+    expect(graph).toContain('fetch("/api/import/github-dir"');
+    expect(graph).toContain("const checked = lzIntakeCheck(list);");
+    expect(graph).toContain('drop.addEventListener("drop"');
+    expect(graph).toContain("function guessEntry(edges) { return lzPickEntry(files, edges)");
+    // Helpers load before every script that uses them; the stale guard stays the last script.
+    expect(pageHtml.indexOf("/* lz-intake:start */")).toBeLessThan(pageHtml.indexOf("Multi-File Project (Stitch Graph): file-tab editor"));
+    expect(pageHtml.indexOf("/* lz-intake:start */")).toBeLessThan(pageHtml.indexOf("/* Tab 1 lab link:"));
+    expect(pageHtml.indexOf("/* Tab 1 lab link:")).toBeLessThan(pageHtml.indexOf("/* lz-stale:start */"));
+  });
+
+  it("dismisses the finished Guided Tour banner on Tab 2 and Tab 3, and keeps Close on Tab 1", () => {
+    const studio = scriptWith("// ---- Guided Judge Tour: real live API calls only ----");
+    expect(studio).toMatch(/history\.replaceState\(null, "", "#" \+ name\);\r?\n\s+document\.dispatchEvent\(new CustomEvent\("lazarus:tab", \{ detail: \{ name: name \} \}\)\);/);
+    expect(studio).toContain('document.addEventListener("lazarus:tab", (e) => { if (!tour && e.detail && e.detail.name !== "single") hud.hidden = true; });');
+    expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
+  });
+
+  it("shows the hooks in the Kiro DNA drawer and the 19-spec badge", () => {
+    expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
+    expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">19 Kiro Specs</span>');
   });
 });

@@ -532,6 +532,27 @@ pre { max-width: 100%; }
 .dna-steer { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
 .dna-steer li { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: #111827; color: #cbd5e1; }
 .dna-steer code { color: #c4b5fd; }
+/* ---- Tab 2 intake bar, Tab 1 lab link, DNA hooks ---------------------------------- */
+.graph-intake { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 8px 14px; padding: 10px 14px 0; align-items: stretch; }
+.gi-drop { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 7px 12px; border: 1px dashed #475569; border-radius: 8px; background: #090d16; color: #cbd5e1; font-size: 11px; cursor: pointer; transition: border-color .2s, background .2s; min-width: 0; }
+.gi-drop b { color: #e9d5ff; }
+.gi-drop small { color: var(--muted); }
+.gi-drop:hover, .gi-drop:focus-visible, .gi-drop.over { border-color: var(--violet); background: rgba(139, 92, 246, 0.08); outline: none; }
+.gi-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.gi-repo { display: flex; gap: 8px; min-width: 0; align-items: center; }
+.gi-repo input { flex: 1; min-width: 0; background: #090d16; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+.gi-repo input:focus { outline: none; border-color: var(--violet); }
+.gi-status { grid-column: 1 / -1; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.gi-status:empty { display: none; }
+.gi-status.ok { color: #6ee7b7; }
+.gi-status.err { color: #fecaca; }
+@media (max-width: 900px) { .graph-intake { grid-template-columns: 1fr; } }
+.link-btn { margin-left: 8px; background: #1e1b4b; border: 1px solid var(--violet); color: #e9d5ff; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px; }
+.link-btn:hover { background: #2e1065; }
+.link-note { display: inline-block; margin-left: 8px; font-size: 11px; color: #fecaca; vertical-align: middle; }
+.link-note.ok { color: #6ee7b7; }
+.link-note[hidden] { display: none; }
+.dna-card code.run { display: block; margin-top: 6px; padding: 5px 7px; border-radius: 6px; background: #020617; border: 1px solid var(--border); color: #c4b5fd; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
 .stale-hint { display: inline-block; margin-left: 10px; font-size: 11px; color: #fbbf24; vertical-align: middle; }
 .stale-hint[hidden] { display: none; }
 .lz-stale { opacity: 0.45; filter: grayscale(0.6); transition: opacity 0.2s; }
@@ -548,8 +569,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">745 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">18 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">825 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">19 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -580,7 +601,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <option value="bitwise">Preset 2: ES5 Bitwise Integer Truncation ((n / 2) | 0)</option>
           <option value="checksum">Preset 3: Legacy ES5 String Checksum Loop</option>
         </select>
-        <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button>
+        <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button><button id="copyLinkBtn" type="button" class="link-btn" title="Copy a link that opens this exact specimen (code + name in the URL hash, max 4 KB)">COPY LAB LINK</button>
+        <span id="linkNote" class="link-note" role="status" hidden></span>
         <span id="staleHint" class="stale-hint" role="status" hidden>Code changed — click Resurrect Specimen to refresh proof</span>
       </div>
       </div>
@@ -802,6 +824,17 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <button type="button" class="graph-btn" id="graphZipBtn" disabled>Download Whole-Project .zip</button>
         </div>
       </div>
+      <div class="graph-intake" id="graphIntake">
+        <label class="gi-drop" id="graphDrop" for="graphFiles" tabindex="0">
+          <input type="file" id="graphFiles" multiple accept=".js,.cjs" aria-label="Choose .js or .cjs files" tabindex="-1">
+          <b>Drop your .js / .cjs files</b> or click to choose <small>up to 8 files &middot; 32 KB each &middot; 128 KB total</small>
+        </label>
+        <div class="gi-repo">
+          <input id="graphRepoUrl" type="url" spellcheck="false" autocomplete="off" placeholder="https://github.com/owner/repo/tree/branch/folder" aria-label="GitHub folder URL">
+          <button type="button" class="graph-btn" id="graphRepoBtn">Import GitHub Folder</button>
+        </div>
+        <div class="gi-status" id="graphIntakeStatus" role="status" aria-live="polite"></div>
+      </div>
       <div class="graph-body">
         <div>
           <div class="gf-tabs" id="graphTabs" role="tablist"></div>
@@ -855,7 +888,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
   <div class="dna-scrim" id="dnaScrim" hidden></div>
 <aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
   <div class="dna-head">
-    <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents and .kiro/steering</small></h2>
+    <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents, .kiro/steering and .kiro/hooks</small></h2>
     <button type="button" class="hdr-btn" id="dnaClose" aria-label="Close Kiro DNA">Close</button>
   </div>
   <div class="dna-body">
@@ -886,6 +919,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     <pre class="dna-doc" id="dnaDoc" hidden></pre>
     <h3>Steering rules</h3>
     <ul class="dna-steer" id="dnaSteering"></ul>
+    <h3 id="dnaHooksTitle">Agent hooks</h3>
+    <div class="dna-grid" id="dnaHooks"></div>
   </div>
 </aside>
 <script>
@@ -1946,6 +1981,98 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
 })();
 </script>
 <script>
+/* lz-intake:start */
+// Pure helpers shared by the Tab 2 intake and the Tab 1 lab link (tested in node:vm by studio-ui.test.ts).
+var LZ_INTAKE = { maxFiles: 8, maxFileBytes: 32 * 1024, maxTotalBytes: 128 * 1024, maxHash: 4096 };
+var LZ_SAFE_JS = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.c?js$/i;
+/** list: [{ name, size }] (File objects work). Returns { accepted: [{ name, item }], rejected: [{ name, reason }], error }. */
+function lzIntakeCheck(list) {
+  const accepted = [], rejected = [], seen = new Set();
+  let total = 0;
+  for (const item of Array.from(list || [])) {
+    const name = String((item && item.name) || "").split(/[\\/]/).pop();
+    const size = item && typeof item.size === "number" ? item.size : NaN;
+    if (!/\.c?js$/i.test(name)) { rejected.push({ name: name || "(unnamed)", reason: "not a .js or .cjs file" }); continue; }
+    if (!LZ_SAFE_JS.test(name)) { rejected.push({ name: name, reason: "unsafe file name (letters, digits, dot, dash, underscore)" }); continue; }
+    if (seen.has(name.toLowerCase())) { rejected.push({ name: name, reason: "duplicate file name" }); continue; }
+    if (!(size > 0)) { rejected.push({ name: name, reason: "empty file" }); continue; }
+    seen.add(name.toLowerCase());
+    if (size > LZ_INTAKE.maxFileBytes) return { accepted: [], rejected: rejected, error: name + " is " + size + " bytes; the per-file limit is " + LZ_INTAKE.maxFileBytes + " bytes. Nothing was loaded." };
+    total += size;
+    accepted.push({ name: name, item: item });
+  }
+  if (accepted.length === 0) return { accepted: [], rejected: rejected, error: "No .js or .cjs files to load." };
+  if (accepted.length > LZ_INTAKE.maxFiles) return { accepted: [], rejected: rejected, error: accepted.length + " JavaScript files; the limit is " + LZ_INTAKE.maxFiles + ". Nothing was loaded." };
+  if (total > LZ_INTAKE.maxTotalBytes) return { accepted: [], rejected: rejected, error: "The files total " + total + " bytes; the limit is " + LZ_INTAKE.maxTotalBytes + " bytes. Nothing was loaded." };
+  return { accepted: accepted, rejected: rejected, error: null };
+}
+/** Relative require('./x') edges between files of the map (same suffix rules as the sandbox's virtual require). */
+function lzRequireEdges(files) {
+  const out = [];
+  const names = Object.keys(files);
+  names.forEach((from) => {
+    const re = /require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+    let m;
+    while ((m = re.exec(files[from])) !== null) {
+      const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
+      const stack = [];
+      (dir ? dir + "/" + m[1] : m[1]).split("/").forEach((p) => { if (p === "..") stack.pop(); else if (p !== "." && p !== "") stack.push(p); });
+      const base = stack.join("/");
+      const hit = ["", ".js", ".cjs", "/index.js", "/index.cjs"].map((x) => base + x).find((c) => names.includes(c));
+      if (hit && !out.some((e) => e.from === from && e.to === hit)) out.push({ from: from, to: hit });
+    }
+  });
+  return out;
+}
+/** The server analyzer's rule: a root (required by nobody) that requires project files (index/main first, then the
+    widest reach, then by name); without one, index.cjs, index.js, then the first root. */
+function lzPickEntry(files, edges) {
+  const names = Object.keys(files).filter((f) => /\.c?js$/i.test(f)).sort();
+  const list = edges || lzRequireEdges(files);
+  const required = new Set(list.map((e) => e.to));
+  const roots = names.filter((f) => !required.has(f));
+  const reach = (start) => {
+    const seen = new Set();
+    const visit = (f) => { if (seen.has(f)) return; seen.add(f); list.filter((e) => e.from === f).forEach((e) => visit(e.to)); };
+    visit(start);
+    return seen.size;
+  };
+  const linked = roots.filter((f) => list.some((e) => e.from === f));
+  if (linked.length > 0) return linked.find((f) => /(^|\/)(index|main)\.c?js$/i.test(f)) || linked.slice().sort((x, y) => reach(y) - reach(x) || x.localeCompare(y))[0];
+  return roots.find((f) => /(^|\/)index\.cjs$/i.test(f)) || roots.find((f) => /(^|\/)index\.js$/i.test(f)) || roots[0] || "";
+}
+/** { name, code } -> { ok, hash } with hash "#specimen=<base64url UTF-8 JSON>", at most LZ_INTAKE.maxHash characters. */
+function lzEncodeSpecimen(specimen) {
+  const json = JSON.stringify({ v: 1, name: String(specimen.name || ""), code: String(specimen.code || "") });
+  const bytes = new TextEncoder().encode(json);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const hash = "#specimen=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  if (hash.length > LZ_INTAKE.maxHash) return { ok: false, length: hash.length, error: "This specimen needs a " + hash.length + "-character link; the limit is " + LZ_INTAKE.maxHash + ". Shorten the code to share it." };
+  return { ok: true, hash: hash, length: hash.length };
+}
+/** "#specimen=..." -> { ok, name, code } or { ok: false, error }. Never throws. */
+function lzDecodeSpecimen(hash) {
+  if (typeof hash !== "string" || !hash.startsWith("#specimen=")) return { ok: false, error: "no specimen in the link" };
+  if (hash.length > LZ_INTAKE.maxHash) return { ok: false, error: "the link is longer than " + LZ_INTAKE.maxHash + " characters" };
+  const b64 = hash.slice("#specimen=".length);
+  if (!/^[A-Za-z0-9_-]+$/.test(b64)) return { ok: false, error: "the link is not valid base64url" };
+  try {
+    const bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64.length + 3) % 4));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (!data || typeof data !== "object" || data.v !== 1) return { ok: false, error: "unknown link version" };
+    if (typeof data.code !== "string" || data.code.trim() === "") return { ok: false, error: "the link has no code" };
+    if (typeof data.name !== "string" || !/^[A-Za-z0-9_$.-]{0,80}$/.test(data.name)) return { ok: false, error: "the link has an invalid module name" };
+    return { ok: true, name: data.name, code: data.code };
+  } catch (err) {
+    return { ok: false, error: "the link could not be decoded" };
+  }
+}
+/* lz-intake:end */
+</script>
+<script>
 /* Multi-File Project (Stitch Graph): file-tab editor, live SVG dependency graph over SSE, whole-project zip. */
 (function () {
   "use strict";
@@ -1980,24 +2107,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
   function el(name, attrs, text) { const n = document.createElementNS(SVG_NS, name); Object.keys(attrs || {}).forEach((k) => n.setAttribute(k, attrs[k])); if (text !== undefined) n.textContent = text; return n; }
 
   // ---- static analysis on the client (only to draw the graph before the run; the server re-analyzes) ----
-  function clientEdges() {
-    const out = [];
-    const names = Object.keys(files);
-    names.forEach((from) => {
-      const re = /require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
-      let m;
-      while ((m = re.exec(files[from])) !== null) {
-        const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/")) : "";
-        const parts = (dir ? dir + "/" + m[1] : m[1]).split("/");
-        const stack = [];
-        parts.forEach((p) => { if (p === "..") stack.pop(); else if (p !== "." && p !== "") stack.push(p); });
-        const base = stack.join("/");
-        const hit = ["", ".js", ".cjs"].map((s) => base + s).find((c) => names.includes(c));
-        if (hit && !out.some((e) => e.from === from && e.to === hit)) out.push({ from: from, to: hit });
-      }
-    });
-    return out;
-  }
+  function clientEdges() { return lzRequireEdges(files); }
   function depthOf(edges) {
     const depth = {};
     const deps = (f) => edges.filter((e) => e.from === f).map((e) => e.to);
@@ -2104,11 +2214,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     if (esmByFile[f]) { const typed = esmByFile[f].tsCode; esmOut.style.display = "block"; esmOut.textContent = "// " + f + " -> " + (typed ? esmByFile[f].tsPath : esmByFile[f].esmPath) + "\n" + (typed || esmByFile[f].esmCode); }
     else esmOut.style.display = "none";
   }
-  function guessEntry(edges) {
-    const required = new Set(edges.map((e) => e.to));
-    const roots = Object.keys(files).filter((f) => !required.has(f)).sort();
-    return roots[roots.length - 1] || Object.keys(files)[0] || "";
-  }
+  function guessEntry(edges) { return lzPickEntry(files, edges) || Object.keys(files)[0] || ""; }
   function redraw() {
     const edges = clientEdges();
     entry = guessEntry(edges);
@@ -2119,10 +2225,74 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     project = PROJECTS[key];
     files = Object.assign({}, project.files);
     states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true;
-    log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = "";
+    log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmOut.style.display = "none";
     redraw();
     showFile(Object.keys(files)[0]);
   }
+
+  // ---- Intake: drag-and-drop / picked files and GitHub folders become the "custom" project ----
+  const drop = $("graphDrop"), picker = $("graphFiles"), repoUrl = $("graphRepoUrl"), repoBtn = $("graphRepoBtn"), intakeStatus = $("graphIntakeStatus");
+  function intakeNote(text, kind) { intakeStatus.className = "gi-status" + (kind ? " " + kind : ""); intakeStatus.textContent = text; }
+  const safeProjectName = (raw) => (String(raw || "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "uploaded-project");
+  function loadFiles(name, fileMap) {
+    PROJECTS.custom = { name: safeProjectName(name), schemas: undefined, files: fileMap };
+    let opt = presetSel.querySelector('option[value="custom"]');
+    if (!opt) { opt = document.createElement("option"); opt.value = "custom"; presetSel.append(opt); }
+    opt.textContent = "Your files: " + PROJECTS.custom.name + " (" + Object.keys(fileMap).length + " file" + (Object.keys(fileMap).length === 1 ? "" : "s") + ")";
+    presetSel.value = "custom";
+    loadProject("custom");
+    showFile(entry || Object.keys(files)[0]);
+  }
+  async function takeFiles(list) {
+    if (busy) { intakeNote("Wait for the current graph resurrection to finish.", "err"); return; }
+    const checked = lzIntakeCheck(list);
+    const rejectedNote = checked.rejected.length ? " Skipped: " + checked.rejected.map((r) => r.name + " (" + r.reason + ")").join(", ") + "." : "";
+    if (checked.error) { intakeNote(checked.error + rejectedNote, "err"); return; }
+    try {
+      const map = {};
+      for (const a of checked.accepted) map[a.name] = await a.item.text();
+      loadFiles(checked.accepted.length === 1 ? checked.accepted[0].name.replace(/\.c?js$/i, "") : "uploaded-project", map);
+      intakeNote("Loaded " + checked.accepted.length + " file" + (checked.accepted.length === 1 ? "" : "s") + " \u00b7 entry \u2605 " + (entry || "none") + ". Click Resurrect Project Graph." + rejectedNote, "ok");
+    } catch (err) {
+      intakeNote("Could not read the files: " + (err && err.message ? err.message : err), "err");
+    }
+  }
+  picker.addEventListener("change", () => { const list = Array.from(picker.files || []); picker.value = ""; takeFiles(list); });
+  drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } });
+  ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; drop.classList.add("over"); }));
+  ["dragleave", "dragend"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); takeFiles(Array.from((e.dataTransfer && e.dataTransfer.files) || [])); });
+  async function importFolder() {
+    const url = repoUrl.value.trim();
+    if (!url) { intakeNote("Paste a GitHub folder URL: https://github.com/owner/repo/tree/branch/folder", "err"); return; }
+    if (busy) { intakeNote("Wait for the current graph resurrection to finish.", "err"); return; }
+    repoBtn.disabled = true; repoBtn.textContent = "Importing...";
+    intakeNote("Reading the folder listing from api.github.com ...", "");
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const res = await fetch("/api/import/github-dir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url }), signal: ctl.signal });
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok || !data || typeof data.files !== "object" || data.files === null) {
+        const code = data && data.code ? data.code + ": " : "";
+        intakeNote("GitHub folder import failed (HTTP " + res.status + ") " + code + ((data && data.error) || "unexpected response"), "err");
+        return;
+      }
+      const names = Object.keys(data.files);
+      loadFiles(String(data.repo || "").split("/").pop() + (data.path ? "-" + String(data.path).split("/").pop() : ""), data.files);
+      const skipped = Array.isArray(data.skipped) && data.skipped.length ? " \u00b7 skipped " + data.skipped.length + " non-JS entr" + (data.skipped.length === 1 ? "y" : "ies") : "";
+      intakeNote("Imported " + names.length + " file" + (names.length === 1 ? "" : "s") + " (" + data.totalBytes + " bytes) from " + data.repo + "@" + data.branch + (data.path ? "/" + data.path : "") + " \u00b7 entry \u2605 " + (entry || "none") + skipped + ". Click Resurrect Project Graph.", "ok");
+    } catch (err) {
+      intakeNote(ctl.signal.aborted ? "GitHub folder import timed out after 15 s." : "GitHub folder import failed: " + (err && err.message ? err.message : err), "err");
+    } finally {
+      clearTimeout(timer);
+      repoBtn.disabled = false; repoBtn.textContent = "Import GitHub Folder";
+    }
+  }
+  repoBtn.addEventListener("click", importFolder);
+  repoUrl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); importFolder(); } });
+  window.LazarusGraph = { loadFiles: loadFiles, takeFiles: takeFiles, entry: () => entry, files: () => Object.assign({}, files) };
   editor.addEventListener("input", () => {
     files[active] = editor.value;
     bundleId = null; zipBtn.disabled = true;
@@ -2454,6 +2624,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       if (on && focus) tab.focus();
     });
     if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    document.dispatchEvent(new CustomEvent("lazarus:tab", { detail: { name: name } }));
   }
   tabs.forEach((tab, idx) => {
     tab.addEventListener("click", () => switchTab(tab.dataset.studioTab, false));
@@ -2606,6 +2777,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     }
   }
   tourBtn.addEventListener("click", runTour);
+  // A finished (or stopped) tour's banner never covers Tab 2 or Tab 3; on Tab 1 it stays until Close.
+  document.addEventListener("lazarus:tab", (e) => { if (!tour && e.detail && e.detail.name !== "single") hud.hidden = true; });
   tourCancel.addEventListener("click", () => {
     if (!tour) return;
     tour.cancelled = true;
@@ -2733,7 +2906,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       const res = await fetch("/api/kiro-dna");
       const dna = await res.json();
       loaded = true;
-      $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules";
+      $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules \u00b7 " + dna.hooks.length + " hooks";
       $("dnaAgentsTitle").textContent = "Kiro Crew agents (" + dna.agents.length + ")";
       $("dnaSpecsTitle").textContent = "Specs (" + dna.specCount + ")";
       const order = ["archaeologist", "architect", "necromancer", "exorcist"];
@@ -2773,6 +2946,19 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
         if (r.fileMatchPattern) li.append(el("code", "", r.fileMatchPattern));
         li.append(document.createTextNode(" \u00b7 .kiro/steering/" + r.file));
         steer.append(li);
+      });
+      $("dnaHooksTitle").textContent = "Agent hooks (" + dna.hooks.length + ")";
+      const hooksEl = $("dnaHooks");
+      hooksEl.textContent = "";
+      dna.hooks.forEach((h) => {
+        const card = el("div", "dna-card");
+        card.append(el("div", "n", h.name), el("div", "t", h.trigger + (h.matcher ? " \u00b7 " + h.matcher : "") + " \u00b7 .kiro/hooks/" + h.file));
+        if (h.description) card.append(el("div", "", h.description));
+        const chips = el("div", "chips");
+        chips.append(el("span", "", h.action === "command" ? "runs a command" : "asks the agent"), el("span", "", h.format === "v1" ? "Kiro v1 format" : "legacy format"));
+        if (!h.enabled) chips.append(el("span", "", "disabled"));
+        card.append(chips, el("code", "run", h.run.length > 220 ? h.run.slice(0, 217) + "..." : h.run));
+        hooksEl.append(card);
       });
       $("badgeSpecs").textContent = dna.specCount + " Kiro Specs";
     } catch (err) {
@@ -2870,6 +3056,53 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
   });
   document.addEventListener("lazarus:crew", (e) => { if (e.detail && e.detail.type === "counterexample_found") tone([220, 185], "triangle", 0.12); });
   document.addEventListener("lazarus:result", (e) => { if (e.detail && e.detail.success) tone([523.25, 659.25, 783.99], "sine", 0.09); });
+})();
+</script>
+<script>
+/* Tab 1 lab link: #specimen=<base64url JSON> opens this exact specimen; never starts a run by itself. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const btn = $("copyLinkBtn"), note = $("linkNote"), code = $("legacyCode"), modName = $("modName");
+  if (!btn || !code || !modName) return;
+  let noteTimer = null;
+  function say(text, ok) {
+    note.textContent = text; note.className = "link-note" + (ok ? " ok" : ""); note.hidden = false;
+    clearTimeout(noteTimer); noteTimer = setTimeout(() => { note.hidden = true; }, ok ? 3000 : 7000);
+  }
+  async function copyText(text) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) { /* fall back */ }
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  btn.addEventListener("click", async () => {
+    if (!code.value.trim()) { say("Nothing to share: the editor is empty.", false); return; }
+    const enc = lzEncodeSpecimen({ name: modName.value, code: code.value });
+    if (!enc.ok) { say(enc.error, false); return; }
+    const link = location.origin + location.pathname + enc.hash;
+    const ok = await copyText(link);
+    window.lastLabLink = link;
+    say(ok ? "Lab link copied (" + enc.length + " of " + LZ_INTAKE.maxHash + " characters)." : "Copy blocked by the browser; the link is in the address bar.", ok);
+    if (!ok) history.replaceState(null, "", enc.hash);
+  });
+  function openFromHash(switchToSingle) {
+    if (!location.hash.startsWith("#specimen=")) return false;
+    const dec = lzDecodeSpecimen(location.hash);
+    if (!dec.ok) { say("Lab link ignored: " + dec.error + ".", false); return false; }
+    if (switchToSingle && window.LazarusStudio) window.LazarusStudio.switchTab("single");
+    code.value = dec.code;
+    modName.value = dec.name || modName.value;
+    code.dispatchEvent(new Event("input"));
+    window.lazarusProvenance = { kind: "paste", label: "shared lab link" };
+    say("Loaded the shared specimen" + (dec.name ? " " + dec.name : "") + ". Click RESURRECT SPECIMEN to prove it.", true);
+    return true;
+  }
+  openFromHash(false);
+  window.addEventListener("hashchange", () => openFromHash(true));
+  window.LazarusLink = { open: () => openFromHash(true) };
 })();
 </script>
 <script>

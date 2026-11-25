@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Kiro DNA Sync Check",
+      "description": "After a spec document is saved, checks that the header proof badge and the Kiro DNA reader still match .kiro/specs and .kiro/hooks.",
+      "trigger": "PostFileSave",
+      "matcher": "\\.kiro[\\\\/]specs[\\\\/].*\\.md$",
+      "action": {
+        "type": "command",
+        "command": "npx vitest run src/web/__tests__/kiro-dna.test.ts"
+      },
+      "timeout": 120
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 // Read-only view of the repository's Kiro configuration for the "Kiro DNA" drawer.
 //
-// Only three directories are ever read: .kiro/specs (requirements/design/tasks of each spec), .kiro/agents (*.json)
-// and .kiro/steering (*.md). Directory listings are enumerated by the server; request input is only ever compared
+// Only four directories are ever read: .kiro/specs (requirements/design/tasks of each spec), .kiro/agents (*.json),
+// .kiro/steering (*.md) and .kiro/hooks (*.json). Directory listings are enumerated by the server; request input is only ever compared
 // against those listings. Every file path is resolved, symlinks are refused, and the real path must stay inside its
 // directory.
 import * as fs from "node:fs";
@@ -42,11 +42,29 @@ export interface SteeringSummary {
   readonly rules: number;
 }
 
+export interface HookSummary {
+  readonly file: string;
+  readonly name: string;
+  readonly description: string;
+  /** Kiro v1 trigger (e.g. PostFileSave), or the legacy `when.type` (e.g. fileEdited). */
+  readonly trigger: string;
+  /** v1 regex matcher, or the legacy glob patterns joined with ", ". */
+  readonly matcher?: string;
+  readonly action: "command" | "agent";
+  /** The shell command (command hooks) or the prompt (agent hooks). */
+  readonly run: string;
+  readonly enabled: boolean;
+  readonly format: "v1" | "legacy";
+}
+
 export interface KiroDna {
   readonly specCount: number;
   readonly specs: SpecSummary[];
   readonly agents: AgentSummary[];
   readonly steering: SteeringSummary[];
+  readonly hooks: HookSummary[];
+  /** Number of hook files that were read (one file may define several hooks). */
+  readonly hookFiles: number;
   /** Files that exist but were not used, with the reason (oversized, invalid, symlink). */
   readonly skipped: Array<{ readonly path: string; readonly reason: string }>;
   readonly generatedFrom: string;
@@ -60,6 +78,80 @@ const AgentSchema = z
     model: z.string().min(1).max(100).default("auto"),
   })
   .passthrough();
+
+const V1HookSchema = z
+  .object({
+    version: z.literal("v1"),
+    hooks: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1).max(200),
+            description: z.string().max(2000).optional(),
+            trigger: z.string().min(1).max(100),
+            matcher: z.string().max(500).optional(),
+            enabled: z.boolean().optional(),
+            action: z.discriminatedUnion("type", [
+              z.object({ type: z.literal("command"), command: z.string().min(1).max(4000) }).passthrough(),
+              z.object({ type: z.literal("agent"), prompt: z.string().min(1).max(8000) }).passthrough(),
+            ]),
+          })
+          .passthrough()
+      )
+      .min(1)
+      .max(50),
+  })
+  .passthrough();
+
+const LegacyHookSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    enabled: z.boolean().optional(),
+    when: z.object({ type: z.string().min(1).max(100), patterns: z.array(z.string().max(500)).max(50).optional() }).passthrough(),
+    then: z.discriminatedUnion("type", [
+      z.object({ type: z.literal("runCommand"), command: z.string().min(1).max(4000) }).passthrough(),
+      z.object({ type: z.literal("askAgent"), prompt: z.string().min(1).max(8000) }).passthrough(),
+    ]),
+  })
+  .passthrough();
+
+/** Normalizes a hook file in the Kiro v1 format or the legacy when/then format; `{ error }` when it is neither. */
+export function parseHookFile(file: string, json: unknown): HookSummary[] | { error: string } {
+  const v1 = V1HookSchema.safeParse(json);
+  if (v1.success) {
+    return v1.data.hooks.map((h) => ({
+      file,
+      name: h.name,
+      description: h.description ?? "",
+      trigger: h.trigger,
+      ...(h.matcher !== undefined ? { matcher: h.matcher } : {}),
+      action: h.action.type,
+      run: h.action.type === "command" ? h.action.command : h.action.prompt,
+      enabled: h.enabled ?? true,
+      format: "v1" as const,
+    }));
+  }
+  const legacy = LegacyHookSchema.safeParse(json);
+  if (legacy.success) {
+    const h = legacy.data;
+    const patterns = h.when.patterns ?? [];
+    return [
+      {
+        file,
+        name: h.name,
+        description: h.description ?? "",
+        trigger: h.when.type,
+        ...(patterns.length > 0 ? { matcher: patterns.join(", ") } : {}),
+        action: h.then.type === "runCommand" ? "command" : "agent",
+        run: h.then.type === "runCommand" ? h.then.command : h.then.prompt,
+        enabled: h.enabled ?? true,
+        format: "legacy",
+      },
+    ];
+  }
+  return { error: `not a Kiro hook (${v1.error.issues[0]?.message ?? "invalid"})` };
+}
 
 type Skipped = KiroDna["skipped"];
 
@@ -212,7 +304,29 @@ export function readKiroDna(repoRoot: string): KiroDna {
     });
   }
 
-  return { specCount: specs.length, specs, agents, steering, skipped, generatedFrom: ".kiro/{specs,agents,steering}" };
+  const hooksDir = nodePath.join(kiro, "hooks");
+  const hooks: HookSummary[] = [];
+  let hookFiles = 0;
+  for (const file of listFiles(hooksDir, ".json")) {
+    const text = read(safeFile(hooksDir, file, skipped, `hooks/${file}`));
+    if (text === undefined) continue;
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      skipped.push({ path: `hooks/${file}`, reason: "not valid JSON" });
+      continue;
+    }
+    const parsed = parseHookFile(file, json);
+    if (!Array.isArray(parsed)) {
+      skipped.push({ path: `hooks/${file}`, reason: parsed.error });
+      continue;
+    }
+    hookFiles++;
+    hooks.push(...parsed);
+  }
+
+  return { specCount: specs.length, specs, agents, steering, hooks, hookFiles, skipped, generatedFrom: ".kiro/{specs,agents,steering,hooks}" };
 }
 
 /**

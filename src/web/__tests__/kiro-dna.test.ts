@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MAX_KIRO_FILE_BYTES, countRequirements, countTasks, readKiroDna, resolveKiroDocument } from "../kiro-dna.js";
+import { MAX_KIRO_FILE_BYTES, countRequirements, countTasks, parseHookFile, readKiroDna, resolveKiroDocument } from "../kiro-dna.js";
 import { createWebServer } from "../server.js";
 
 const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -52,6 +52,42 @@ describe("readKiroDna (live repository)", () => {
     expect(steering["ui-aesthetics.md"]).toMatchObject({ inclusion: "fileMatch" });
   });
 
+  it("returns all four agent hooks, all in the current Kiro v1 format", () => {
+    const hookFiles = fs.readdirSync(nodePath.join(repoRoot, ".kiro", "hooks")).filter((f) => f.endsWith(".json")).sort();
+    expect(hookFiles).toEqual(["kiro-dna-sync-check.json", "run-tests-on-save.json", "sandbox-security-guard.json", "strict-typecheck-on-crew.json"]);
+    expect(dna.hookFiles).toBe(4);
+    expect([...new Set(dna.hooks.map((h) => h.file))].sort()).toEqual(hookFiles);
+    const by = Object.fromEntries(dna.hooks.map((h) => [h.file, h]));
+    expect(by["run-tests-on-save.json"]).toMatchObject({ format: "v1", trigger: "PostFileSave", matcher: "src[\\\\/].*\\.ts$", action: "command", run: "npx vitest run", enabled: true });
+    expect(dna.hooks.every((h) => h.format === "v1" && h.trigger === "PostFileSave")).toBe(true);
+    expect(dna.skipped.filter((x) => x.path.startsWith("hooks/"))).toEqual([]);
+    expect(by["sandbox-security-guard.json"]).toMatchObject({ format: "v1", trigger: "PostFileSave", action: "agent", enabled: true });
+    expect(by["sandbox-security-guard.json"]?.run).toContain("child_process");
+    expect(by["strict-typecheck-on-crew.json"]).toMatchObject({ format: "v1", trigger: "PostFileSave", action: "command", run: "npx tsc --noEmit" });
+    expect(by["kiro-dna-sync-check.json"]).toMatchObject({ format: "v1", action: "command", run: "npx vitest run src/web/__tests__/kiro-dna.test.ts" });
+    expect(dna.generatedFrom).toBe(".kiro/{specs,agents,steering,hooks}");
+  });
+  it("hook matchers select exactly the paths they are meant for (both path separators)", () => {
+    const matcher = (file: string): RegExp => new RegExp(dna.hooks.find((h) => h.file === file)?.matcher ?? "^$");
+    const sandbox = matcher("sandbox-security-guard.json");
+    const crew = matcher("strict-typecheck-on-crew.json");
+    const specs = matcher("kiro-dna-sync-check.json");
+    const tests = matcher("run-tests-on-save.json");
+    expect(["src/crew/orchestrator.ts", "src\\web\\__tests__\\kiro-dna.test.ts"].every((f) => tests.test(f))).toBe(true);
+    expect(tests.test("public/index.html")).toBe(false);
+    expect(tests.test("scripts/build.mjs")).toBe(false);
+    expect(["src/sandbox/pool.ts", "src\\sandbox\\worker.ts"].every((f) => sandbox.test(f))).toBe(true);
+    expect(sandbox.test("src/crew/orchestrator.ts")).toBe(false);
+    expect(["src/crew/orchestrator.ts", "src\\exporter\\bundle.ts"].every((f) => crew.test(f))).toBe(true);
+    expect(crew.test("src/web/server.ts")).toBe(false);
+    expect(["/repo/.kiro/specs/sandbox/tasks.md", ".kiro\\specs\\x\\design.md"].every((f) => specs.test(f))).toBe(true);
+    expect(specs.test(".kiro/steering/architecture.md")).toBe(false);
+  });
+  it("keeps the static header badge in sync with .kiro/specs (what kiro-dna-sync-check runs)", () => {
+    const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
+    expect(html).toContain(`<span class="proof-badge" id="badgeSpecs">${specDirs.length} Kiro Specs</span>`);
+    expect(html).toMatch(/<span class="proof-badge" id="badgeTests">\d+ Verified Tests<\/span>/);
+  });
   it("reads one document only for an enumerated spec and a known document name", () => {
     expect(resolveKiroDocument(repoRoot, "kiro-dna-and-smart-paste", "requirements")).toContain("# Requirements: Kiro DNA and Smart Paste");
     for (const [spec, doc] of [
@@ -89,6 +125,10 @@ describe("readKiroDna (hostile fixture)", () => {
     fs.writeFileSync(nodePath.join(kiro, "agents", "wrong.json"), JSON.stringify({ name: "x" }));
     fs.writeFileSync(nodePath.join(kiro, "agents", "ok.json"), JSON.stringify({ name: "ok", description: "does a careful job" }));
     fs.writeFileSync(nodePath.join(kiro, "agents", "notes.txt"), "ignored");
+    fs.mkdirSync(nodePath.join(kiro, "hooks"), { recursive: true });
+    fs.writeFileSync(nodePath.join(kiro, "hooks", "v1.json"), JSON.stringify({ version: "v1", hooks: [{ name: "a", trigger: "PostFileSave", matcher: "x", action: { type: "command", command: "echo a" } }, { name: "b", trigger: "Stop", enabled: false, action: { type: "agent", prompt: "check" } }] }));
+    fs.writeFileSync(nodePath.join(kiro, "hooks", "bad-action.json"), JSON.stringify({ version: "v1", hooks: [{ name: "x", trigger: "Stop", action: { type: "shell", command: "rm -rf /" } }] }));
+    fs.writeFileSync(nodePath.join(kiro, "hooks", "garbage.json"), "[1, 2");
     // Anything outside the three directories is never read.
     fs.writeFileSync(nodePath.join(kiro, "settings.json"), "{}");
   });
@@ -102,7 +142,12 @@ describe("readKiroDna (hostile fixture)", () => {
     expect(dna.specs[0]).toMatchObject({ title: "Good", requirementCount: 2, requirementStyle: "REQ-ids", taskCount: 3, tasksDone: 2, documents: { requirements: true, design: false, tasks: true } });
     expect(dna.specs[1]).toMatchObject({ requirementCount: 0, requirementStyle: "none", documents: { requirements: false } });
     expect(dna.agents).toEqual([{ file: "ok.json", name: "ok", description: "does a careful job", model: "auto", tools: [] }]);
-    expect(dna.skipped.map((s) => s.path).sort()).toEqual(["agents/broken.json", "agents/wrong.json", "specs/huge/requirements.md"]);
+    expect(dna.skipped.map((s) => s.path).sort()).toEqual(["agents/broken.json", "agents/wrong.json", "hooks/bad-action.json", "hooks/garbage.json", "specs/huge/requirements.md"]);
+    expect(dna.hookFiles).toBe(1);
+    expect(dna.hooks).toEqual([
+      { file: "v1.json", name: "a", description: "", trigger: "PostFileSave", matcher: "x", action: "command", run: "echo a", enabled: true, format: "v1" },
+      { file: "v1.json", name: "b", description: "", trigger: "Stop", action: "agent", run: "check", enabled: false, format: "v1" },
+    ]);
     expect(JSON.stringify(dna)).not.toContain("TOP SECRET");
   });
 
@@ -125,13 +170,23 @@ describe("readKiroDna (hostile fixture)", () => {
   it("returns an empty, valid result when .kiro is missing", () => {
     const empty = fs.mkdtempSync(nodePath.join(os.tmpdir(), "lazarus-dna-empty-"));
     try {
-      expect(readKiroDna(empty)).toMatchObject({ specCount: 0, specs: [], agents: [], steering: [] });
+      expect(readKiroDna(empty)).toMatchObject({ specCount: 0, specs: [], agents: [], steering: [], hooks: [], hookFiles: 0 });
     } finally {
       fs.rmSync(empty, { recursive: true, force: true });
     }
   });
 });
 
+describe("parseHookFile", () => {
+  it("normalizes the legacy when/then format", () => {
+    expect(parseHookFile("l.json", { name: "L", when: { type: "fileEdited", patterns: ["a/**", "b/**"] }, then: { type: "askAgent", prompt: "p" } })).toEqual([
+      { file: "l.json", name: "L", description: "", trigger: "fileEdited", matcher: "a/**, b/**", action: "agent", run: "p", enabled: true, format: "legacy" },
+    ]);
+  });
+  it.each([[null], [[]], [{ version: "v2", hooks: [] }], [{ version: "v1", hooks: [] }], [{ name: "x", when: { type: "fileEdited" }, then: { type: "deploy" } }]])("rejects %j", (json) => {
+    expect(Array.isArray(parseHookFile("x.json", json))).toBe(false);
+  });
+});
 describe("counters", () => {
   it.each([
     ["### R1. a\n### R2. b\n### R2b. c\n", 3, "R-headings"],
@@ -167,11 +222,13 @@ describe("GET /api/kiro-dna", () => {
     const res = await fetch(`${baseUrl}/api/kiro-dna`);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    const body = (await res.json()) as { specCount: number; specs: Array<{ name: string }>; agents: Array<{ name: string }>; steering: unknown[] };
+    const body = (await res.json()) as { specCount: number; specs: Array<{ name: string }>; agents: Array<{ name: string }>; steering: unknown[]; hookFiles: number; hooks: Array<{ file: string }> };
     expect(body.specCount).toBe(specDirs.length);
     expect(body.specs.map((s) => s.name)).toContain("kiro-dna-and-smart-paste");
     expect(body.agents.map((a) => a.name).sort()).toEqual(["archaeologist", "architect", "exorcist", "necromancer"]);
     expect(body.steering).toHaveLength(3);
+    expect(body.hookFiles).toBe(4);
+    expect(new Set(body.hooks.map((h) => h.file)).size).toBe(4);
   });
 
   it("serves one spec document", async () => {
