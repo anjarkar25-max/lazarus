@@ -1,0 +1,13 @@
+# Tasks: Kiro DNA and Smart Paste
+- [x] 0a. Red-Team Lab: running pill with timer, defensive parsing and shape check, visible HTTP/network/timeout errors.
+- [x] 0b. Run control (`lz-run`): abortable, tokenized `/api/resurrect` streams; abortable audit and probe; tour on promise-returning controls; Cancel aborts.
+- [x] 0c. Regression tests: red-team script in `node:vm` with a minimal DOM; run-control core in `node:vm`; live browser repro of both bugs.
+- [x] 0d. Stale exports (R0.3): `lazarus:run-start` source capture, `lz-stale` script, importer hooks, bundle guard, hint and dimming; vm regression tests (edit, preset, import, re-enable on success); browser check.
+- [x] 1. `src/web/kiro-dna.ts`: allowlisted reader, requirement/task counting, agents (zod), steering, document resolver.
+- [x] 2. `GET /api/kiro-dna` (+ `?spec=&doc=`).
+- [x] 3. Scanner: bare function-expression specimens; boolean and string-literal evidence in `inferParamKinds`.
+- [x] 4. `POST /api/scan` and signature rendering.
+- [x] 5. `renderCertificateSvg`; `certificateSvg` on `/api/export-bundle`.
+- [x] 6. Page: Kiro DNA button + drawer (Chimera diagram, spec/agent/steering cards), smart-paste pill and schema fill, Download Certificate (.svg), Audio toggle.
+- [x] 7. Tests: `kiro-dna.test.ts`, `certificate-svg.test.ts`, scanner and studio additions.
+- [x] 8. Verify: browser check (overflow with drawer open/closed, paste flow, SVG download), `tsc`, full `vitest run`, leak check, badges.

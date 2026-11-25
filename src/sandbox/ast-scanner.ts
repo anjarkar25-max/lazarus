@@ -70,6 +70,8 @@ const ARRAY_METHODS = new Set([
   "some", "every", "find", "findIndex", "join", "flat",
 ]);
 
+/** Methods both strings and arrays have: a weak hint for `string`, overridden by any array-only method. */
+const SHARED_METHODS = new Set(["slice", "indexOf", "lastIndexOf", "includes", "concat", "at"]);
 function parseSource(source: string): { program: ESTree.Program } | { error: string } {
   const attempt = (sourceType: "script" | "module"): ESTree.Program =>
     parse(source, {
@@ -222,6 +224,11 @@ function collectCandidates(program: ESTree.Program): { candidates: Candidate[]; 
           byBinding.set(c.name, c);
         }
       }
+    } else if (statement.type === "ExpressionStatement" && isFunctionNode(statement.expression)) {
+      // A pasted bare function expression, e.g. `(str, len) => str.slice(0, len)` or `(function (a, b) { ... })`.
+      const fn = statement.expression;
+      const name = fn.type === "FunctionExpression" && fn.id ? fn.id.name : "anonymous";
+      candidates.push({ node: fn, name, kind: fn.type === "ArrowFunctionExpression" ? "arrow" : "expression", ownStatement: statement, isMethod: false });
     } else if (statement.type === "ExpressionStatement" && statement.expression.type === "AssignmentExpression" && statement.expression.operator === "=") {
       const target = exportTarget(statement.expression.left);
       if (target === null) continue;
@@ -271,10 +278,68 @@ function paramName(param: ESTree.Pattern): string | null {
   return null;
 }
 
+/** The expression is evaluated only for its truthiness (an if/while/for/ternary test, a `!` operand, ...). */
+function isBooleanContext(node: Node, parents: Map<Node, Node | null>): boolean {
+  let child: Node = node;
+  for (let parent = parents.get(node) ?? null; parent !== null; child = parent, parent = parents.get(parent) ?? null) {
+    switch (parent.type) {
+      case "IfStatement":
+      case "WhileStatement":
+      case "DoWhileStatement":
+      case "ConditionalExpression":
+        return (parent as { test: Node }).test === child;
+      case "ForStatement":
+        return parent.test === child;
+      case "UnaryExpression":
+        return parent.operator === "!";
+      case "LogicalExpression":
+        // `a && b` passes its operands' values on, so it is boolean only if the whole expression is a condition.
+        continue;
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+const isStringLiteral = (n: Node): boolean => (n.type === "Literal" && typeof n.value === "string") || n.type === "TemplateLiteral";
+const isBooleanLiteral = (n: Node): boolean => n.type === "Literal" && typeof n.value === "boolean";
+
 function inferParamKinds(root: Node, names: string[]): Record<string, ParamKind> {
   const kinds = new Map<string, ParamKind>();
   const lengthHint = new Set<string>();
   const wanted = new Set(names);
+  const parents = new Map<Node, Node | null>();
+  walk(root, (n, parent) => {
+    parents.set(n, parent);
+    return undefined;
+  });
+  /** References per name, and how many of them are boolean-only uses. */
+  const uses = new Map<string, { total: number; boolean: number }>();
+  const stringHint = new Set<string>();
+  /** `a + b` between two parameters: if either is a string, the other is concatenated too. */
+  const plusPairs: Array<[string, string]> = [];
+  walk(root, (n, parent, key) => {
+    if (n.type === "Identifier" && wanted.has(n.name)) {
+      const isProperty = (parent?.type === "MemberExpression" && key === "property" && !parent.computed) || (parent?.type === "Property" && key === "key" && !parent.computed);
+      if (!isProperty) {
+        const u = uses.get(n.name) ?? { total: 0, boolean: 0 };
+        u.total++;
+        const comparedToBoolean =
+          parent?.type === "BinaryExpression" && ["===", "!==", "==", "!="].includes(parent.operator) && isBooleanLiteral(parent.left === n ? parent.right : parent.left);
+        if (isBooleanContext(n, parents) || comparedToBoolean) u.boolean++;
+        uses.set(n.name, u);
+      }
+    }
+    if (n.type === "BinaryExpression" && (n.operator === "+" || ["===", "!==", "==", "!="].includes(n.operator))) {
+      const pairs: Array<[Node, Node]> = [[n.left, n.right], [n.right, n.left]];
+      for (const [a, b] of pairs) if (a.type === "Identifier" && wanted.has(a.name) && isStringLiteral(b)) stringHint.add(a.name);
+      if (n.operator === "+" && n.left.type === "Identifier" && n.right.type === "Identifier" && wanted.has(n.left.name) && wanted.has(n.right.name)) {
+        plusPairs.push([n.left.name, n.right.name]);
+      }
+    }
+    return undefined;
+  });
   walk(root, (n) => {
     if (n.type === "MemberExpression" && n.object.type === "Identifier" && wanted.has(n.object.name)) {
       const name = n.object.name;
@@ -283,6 +348,7 @@ function inferParamKinds(root: Node, names: string[]): Record<string, ParamKind>
       } else if (n.property.type === "Identifier") {
         const prop = n.property.name;
         if (STRING_METHODS.has(prop)) kinds.set(name, "string");
+        else if (SHARED_METHODS.has(prop)) stringHint.add(name);
         else if (ARRAY_METHODS.has(prop) && kinds.get(name) !== "string") kinds.set(name, "json");
         else if (prop === "length") lengthHint.add(name);
       }
@@ -299,7 +365,23 @@ function inferParamKinds(root: Node, names: string[]): Record<string, ParamKind>
     return undefined;
   });
   const result: Record<string, ParamKind> = {};
-  for (const name of names) result[name] = kinds.get(name) ?? (lengthHint.has(name) ? "string" : "integer");
+  for (const name of names) {
+    const u = uses.get(name);
+    const onlyBoolean = u !== undefined && u.total > 0 && u.boolean === u.total;
+    result[name] = kinds.get(name) ?? (stringHint.has(name) ? "string" : onlyBoolean ? "boolean" : lengthHint.has(name) ? "string" : "integer");
+  }
+  // `string + x` always concatenates, so an untyped partner of a string becomes a string (to a fixed point).
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [a, b] of plusPairs) {
+      for (const [from, to] of [[a, b], [b, a]] as const) {
+        if (result[from] === "string" && result[to] === "integer" && !kinds.has(to)) {
+          result[to] = "string";
+          changed = true;
+        }
+      }
+    }
+  }
   return result;
 }
 

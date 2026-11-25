@@ -13,7 +13,9 @@ import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
-import { generateCertificate, sanitizeProvenance, type CertificateInput } from "../exporter/certificate.js";
+import { generateCertificate, renderCertificateSvg, sanitizeProvenance, type CertificateInput } from "../exporter/certificate.js";
+import { readKiroDna, resolveKiroDocument, SPEC_DOCUMENTS } from "./kiro-dna.js";
+import { describePaste } from "./smart-paste.js";
 import { buildGitHubPrSummary } from "../exporter/pr-summary.js";
 import { importNpmPackage, NpmImportError, statusFor, type FetchLike } from "../importer/npm.js";
 import type { ResurrectionResult } from "../crew/types.js";
@@ -222,7 +224,7 @@ export type ExportRequest = {
  * Builds the PR bundle and verifies its TypeScript with the real compiler under --strict. The certificate and SPEC.md
  * carry that server-computed result; any client-supplied claim about it is ignored.
  */
-export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string }> {
+export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string }> {
   const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
@@ -272,7 +274,12 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
     },
     (typecheck) => generateCertificate(certificateInput(typecheck)).markdown
   );
-  return { ...verified, prSummary: buildGitHubPrSummary({ ...certificateInput(verified.typecheck), name: sanitizeIdentifier(parsed.specimenName ?? "resurrectedSpecimen") }) };
+  const name = sanitizeIdentifier(parsed.specimenName ?? "resurrectedSpecimen");
+  return {
+    ...verified,
+    prSummary: buildGitHubPrSummary({ ...certificateInput(verified.typecheck), name }),
+    certificateSvg: renderCertificateSvg(generateCertificate(certificateInput(verified.typecheck)), { name }),
+  };
 }
 export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
@@ -294,6 +301,9 @@ export const GraphBodySchema = z
   })
   .strict();
 const GraphZipBody = z.object({ bundleId: z.string().uuid() }).strict();
+const ScanBody = z.object({ legacyCode: z.string().max(MAX_CODE_CHARS) }).strict();
+/** Repository root: the anchor of `public/`, so `.kiro/` is found the same way locally and on Render. */
+const repoRoot = nodePath.resolve(__dirname, "../..");
 export const MutationAuditBodySchema = z
   .object({
     legacyCode: z.string().min(1).max(MAX_CODE_CHARS),
@@ -608,7 +618,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const { bundle, typecheck, prSummary } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
+        const { bundle, typecheck, prSummary, certificateSvg } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
         if (routePath === "/api/export-zip") {
           const archive = createZip(bundleToZipEntries(bundle));
           res.writeHead(200, {
@@ -621,7 +631,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...bundle, typecheck, prSummary }));
+        res.end(JSON.stringify({ ...bundle, typecheck, prSummary, certificateSvg }));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -750,6 +760,50 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         "Cache-Control": "no-store",
       });
       res.end(archive);
+      return;
+    }
+    if (req.method === "GET" && routePath === "/api/kiro-dna") {
+      const reply = (status: number, payload: unknown): void => {
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(payload));
+      };
+      const query = new URL(req.url ?? "/", "http://localhost").searchParams;
+      const spec = query.get("spec");
+      const doc = query.get("doc") ?? "requirements";
+      if (spec === null) {
+        reply(200, readKiroDna(repoRoot));
+        return;
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(spec) || spec.includes("..") || !(SPEC_DOCUMENTS as readonly string[]).includes(doc)) {
+        reply(400, { error: `spec must be a spec folder name and doc one of ${SPEC_DOCUMENTS.join(", ")}` });
+        return;
+      }
+      const text = resolveKiroDocument(repoRoot, spec, doc);
+      if (text === undefined) {
+        reply(404, { error: `no ${doc}.md for spec "${spec}"` });
+        return;
+      }
+      reply(200, { spec, doc, text });
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/scan") {
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        res.writeHead(err instanceof PayloadTooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" }));
+        return;
+      }
+      const checked = ScanBody.safeParse(rawBody);
+      if (!checked.success) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Body must be { legacyCode: string } (at most 64000 characters)" }));
+        return;
+      }
+      // Parse only: the pasted code is never executed here.
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(describePaste(checked.data.legacyCode)));
       return;
     }
     if (req.method === "POST" && routePath === "/api/mutation-audit") {

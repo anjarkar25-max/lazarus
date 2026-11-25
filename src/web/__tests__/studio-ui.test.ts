@@ -7,6 +7,7 @@ import { parse } from "acorn";
 import * as fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MAX_LCS_CELLS, diffLines, diffStats, splitLines, type DiffLine } from "../line-diff.js";
+import { FakeDocument, runInlineScript, type FakeElement } from "./fake-dom.js";
 import { createWebServer } from "../server.js";
 
 const root = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -122,9 +123,16 @@ describe("GET / serves Lazarus Studio", () => {
     }
     const studio = scripts().find((s) => s.includes("Guided Judge Tour")) ?? "";
     expect(studio).toContain('preset.value = "es5-string-hash"');
-    expect(studio).toContain('$("runBtn").click()');
-    expect(studio).toContain('$("mutBtn").click()');
-    expect(studio).toContain('c.dataset.value === "NaN"');
+    // Own, abortable requests: never a click on a possibly disabled button, never a stale result.
+    expect(studio).toContain("const result = await guard(window.LazarusRun.start(), 30000, \"the resurrection\");");
+    expect(studio).toContain('if (result.name !== "stringHash32")');
+    expect(studio).toContain("await guard(window.LazarusMutation.run(), 20000");
+    expect(studio).toContain('await guard(window.LazarusProbe.run("NaN"), 15000');
+    expect(studio).not.toContain("waitFor(");
+    // Cancel aborts the tour's in-flight requests.
+    expect(studio).toContain('window.LazarusRun.abort("cancelled with the tour")');
+    expect(studio).toContain("window.LazarusMutation.abort();");
+    expect(studio).toContain("window.LazarusProbe.abort();");
     expect(studio).toContain("Open Tab 2");
     expect(studio).toContain("Open Tab 3");
     // The tour itself never calls fetch: every request comes from the existing, tested controls.
@@ -157,7 +165,8 @@ describe("GET / serves Lazarus Studio", () => {
     expect(main).toContain('<div class="trace-list" id="traceList" hidden');
     expect(main.indexOf('id="traceList"')).toBeGreaterThan(main.indexOf('id="logList"'));
     // Trace events go to the trace view only.
-    expect(html).toContain('if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); continue; }');
+    // Inside the frame callback of the run handler (`return` skips the crew-card and log handling).
+    expect(html).toContain('if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); return; }');
   });
 
   it("has the Copy GitHub PR Summary button in the PR Bundle bar, fed by the server export", () => {
@@ -172,6 +181,41 @@ describe("GET / serves Lazarus Studio", () => {
     expect(html).not.toMatch(/file\(s\)|" typed \.ts files"/);
     expect(html).toContain('" typed .ts file" + (tc.filesChecked === 1 ? "" : "s")');
     expect(html).toContain('" file" + (tc.filesChecked === 1 ? "" : "s") + " checked with TypeScript "');
+  });
+
+  it("adds Kiro DNA and Audio to the header without a new tab, the drawer closed by default", () => {
+    const header = html.slice(html.indexOf('<header class="studio-header">'), html.indexOf("</header>"));
+    expect(header).toContain('id="dnaBtn" aria-haspopup="dialog" aria-controls="dnaDrawer" aria-expanded="false">Kiro DNA</button>');
+    expect(header).toContain('id="audioBtn" aria-pressed="false"');
+    expect(header).toContain(">Audio: OFF</button>");
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(html).toContain('<aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>');
+    expect(html).toContain('<div class="dna-scrim" id="dnaScrim" hidden></div>');
+    for (const organ of ["acorn", "sandbox", "fuzzer", "tsc"]) expect(html).toContain(`data-organ="${organ}"`);
+    for (const label of ["Acorn AST Parser", "Node VM Sandbox", "fast-check Fuzzer", "tsc --strict"]) expect(html).toContain(label);
+    // The drawer is fixed-position, so it adds no height to the page.
+    expect(html).toMatch(/\.dna-drawer \{ position: fixed;/);
+    expect(html).toContain('fetch("/api/kiro-dna")');
+  });
+
+  it("shows the smart-paste pill under the editor and fills the schema only when not hand-edited", () => {
+    const single = pane("pane-single");
+    expect(single.indexOf('id="pastePill"')).toBeGreaterThan(single.indexOf('<textarea id="legacyCode">'));
+    expect(single.indexOf('id="pastePill"')).toBeLessThan(single.indexOf('id="schemaJson"'));
+    expect(html).toContain('fetch("/api/scan"');
+    expect(html).toContain(': "Auto-detected: ";');
+    expect(html).toContain("const filled = !schemaTouched && Object.keys(r.schema).length > 0;");
+  });
+
+  it("downloads the server-built SVG certificate and keeps audio muted until the user turns it on", () => {
+    expect(html).toContain('svgBtn.textContent = "DOWNLOAD CERTIFICATE (.SVG)"');
+    expect(html).toContain('typeof bundle.certificateSvg !== "string"');
+    const audio = scripts().find((s) => s.includes("Lab audio")) ?? "";
+    expect(audio).toContain("let ctx = null, on = false;");
+    // The AudioContext is created only inside the toggle's click handler.
+    expect(audio.match(/new AC\(\)/g)).toHaveLength(1);
+    expect(audio.indexOf("new AC()")).toBeGreaterThan(audio.indexOf('audioBtn.addEventListener("click"'));
+    expect(audio).toContain("if (!on || !ctx) return;");
   });
 
   it("keeps the routes the tour relies on", async () => {
@@ -286,5 +330,403 @@ describe("diffLines (LCS line diff)", () => {
     expect(lines[0]).toEqual({ kind: "same", text: "head", oldLine: 1, newLine: 1 });
     expect(lines.at(-1)).toEqual({ kind: "same", text: "tail", oldLine: size + 2, newLine: size + 2 });
     expect(diffStats(lines)).toEqual({ added: size, removed: size, unchanged: 2 });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Production bugfix regressions. The page's own shipped scripts run in node:vm (no DOM library).
+// ---------------------------------------------------------------------------------------------
+const pageHtml = fs.readFileSync(nodePath.join(root, "public", "index.html"), "utf8");
+const inlineScripts = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "");
+
+describe("Tab 3 Red-Team Lab buttons (shipped script, minimal DOM, scripted fetch)", () => {
+  const source = inlineScripts.find((s) => s.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+  const ATTACKS = [...pageHtml.matchAll(/<button type="button" class="rt-btn" data-attack="([\w-]+)">([^<]+)<\/button>/g)].map((m) => ({ attack: m[1] ?? "", label: m[2] ?? "" }));
+
+  interface Harness {
+    doc: FakeDocument;
+    buttons: FakeElement[];
+    log: FakeElement;
+    calls: Array<{ url: string; init: RequestInit | undefined }>;
+    timeouts: Array<{ ms: number; fn: () => void }>;
+    settle: () => Promise<void>;
+  }
+  function setup(respond: (url: string, init: RequestInit | undefined) => Promise<Response>): Harness {
+    const doc = new FakeDocument();
+    const container = doc.element("div", "rtButtons");
+    const buttons = ATTACKS.map(({ attack, label }) => {
+      const b = doc.createElement("button");
+      b.className = "rt-btn";
+      b.dataset["attack"] = attack;
+      b.textContent = label;
+      container.append(b);
+      return b;
+    });
+    doc.selectors.set("#rtButtons .rt-btn", buttons);
+    const log = doc.element("div", "rtLog");
+    const calls: Harness["calls"] = [];
+    const timeouts: Harness["timeouts"] = [];
+    runInlineScript(source, {
+      document: doc,
+      fetch: (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return respond(url, init);
+      },
+      setTimeout: (fn: () => void, ms: number) => { timeouts.push({ ms, fn }); return timeouts.length; },
+      clearTimeout: () => undefined,
+      setInterval: () => 1,
+      clearInterval: () => undefined,
+    });
+    const settle = async (): Promise<void> => {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    };
+    return { doc, buttons, log, calls, timeouts, settle };
+  }
+  const byAttack = (h: Harness, attack: string): FakeElement => {
+    const b = h.buttons.find((x) => x.dataset["attack"] === attack);
+    if (b === undefined) throw new Error(`no button for ${attack}`);
+    return b;
+  };
+  const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const RESULT = {
+    attack: "process-exit",
+    label: "process.exit(1)",
+    description: "tries to terminate the host process",
+    contained: true,
+    recovered: true,
+    respawned: false,
+    canaryResult: 2,
+    elapsedMs: 6,
+    outcome: { ok: false, errorCode: "EXECUTION_ERROR", message: "process.exit is not a function" },
+  };
+
+  it("finds exactly the four attack buttons the page ships", () => {
+    expect(ATTACKS.map((a) => a.attack)).toEqual(["infinite-loop", "process-exit", "heap-bomb", "prototype-escape"]);
+    expect(ATTACKS.map((a) => a.label)).toEqual(["Infinite Loop", "process.exit(1)", "256MB Heap Bomb", "Hostile Escape"]);
+  });
+
+  it("posts the attack to /api/redteam and shows RUNNING ATTACK... immediately, with the buttons disabled", async () => {
+    let release: (r: Response) => void = () => undefined;
+    const h = setup(() => new Promise<Response>((resolve) => { release = resolve; }));
+    byAttack(h, "heap-bomb").click();
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0]?.url).toBe("/api/redteam");
+    expect(h.calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(h.calls[0]?.init?.body))).toEqual({ attack: "heap-bomb" });
+    const first = h.log.children[0];
+    expect(first?.textContent).toContain("RUNNING ATTACK...");
+    expect(first?.textContent).toContain("256MB Heap Bomb");
+    expect(h.buttons.every((b) => b.disabled)).toBe(true);
+    // A second click while running does not start another attack.
+    byAttack(h, "infinite-loop").click();
+    expect(h.calls).toHaveLength(1);
+    release(json({ ...RESULT, attack: "heap-bomb", label: "256MB Heap Bomb", respawned: true, outcome: { ok: false, errorCode: "MEMORY_EXCEEDED", message: "heap" } }));
+    await h.settle();
+    expect(h.log.children).toHaveLength(1);
+    expect(h.log.children[0]?.textContent).not.toContain("RUNNING ATTACK...");
+    expect(h.buttons.every((b) => !b.disabled)).toBe(true);
+  });
+
+  it.each([
+    [false, "NO RESPAWN NEEDED"],
+    [true, "WORKER RESPAWNED & HEALTHY"],
+  ])("renders the containment result into the timeline (respawned: %s)", async (respawned, recovery) => {
+    const h = setup(() => Promise.resolve(json({ ...RESULT, respawned })));
+    byAttack(h, "process-exit").click();
+    await h.settle();
+    const row = h.log.children[0];
+    expect(row?.className).toBe("rt-row");
+    const text = row?.textContent ?? "";
+    for (const part of ["process.exit(1)", "CONTAINED", "EXECUTION_ERROR", "6 ms", "canary 1 + 1 = 2", recovery]) expect(text).toContain(part);
+  });
+
+  it.each([
+    ["a 429 from the guard", () => Promise.resolve(json({ error: "Another red-team attack is still running", code: "BUSY" }, 429)), ["ATTACK NOT RUN", "HTTP 429", "Another red-team attack is still running", "another attack is still running"]],
+    ["a non-JSON 502 proxy page", () => Promise.resolve(new Response("<html><h1>502 Bad Gateway</h1></html>", { status: 502, statusText: "Bad Gateway" })), ["HTTP 502 Bad Gateway", "non-JSON response", "502 Bad Gateway</h1>"]],
+    ["a malformed 200 body", () => Promise.resolve(json({ hello: "world" })), ["Unexpected response from /api/redteam", "hello"]],
+    ["an empty 200 body", () => Promise.resolve(new Response("", { status: 200 })), ["Unexpected response from /api/redteam: empty body"]],
+    ["a network error", () => Promise.reject(new TypeError("Failed to fetch")), ["Network error: Failed to fetch"]],
+  ])("surfaces %s visibly and re-enables the buttons", async (_label, respond, parts) => {
+    const h = setup(respond);
+    byAttack(h, "prototype-escape").click();
+    await h.settle();
+    expect(h.log.children).toHaveLength(1);
+    const row = h.log.children[0];
+    expect(row?.className).toBe("rt-row bad");
+    for (const part of parts) expect(row?.textContent).toContain(part);
+    expect(h.buttons.every((b) => !b.disabled)).toBe(true);
+  });
+
+  it("times out a hung request after 60 s, aborts it and says so", async () => {
+    const h = setup((_url, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+    byAttack(h, "infinite-loop").click();
+    const deadline = h.timeouts.find((x) => x.ms === 60000);
+    expect(deadline).toBeDefined();
+    deadline?.fn();
+    await h.settle();
+    expect(h.log.children[0]?.textContent).toContain("No answer within 60 s (request timed out and was aborted)");
+    expect(h.buttons.every((b) => !b.disabled)).toBe(true);
+  });
+});
+
+describe("resurrection run control (shipped lz-run core): a new run aborts the old stream", () => {
+  /** The shipped core, looked up per test so a missing marker fails each test instead of the whole file. */
+  const core = (): string => {
+    const start = pageHtml.indexOf("/* lz-run:start */");
+    const end = pageHtml.indexOf("/* lz-run:end */");
+    expect(start, "lz-run markers in public/index.html").toBeGreaterThan(0);
+    return pageHtml.slice(start, end);
+  };
+  interface RunControl {
+    begin(): { token: number; signal: AbortSignal };
+    isCurrent(token: number): boolean;
+    abort(): void;
+    token(): number;
+  }
+  type ReadSse = (response: Response, onData: (data: unknown) => void, isCurrent: () => boolean) => Promise<boolean>;
+  const load = (): { make: () => RunControl; read: ReadSse } => {
+    const exported = runInlineScript(`${core()}; ({ make: lzMakeRunControl, read: lzReadSse })`, {}) as { make: () => RunControl; read: ReadSse };
+    return exported;
+  };
+  /** A streamed SSE response whose chunks the test pushes one by one. */
+  function stream(): { response: Response; push: (text: string) => void; end: () => void } {
+    let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const body = new ReadableStream<Uint8Array>({ start: (c) => { controller = c; } });
+    const enc = new TextEncoder();
+    return { response: new Response(body), push: (text) => controller?.enqueue(enc.encode(text)), end: () => controller?.close() };
+  }
+  const frame = (data: unknown): string => `data: ${JSON.stringify(data)}\n\n`;
+  const tick = async (): Promise<void> => { for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r)); };
+
+  it("begin() aborts the previous run's signal and makes its token stale", () => {
+    const rc = load().make();
+    const first = rc.begin();
+    expect(rc.isCurrent(first.token)).toBe(true);
+    const second = rc.begin();
+    expect(first.signal.aborted).toBe(true);
+    expect(rc.isCurrent(first.token)).toBe(false);
+    expect(rc.isCurrent(second.token)).toBe(true);
+    expect(second.token).toBeGreaterThan(first.token);
+    rc.abort();
+    expect(second.signal.aborted).toBe(true);
+    expect(rc.isCurrent(second.token)).toBe(false);
+  });
+
+  it("delivers every frame of the current run, across chunk boundaries", async () => {
+    const { make, read } = load();
+    const rc = make();
+    const run = rc.begin();
+    const s = stream();
+    const got: unknown[] = [];
+    const done = read(s.response, (d) => got.push(d), () => rc.isCurrent(run.token));
+    const text = frame({ kind: "event", n: 1 }) + frame({ kind: "result", n: 2 });
+    s.push(text.slice(0, 17));
+    s.push(text.slice(17));
+    s.end();
+    expect(await done).toBe(true);
+    expect(got).toEqual([{ kind: "event", n: 1 }, { kind: "result", n: 2 }]);
+  });
+
+  it("drops every frame of a superseded run (an earlier cjsMathUtils run cannot answer for the tour)", async () => {
+    const { make, read } = load();
+    const rc = make();
+    const old = rc.begin();
+    const oldStream = stream();
+    const oldFrames: unknown[] = [];
+    const oldDone = read(oldStream.response, (d) => oldFrames.push(d), () => rc.isCurrent(old.token));
+    oldStream.push(frame({ kind: "event", name: "cjsMathUtils", step: 1 }));
+    await tick();
+    expect(oldFrames).toHaveLength(1);
+    // The tour starts its own run.
+    const tour = rc.begin();
+    const tourStream = stream();
+    const tourFrames: unknown[] = [];
+    const tourDone = read(tourStream.response, (d) => tourFrames.push(d), () => rc.isCurrent(tour.token));
+    oldStream.push(frame({ kind: "result", result: { name: "cjsMathUtils" } }));
+    oldStream.end();
+    tourStream.push(frame({ kind: "result", result: { name: "stringHash32" } }));
+    tourStream.end();
+    expect(await oldDone).toBe(false);
+    expect(await tourDone).toBe(true);
+    expect(oldFrames).toEqual([{ kind: "event", name: "cjsMathUtils", step: 1 }]);
+    expect(tourFrames).toEqual([{ kind: "result", result: { name: "stringHash32" } }]);
+    expect(old.signal.aborted).toBe(true);
+  });
+
+  it("treats a read rejected by the abort as a quiet stop, but rethrows real errors of the current run", async () => {
+    const { make, read } = load();
+    const rc = make();
+    const run = rc.begin();
+    const failing = new Response(new ReadableStream<Uint8Array>({ pull: () => Promise.reject(new DOMException("aborted", "AbortError")) }));
+    const pending = read(failing, () => undefined, () => rc.isCurrent(run.token));
+    rc.begin();
+    expect(await pending).toBe(false);
+    const current = rc.begin();
+    const broken = new Response(new ReadableStream<Uint8Array>({ pull: () => Promise.reject(new Error("socket hang up")) }));
+    await expect(read(broken, () => undefined, () => rc.isCurrent(current.token))).rejects.toThrow("socket hang up");
+  });
+
+  it("the page's run handler is built on it: one controller, token checks, no stale run-end", () => {
+    expect(pageHtml).toContain("const runControl = lzMakeRunControl();");
+    expect(pageHtml).toContain("const run = runControl.begin();");
+    expect(pageHtml).toContain("signal: run.signal");
+    expect(pageHtml).toContain("}, mine);");
+    expect(pageHtml).toMatch(/finally \{\r?\n\s+if \(mine\(\)\) \{\r?\n\s+runBtn\.disabled = false;\r?\n\s+document\.dispatchEvent\(new CustomEvent\("lazarus:run-end"\)\);/);
+    expect(pageHtml).toContain('parityBadge.textContent = "RUN FAILED";');
+    expect(pageHtml).toContain('if (runBtn.disabled) this.abort("superseded by a new run");');
+  });
+});
+
+describe("stale exports (shipped lz-stale script, minimal DOM): exports belong to the exact proven source", () => {
+  const EXPORT_IDS = ["exportBtn", "downloadZipBtn", "copyPrSummaryBtn", "copyBundleBtn", "downloadFileBtn", "downloadBundleBtn", "certSvgBtn"];
+  const PROOF_IDS = ["modernOut", "specOut", "parityBadge", "verifyDeck", "certCard", "bundlePanel"];
+  const HINT = "Code changed — click Resurrect Specimen to refresh proof";
+  const script = (): string => {
+    const start = pageHtml.indexOf("/* lz-stale:start */");
+    const end = pageHtml.indexOf("/* lz-stale:end */");
+    expect(start, "lz-stale markers in public/index.html").toBeGreaterThan(0);
+    return pageHtml.slice(start, end);
+  };
+  interface StaleApi {
+    check(): boolean;
+    isStale(): boolean;
+    hint: string;
+  }
+  function setup(): {
+    doc: FakeDocument;
+    api: StaleApi;
+    editor: FakeElement;
+    preset: FakeElement;
+    hint: FakeElement;
+    button: (id: string) => FakeElement;
+    run: (source: string, success: boolean) => void;
+    type: (text: string) => void;
+  } {
+    const doc = new FakeDocument();
+    const editor = doc.element("textarea", "legacyCode");
+    const preset = doc.element("select", "presetSelect");
+    const hint = doc.element("span", "staleHint");
+    hint.hidden = true;
+    for (const id of EXPORT_IDS) doc.element("button", id);
+    for (const id of PROOF_IDS) doc.element("div", id);
+    const win: { LazarusStale?: StaleApi } = {};
+    runInlineScript(script(), { document: doc, window: win });
+    if (win.LazarusStale === undefined) throw new Error("window.LazarusStale was not installed");
+    const button = (id: string): FakeElement => {
+      const el = doc.getElementById(id);
+      if (el === null) throw new Error(id);
+      return el;
+    };
+    return {
+      doc,
+      api: win.LazarusStale,
+      editor,
+      preset,
+      hint,
+      button,
+      run: (source, success) => {
+        doc.dispatchEvent({ type: "lazarus:run-start", detail: { source } });
+        doc.dispatchEvent({ type: "lazarus:result", detail: { success } });
+      },
+      type: (text) => {
+        editor.value = text;
+        editor.dispatch("input");
+      },
+    };
+  }
+  const exportsDisabled = (t: ReturnType<typeof setup>): boolean[] => EXPORT_IDS.map((id) => t.button(id).disabled);
+  const allOf = (v: boolean): boolean[] => EXPORT_IDS.map(() => v);
+
+  it("changes nothing before the first successful resurrection", () => {
+    const t = setup();
+    t.type("function f(a) { return a; }");
+    expect(t.api.isStale()).toBe(false);
+    expect(exportsDisabled(t)).toEqual(allOf(false));
+    expect(t.hint.hidden).toBe(true);
+  });
+
+  it("disables every export, dims the proof and shows the hint when the editor is edited", () => {
+    const t = setup();
+    t.editor.value = "function f(a) { return a; }";
+    t.run(t.editor.value, true);
+    expect(exportsDisabled(t)).toEqual(allOf(false));
+    t.type("function f(a) { return a + 1; }");
+    expect(t.api.isStale()).toBe(true);
+    expect(exportsDisabled(t)).toEqual(allOf(true));
+    expect(t.hint.hidden).toBe(false);
+    expect(t.api.hint).toBe(HINT);
+    for (const id of EXPORT_IDS) expect(t.button(id).title).toBe(HINT);
+    for (const id of PROOF_IDS) expect(t.button(id).className.split(" ")).toContain("lz-stale");
+    // Typing back to the exact proven source restores the proof.
+    t.type("function f(a) { return a; }");
+    expect(t.api.isStale()).toBe(false);
+    expect(exportsDisabled(t)).toEqual(allOf(false));
+    expect(t.hint.hidden).toBe(true);
+    for (const id of PROOF_IDS) expect(t.button(id).className).toBe("");
+  });
+
+  it("goes stale on a preset switch and on a GitHub/npm import (programmatic writes, no input event)", () => {
+    const t = setup();
+    t.editor.value = "A";
+    t.run("A", true);
+    t.editor.value = "preset code";
+    t.preset.dispatch("change");
+    expect(exportsDisabled(t)).toEqual(allOf(true));
+    t.run("preset code", true);
+    expect(exportsDisabled(t)).toEqual(allOf(false));
+    // The importers write the editor and then call check().
+    t.editor.value = "module.exports = function imported(s) { return s.length; };";
+    t.api.check();
+    expect(t.api.isStale()).toBe(true);
+    expect(exportsDisabled(t)).toEqual(allOf(true));
+    const importerHooks = pageHtml.match(/legacyCode\.value = data\.source;\r?\n\s+if \(window\.LazarusStale\) window\.LazarusStale\.check\(\);/g) ?? [];
+    expect(importerHooks, "GitHub and npm importers both re-check after writing the editor").toHaveLength(2);
+  });
+
+  it("re-enables only after a successful run of the current text; a failed run keeps the stale state", () => {
+    const t = setup();
+    t.editor.value = "A";
+    t.run("A", true);
+    t.type("B");
+    t.run("B", false);
+    expect(t.api.isStale()).toBe(true);
+    expect(exportsDisabled(t)).toEqual(allOf(true));
+    t.run("B", true);
+    expect(t.api.isStale()).toBe(false);
+    expect(exportsDisabled(t)).toEqual(allOf(false));
+    expect(t.hint.hidden).toBe(true);
+  });
+
+  it("uses the source captured at run start: an edit made during the run stays stale", () => {
+    const t = setup();
+    t.editor.value = "A";
+    t.doc.dispatchEvent({ type: "lazarus:run-start", detail: { source: "A" } });
+    t.type("A edited mid-run");
+    t.doc.dispatchEvent({ type: "lazarus:result", detail: { success: true } });
+    expect(t.api.isStale()).toBe(true);
+    expect(exportsDisabled(t)).toEqual(allOf(true));
+  });
+
+  it("does not re-enable a button that something else had disabled (for example a zip in progress)", () => {
+    const t = setup();
+    t.editor.value = "A";
+    t.run("A", true);
+    t.button("downloadZipBtn").disabled = true;
+    t.type("B");
+    t.type("A");
+    expect(t.button("downloadZipBtn").disabled).toBe(true);
+    expect(t.button("exportBtn").disabled).toBe(false);
+  });
+
+  it("is wired into the page: run-start carries the posted source, the bundle builder refuses while stale", () => {
+    expect(pageHtml).toMatch(/const run = runControl\.begin\(\);\r?\n\s+const mine = [^\n]+\r?\n\s+document\.dispatchEvent\(new CustomEvent\("lazarus:run-start", \{ detail: \{ source: legacyCode\.value \} \}\)\);/);
+    expect(pageHtml).toMatch(/async function buildBundleFromCurrentUI\(\) \{\r?\n\s+if \(window\.LazarusStale && window\.LazarusStale\.isStale\(\)\) \{\r?\n\s+showStatus\(window\.LazarusStale\.hint, true\);\r?\n\s+return null;/);
+    expect(pageHtml).toContain('<span id="staleHint" class="stale-hint" role="status" hidden>' + HINT + "</span>");
+    // Loaded after every other script, so its preset listener runs after the preset handlers wrote the editor.
+    expect(pageHtml.lastIndexOf("<script>")).toBeLessThan(pageHtml.indexOf("/* lz-stale:start */"));
+    // Tab 3 is out of scope: the stale script never references the Red-Team controls.
+    expect(script()).not.toMatch(/redteam|redTeam|rt-/i);
   });
 });

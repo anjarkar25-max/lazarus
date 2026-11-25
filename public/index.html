@@ -291,6 +291,10 @@
 .rt-pill.ok { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.12); }
 .rt-pill.bad { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.15); }
 .rt-pill.info { color: #ddd6fe; border-color: var(--violet); background: rgba(139, 92, 246, 0.12); }
+.rt-pill.run { color: #fde68a; border-color: #f59e0b; background: rgba(245, 158, 11, 0.14); animation: rtPulse 1s ease-in-out infinite; }
+.rt-row.rt-pending { border-left-color: #f59e0b; }
+@keyframes rtPulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .rt-pill.run { animation: none; } }
 .rt-row code { color: #e2e8f0; }
 .graph-panel { margin: 0 24px 24px; border: 1px solid #1e293b; border-radius: 10px; background: #111827; }
 .graph-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid #1e293b; }
@@ -468,6 +472,70 @@ pre { max-width: 100%; }
 .tr-pill.local { color: #94a3b8; border-color: #475569; }
 .trace-row .tr-agent { color: #64748b; text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
 .trace-row .tr-sum { margin-top: 3px; color: #94a3b8; }
+
+/* ---- Header buttons -------------------------------------------------------- */
+.hdr-btn { font-size: 12px; padding: 7px 11px; border-color: #334155; background: #111827; color: #cbd5e1; font-weight: 700; }
+.hdr-btn:hover { border-color: var(--violet); color: #ede9fe; }
+#audioBtn[aria-pressed="true"] { border-color: var(--emerald); color: var(--emerald); }
+.cert-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 1500px) {
+  .studio-header { gap: 10px; padding: 10px 18px; }
+  .studio-header .brand > div > span { display: none; }
+  .proof-badge { font-size: 10px; padding: 3px 7px; }
+  .tour-controls { gap: 6px; }
+  .tour-controls button { font-size: 11px; padding: 7px 10px; }
+}
+
+/* ---- Smart paste pill ---------------------------------------------------------- */
+.paste-pill { margin-top: 6px; display: inline-block; max-width: 100%; padding: 3px 9px; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.08); color: #c4b5fd; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.paste-pill code { color: #ede9fe; }
+.paste-pill.err { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.06); color: #fca5a5; }
+
+/* ---- Kiro DNA drawer ----------------------------------------------------------- */
+.dna-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(2px); }
+.dna-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: min(760px, 100vw); display: flex; flex-direction: column; background: #090d16; border-left: 1px solid var(--violet); box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6); animation: dnaIn .22s ease-out; }
+@keyframes dnaIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.dna-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: #111827; }
+.dna-head h2 { margin: 0; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--violet); }
+.dna-head small { display: block; color: var(--muted); font-size: 11px; letter-spacing: 0; text-transform: none; margin-top: 2px; }
+.dna-body { flex: 1; overflow: auto; padding: 14px 18px 24px; }
+.dna-body h3 { margin: 18px 0 8px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--emerald); }
+.dna-body h3:first-child { margin-top: 0; }
+#chimera { display: block; width: 100%; height: auto; background: #0b1120; border: 1px solid var(--border); border-radius: 10px; }
+#chimera .organ { cursor: pointer; }
+#chimera .organ rect { fill: #111827; stroke: #475569; stroke-width: 1.5; transition: stroke .2s, fill .2s; }
+#chimera .organ:hover rect, #chimera .organ:focus rect { stroke: var(--violet); }
+#chimera .organ.active rect { stroke: var(--emerald); fill: rgba(16, 185, 129, 0.10); }
+#chimera .organ:focus { outline: none; }
+#chimera .o-title { fill: #f1f5f9; font: 700 13px ui-monospace, Consolas, monospace; }
+#chimera .o-sub { fill: #94a3b8; font: 10px ui-monospace, Consolas, monospace; }
+#chimera .flow { fill: none; stroke: #8b5cf6; stroke-width: 1.6; stroke-dasharray: 6 6; animation: flowDash 1.4s linear infinite; }
+#chimera .flow.proof { stroke: #10b981; }
+#chimera .f-label { fill: #a5b4fc; font: 10px ui-monospace, Consolas, monospace; }
+#chimera .f-label.proof { fill: #6ee7b7; }
+@keyframes flowDash { to { stroke-dashoffset: -24; } }
+@media (prefers-reduced-motion: reduce) { #chimera .flow { animation: none; } .dna-drawer { animation: none; } }
+.organ-detail { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #111827; font-size: 12px; color: #cbd5e1; min-height: 64px; }
+.organ-detail b { color: var(--emerald); }
+.organ-detail code { color: #c4b5fd; }
+.dna-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.dna-card { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #111827; font-size: 11px; color: #cbd5e1; min-width: 0; }
+.dna-card .n { color: #f1f5f9; font-weight: 700; font-size: 12px; word-break: break-word; }
+.dna-card .t { color: var(--muted); margin: 2px 0 6px; }
+.dna-card .bar { height: 4px; border-radius: 2px; background: #1e293b; overflow: hidden; margin: 6px 0; }
+.dna-card .bar i { display: block; height: 100%; background: var(--emerald); }
+.dna-card .docs { display: flex; gap: 4px; flex-wrap: wrap; }
+.dna-card .docs button { font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+.dna-card .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.dna-card .chips span { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid #334155; color: #c4b5fd; }
+.dna-doc { margin-top: 10px; max-height: 360px; overflow: auto; white-space: pre-wrap; font-size: 11px; background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.dna-steer { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+.dna-steer li { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: #111827; color: #cbd5e1; }
+.dna-steer code { color: #c4b5fd; }
+.stale-hint { display: inline-block; margin-left: 10px; font-size: 11px; color: #fbbf24; vertical-align: middle; }
+.stale-hint[hidden] { display: none; }
+.lz-stale { opacity: 0.45; filter: grayscale(0.6); transition: opacity 0.2s; }
+button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
 </style>
 </head>
 <body>
@@ -480,14 +548,16 @@ pre { max-width: 100%; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">663 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">17 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">745 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">18 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
     <div class="tour-controls">
       <button type="button" class="tour-btn" id="tourBtn">&#9654; Run 20s Guided Judge Tour</button>
       <button type="button" class="tour-cancel" id="tourCancel" hidden>Cancel Tour</button>
+      <button type="button" class="hdr-btn" id="dnaBtn" aria-haspopup="dialog" aria-controls="dnaDrawer" aria-expanded="false">Kiro DNA</button>
+      <button type="button" class="hdr-btn" id="audioBtn" aria-pressed="false" title="Soft lab tones on parity proven / counterexample caught (muted by default)">Audio: OFF</button>
     </div>
   </header>
   <nav class="studio-tabs" role="tablist" aria-label="Lazarus Studio workspaces">
@@ -511,6 +581,7 @@ pre { max-width: 100%; }
           <option value="checksum">Preset 3: Legacy ES5 String Checksum Loop</option>
         </select>
         <button id="runBtn" class="primary">RESURRECT SPECIMEN</button><button id="exportBtn" type="button" style="margin-left:8px;background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">EXPORT PR BUNDLE</button>
+        <span id="staleHint" class="stale-hint" role="status" hidden>Code changed — click Resurrect Specimen to refresh proof</span>
       </div>
       </div>
     <section class="crew-bar">
@@ -562,6 +633,7 @@ pre { max-width: 100%; }
           <div>
             <label for="legacyCode">Abandoned Source Expression</label>
             <textarea id="legacyCode">var half = (n / 2) | 0; half;</textarea>
+            <div class="paste-pill" id="pastePill" role="status" aria-live="polite" hidden></div>
           </div>
           <div>
             <label for="schemaJson">Input Fuzz Schema (JSON)</label>
@@ -780,7 +852,43 @@ pre { max-width: 100%; }
 
 
 
-  <script>
+  <div class="dna-scrim" id="dnaScrim" hidden></div>
+<aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
+  <div class="dna-head">
+    <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents and .kiro/steering</small></h2>
+    <button type="button" class="hdr-btn" id="dnaClose" aria-label="Close Kiro DNA">Close</button>
+  </div>
+  <div class="dna-body">
+    <h3>The Chimera &middot; four organs, one proof</h3>
+    <svg id="chimera" viewBox="0 0 700 330" role="group" aria-label="Four-organ Chimera architecture">
+          <defs>
+            <marker id="cmArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8b5cf6"/></marker>
+            <marker id="cmArrowOk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#10b981"/></marker>
+          </defs>
+          <text x="20" y="22" class="f-label">legacy ES5 / CommonJS source</text>
+          <path class="flow" d="M60 30 L60 52" marker-end="url(#cmArrow)"/>
+          <g class="organ" data-organ="acorn" tabindex="0" role="button" aria-label="Acorn AST parser" transform="translate(20 56)"><rect width="230" height="78" rx="10"/><text x="14" y="28" class="o-title">1 &middot; Acorn AST Parser</text><text x="14" y="48" class="o-sub">parse, never execute</text><text x="14" y="64" class="o-sub">specimen &middot; schema &middot; AST rewrites</text></g>
+          <g class="organ" data-organ="sandbox" tabindex="0" role="button" aria-label="Node VM sandbox" transform="translate(450 56)"><rect width="230" height="78" rx="10"/><text x="14" y="28" class="o-title">2 &middot; Node VM Sandbox</text><text x="14" y="48" class="o-sub">pooled worker &middot; 256 MB &middot; 3 s</text><text x="14" y="64" class="o-sub">fresh vm context per probe</text></g>
+          <g class="organ" data-organ="fuzzer" tabindex="0" role="button" aria-label="fast-check differential fuzzer" transform="translate(450 220)"><rect width="230" height="78" rx="10"/><text x="14" y="28" class="o-title">3 &middot; fast-check Fuzzer</text><text x="14" y="48" class="o-sub">exact Object.is, tagged -0/NaN</text><text x="14" y="64" class="o-sub">boundary corpus &middot; shrinking</text></g>
+          <g class="organ" data-organ="tsc" tabindex="0" role="button" aria-label="TypeScript strict compiler" transform="translate(20 220)"><rect width="230" height="78" rx="10"/><text x="14" y="28" class="o-title">4 &middot; tsc --strict</text><text x="14" y="48" class="o-sub">TypeScript 7 compiler API</text><text x="14" y="64" class="o-sub">observed types &rarr; 0 errors</text></g>
+          <path class="flow" d="M252 84 L446 84" marker-end="url(#cmArrow)"/><text x="268" y="76" class="f-label">runnable specimen + candidate</text>
+          <path class="flow" d="M600 136 L600 216" marker-end="url(#cmArrow)"/><text x="608" y="172" class="f-label">outcomes</text>
+          <path class="flow" d="M540 216 L540 136" marker-end="url(#cmArrow)"/><text x="470" y="186" class="f-label">inputs</text>
+          <path class="flow proof" d="M446 258 L254 258" marker-end="url(#cmArrowOk)"/><text x="270" y="250" class="f-label proof">verified code + observed I/O</text>
+          <path class="flow" d="M135 136 L135 216" marker-end="url(#cmArrow)"/><text x="143" y="182" class="f-label">rule levels &amp; rollbacks</text>
+          <path class="flow proof" d="M135 300 L135 322 L560 322" marker-end="url(#cmArrowOk)"/><text x="300" y="316" class="f-label proof">Resurrection Certificate &middot; PR bundle</text>
+        </svg>
+    <div class="organ-detail" id="organDetail">Select an organ to see what it does and where it lives in the code.</div>
+    <h3 id="dnaAgentsTitle">Kiro Crew agents</h3>
+    <div class="dna-grid" id="dnaAgents"></div>
+    <h3 id="dnaSpecsTitle">Specs</h3>
+    <div class="dna-grid" id="dnaSpecs"></div>
+    <pre class="dna-doc" id="dnaDoc" hidden></pre>
+    <h3>Steering rules</h3>
+    <ul class="dna-steer" id="dnaSteering"></ul>
+  </div>
+</aside>
+<script>
     const presets = {
       selfHeal: {
         name: "legacy-int-halve",
@@ -837,22 +945,82 @@ pre { max-width: 100%; }
       logList.prepend(div);
     }
 
-    runBtn.addEventListener("click", async () => {
+    /* lz-run:start */
+    /** One active /api/resurrect stream at a time: begin() aborts the previous one and bumps the run token. */
+    function lzMakeRunControl() {
+      var current = 0;
+      var controller = null;
+      return {
+        begin: function () {
+          if (controller) controller.abort();
+          controller = new AbortController();
+          current++;
+          return { token: current, signal: controller.signal };
+        },
+        isCurrent: function (token) { return token === current; },
+        abort: function () {
+          if (controller) controller.abort();
+          controller = null;
+          current++;
+        },
+        token: function () { return current; }
+      };
+    }
+    /** Reads SSE `data:` frames until the stream ends; stops (returns false) once the run is no longer current. */
+    async function lzReadSse(response, onData, isCurrent) {
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = "";
+      try {
+        for (;;) {
+          if (!isCurrent()) { reader.cancel().catch(function () {}); return false; }
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          if (!isCurrent()) { reader.cancel().catch(function () {}); return false; }
+          buffer += decoder.decode(chunk.value, { stream: true });
+          var frames = buffer.split("\n\n");
+          buffer = frames.pop() || "";
+          for (var i = 0; i < frames.length; i++) {
+            if (!isCurrent()) return false;
+            if (frames[i].indexOf("data: ") !== 0) continue;
+            onData(JSON.parse(frames[i].slice(6)));
+          }
+        }
+      } catch (err) {
+        if (!isCurrent()) return false;
+        throw err;
+      }
+      return isCurrent();
+    }
+    /* lz-run:end */
+    const runControl = lzMakeRunControl();
+    function systemLog(type, message) {
+      const div = document.createElement("div");
+      div.className = "log-item " + type;
+      const meta = document.createElement("div"); meta.className = "log-meta"; meta.textContent = "system // " + type;
+      const body = document.createElement("div"); body.textContent = message;
+      div.append(meta, body);
+      logList.prepend(div);
+    }
+    /** Runs one resurrection. Resolves with its result, or null when it was superseded, aborted or failed. */
+    async function startRun() {
       let parsedSchema;
       try {
         parsedSchema = JSON.parse(schemaJson.value);
       } catch {
         alert("Invalid JSON in Input Fuzz Schema");
-        return;
+        return null;
       }
-
+      const run = runControl.begin();
+      const mine = () => runControl.isCurrent(run.token);
+      document.dispatchEvent(new CustomEvent("lazarus:run-start", { detail: { source: legacyCode.value } }));
       runBtn.disabled = true;
       logList.innerHTML = "";
       resetCards();
       if (window.LazarusUI) window.LazarusUI.onRunStart();
       parityBadge.className = "badge badge-idle";
       parityBadge.textContent = "RUNNING...";
-
+      let result = null;
       try {
         const response = await fetch("/api/resurrect", {
           method: "POST",
@@ -865,26 +1033,20 @@ pre { max-width: 100%; }
             seed: 1337,
             simulateBuggyFirstDraft: simulateBug.checked,
             provenance: window.lazarusProvenance
-          })
+          }),
+          signal: run.signal
         });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const frames = buffer.split("\n\n");
-          buffer = frames.pop() || "";
-
-          for (const frame of frames) {
-            if (!frame.startsWith("data: ")) continue;
-            const data = JSON.parse(frame.slice(6));
+        if (!mine()) return null;
+        if (!response.ok || !response.body) {
+          let message = "HTTP " + response.status + (response.statusText ? " " + response.statusText : "");
+          try { const j = await response.json(); if (j && j.error) message += ": " + j.error; } catch (e) { /* non-JSON error page */ }
+          throw new Error(message);
+        }
+        await lzReadSse(response, (data) => {
             if (data.kind === "event") {
               const ev = data.event;
-              if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); continue; }
+              document.dispatchEvent(new CustomEvent("lazarus:crew", { detail: ev }));
+              if (ev.type === "mcp_trace") { if (window.LazarusTrace) window.LazarusTrace.add(ev); return; }
               ["archaeologist", "architect", "necromancer", "exorcist"].forEach((a) => {
                 const card = document.getElementById("card-" + a);
                 if (a === ev.agent) {
@@ -898,8 +1060,11 @@ pre { max-width: 100%; }
               if (ev.payload && ev.payload.specMarkdown) specOut.textContent = ev.payload.specMarkdown;
               if (ev.payload && ev.payload.modernCode) modernOut.textContent = ev.payload.modernCode;
               appendLog(ev.agent, ev.type, ev.message);
+            } else if (data.kind === "error") {
+              throw new Error(data.message || "the server reported an error");
             } else if (data.kind === "result") {
               const r = data.result;
+              result = r;
               ["archaeologist", "architect", "necromancer", "exorcist"].forEach((a) => {
                 document.getElementById("card-" + a).className = "agent-card done";
                 document.getElementById("status-" + a).textContent = "DONE";
@@ -922,13 +1087,41 @@ pre { max-width: 100%; }
                 parityBadge.textContent = "DIVERGENCE DETECTED";
               }
             }
-          }
+        }, mine);
+        if (mine() && result === null) throw new Error("the stream ended without a result");
+      } catch (err) {
+        if (mine()) {
+          parityBadge.className = "badge badge-fail";
+          parityBadge.textContent = "RUN FAILED";
+          systemLog("error", "Resurrection failed: " + (err && err.message ? err.message : String(err)));
         }
       } finally {
-        runBtn.disabled = false;
-        document.dispatchEvent(new CustomEvent("lazarus:run-end"));
+        if (mine()) {
+          runBtn.disabled = false;
+          document.dispatchEvent(new CustomEvent("lazarus:run-end"));
+        }
       }
-    });
+      return mine() ? result : null;
+    }
+    let lastStarted = null;
+    runBtn.addEventListener("click", () => { lastStarted = startRun(); });
+    window.LazarusRun = {
+      /** Aborts any in-flight run, then starts a new one through the button (so every listener runs). */
+      start() {
+        if (runBtn.disabled) this.abort("superseded by a new run");
+        lastStarted = null;
+        runBtn.click();
+        return lastStarted || Promise.resolve(null);
+      },
+      abort(reason) {
+        runControl.abort();
+        runBtn.disabled = false;
+        parityBadge.className = "badge badge-idle";
+        parityBadge.textContent = "CANCELLED";
+        systemLog("cancel", "Run " + (reason || "cancelled") + "; its remaining events are ignored.");
+      },
+      token() { return runControl.token(); }
+    };
   </script>
 <script>
 (function() {
@@ -1099,6 +1292,7 @@ pre { max-width: 100%; }
           throw new Error(data.error || "GitHub import failed (HTTP " + res.status + ")");
         }
         legacyCode.value = data.source;
+        if (window.LazarusStale) window.LazarusStale.check();
         const fileName = (data.normalizedUrl || "").split("/").pop() || "githubSpecimen";
         modName.value = fileName.replace(/\.(c?js)$/i, "");
         if (data.functionName) modName.value = data.functionName;
@@ -1121,6 +1315,10 @@ pre { max-width: 100%; }
   }
 
   async function buildBundleFromCurrentUI() {
+    if (window.LazarusStale && window.LazarusStale.isStale()) {
+      showStatus(window.LazarusStale.hint, true);
+      return null;
+    }
     const modernText = (modernOut.textContent || "").trim();
     if (!modernText || modernText.startsWith("// Modernized code will appear")) {
       showStatus("Run RESURRECT SPECIMEN first so Lazarus proves 100% parity before exporting a verified PR bundle.", true);
@@ -1428,12 +1626,12 @@ pre { max-width: 100%; }
     probeVerdict.append(head, data.reason);
     setStatus("Probed " + Object.keys(context).map((k) => k + " = " + show(context[k])).join(", "));
   }
+  let probeCtl = null, probeToken = 0;
   async function runProbe() {
-    if (busy) return;
     const modern = (modernOut.textContent || "").trim();
     if (!modern || modern.startsWith("// Modernized code will appear")) {
       setStatus("Run RESURRECT SPECIMEN first, so there is resurrected code to probe.", true);
-      return;
+      return null;
     }
     const chosen = selectedProbeFunction();
     const context = {};
@@ -1441,8 +1639,12 @@ pre { max-width: 100%; }
     busy = true;
     probeBtn.disabled = true;
     setStatus("Probing both sides in the sandbox...");
+    if (probeCtl) probeCtl.abort();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    probeCtl = controller;
+    const mine = ++probeToken;
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 12000);
     try {
       const res = await fetch("/api/probe", {
         method: "POST",
@@ -1451,24 +1653,40 @@ pre { max-width: 100%; }
         signal: controller.signal
       });
       const data = await res.json();
+      if (mine !== probeToken) return null;
       if (!res.ok) {
         const detail = Array.isArray(data.issues) ? data.issues.map((i) => i.path + " " + i.message).join("; ") : data.error;
         setStatus("Probe rejected: " + detail, true);
-        return;
+        return null;
       }
       renderProbe(data, context);
       document.dispatchEvent(new CustomEvent("lazarus:probe", { detail: data }));
+      return data;
     } catch (err) {
-      setStatus(err && err.name === "AbortError" ? "Probe timed out." : "Probe failed: " + (err && err.message ? err.message : err), true);
+      if (mine !== probeToken) return null;
+      setStatus(timedOut ? "Probe timed out." : "Probe failed: " + (err && err.message ? err.message : err), true);
+      return null;
     } finally {
       clearTimeout(timer);
-      busy = false;
-      probeBtn.disabled = false;
-      document.dispatchEvent(new CustomEvent("lazarus:probe-end"));
+      if (mine === probeToken) {
+        probeCtl = null;
+        busy = false;
+        probeBtn.disabled = false;
+        document.dispatchEvent(new CustomEvent("lazarus:probe-end"));
+      }
     }
   }
-
-  probeBtn.addEventListener("click", runProbe);
+  probeBtn.addEventListener("click", () => { runProbe(); });
+  window.LazarusProbe = {
+    /** Puts `value` in the first input and probes it (aborting a probe in flight); resolves with the result or null. */
+    run(value) {
+      const first = probeInputs.querySelector("input");
+      if (!first) return Promise.resolve(null);
+      first.value = value;
+      return runProbe();
+    },
+    abort() { if (probeCtl) probeCtl.abort(); probeCtl = null; probeToken++; busy = false; probeBtn.disabled = false; }
+  };
   $("probeChips").querySelectorAll(".probe-chip").forEach((chipButton) => {
     chipButton.addEventListener("click", () => {
       const target = activeInput && probeInputs.contains(activeInput) ? activeInput : probeInputs.querySelector("input");
@@ -1548,6 +1766,7 @@ pre { max-width: 100%; }
       const data = await res.json();
       if (!res.ok) { showError(res.status, data); return; }
       legacyCode.value = data.source;
+      if (window.LazarusStale) window.LazarusStale.check();
       modName.value = (data.functionName || data.packageName).replace(/[^A-Za-z0-9_$]/g, "_");
       if (data.suggestedSchema && Object.keys(data.suggestedSchema).length > 0) schemaJson.value = JSON.stringify(data.suggestedSchema);
       if (simulateBug) simulateBug.checked = false;
@@ -1596,7 +1815,27 @@ pre { max-width: 100%; }
         copy.textContent = ok ? "COPIED" : "COPY FAILED"; copy.classList.toggle("done", ok);
         setTimeout(() => { copy.textContent = "COPY CERTIFICATE (MARKDOWN)"; copy.classList.remove("done"); }, 1800);
       });
-      head.append(titles, copy);
+      const svgBtn = document.createElement("button"); svgBtn.type = "button"; svgBtn.className = "cert-copy"; svgBtn.id = "certSvgBtn"; svgBtn.textContent = "DOWNLOAD CERTIFICATE (.SVG)";
+      svgBtn.addEventListener("click", async () => {
+        if (!window.LazarusBundle) return;
+        svgBtn.disabled = true;
+        try {
+          // Built by the server from the same verified inputs as the export (tsc is re-checked there).
+          const bundle = await window.LazarusBundle.build();
+          if (!bundle || typeof bundle.certificateSvg !== "string") { svgBtn.textContent = "SVG UNAVAILABLE"; return; }
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([bundle.certificateSvg], { type: "image/svg+xml" }));
+          a.download = "lazarus-certificate-" + c.id + ".svg";
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          svgBtn.textContent = "DOWNLOADED";
+        } finally {
+          svgBtn.disabled = false;
+          setTimeout(() => { svgBtn.textContent = "DOWNLOAD CERTIFICATE (.SVG)"; }, 1800);
+        }
+      });
+      const btns = document.createElement("div"); btns.className = "cert-btns"; btns.append(copy, svgBtn);
+      head.append(titles, btns);
       const score = document.createElement("div"); score.className = "cert-score";
       const lab = document.createElement("span"); lab.textContent = "Legacy Debt " + c.debtScore + "/100 (" + c.debtGrade + ")";
       const bar = document.createElement("div"); bar.className = "cert-bar"; const fill = document.createElement("i"); fill.style.width = Math.max(0, Math.min(100, c.debtScore)) + "%"; bar.append(fill);
@@ -1620,56 +1859,86 @@ pre { max-width: 100%; }
 </script>
 <script>
 /* Red-Team the Sandbox: one-click containment proofs (textContent only, no frameworks). */
+/* Uses only the DOM calls studio-ui.test.ts stubs: querySelectorAll, getElementById, createElement, append, prepend,
+   remove, textContent, className, dataset, disabled, addEventListener. */
 (function () {
   "use strict";
+  const ATTACK_TIMEOUT_MS = 60000;
   const buttons = Array.from(document.querySelectorAll("#rtButtons .rt-btn"));
   const log = document.getElementById("rtLog");
   if (!log || buttons.length === 0) return;
-  function pill(parent, text, cls) { const s = document.createElement("span"); s.className = "rt-pill " + cls; s.textContent = text; parent.append(s); }
+  let running = false;
+  function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+  function pill(parent, text, cls) { const s = el("span", "rt-pill " + cls, text); parent.append(s); return s; }
+  function failRow(label, cause) {
+    const row = el("div", "rt-row bad");
+    const head = el("div", "badge-line");
+    head.append(el("strong", "", label));
+    pill(head, "ATTACK NOT RUN", "bad");
+    row.append(head, el("div", "", cause));
+    log.prepend(row);
+  }
+  function isResult(r) {
+    return r !== null && typeof r === "object" && typeof r.label === "string" && r.outcome !== null && typeof r.outcome === "object" &&
+      typeof r.elapsedMs === "number" && typeof r.contained === "boolean" && typeof r.recovered === "boolean" && "canaryResult" in r;
+  }
   function renderResult(r) {
-    const row = document.createElement("div");
-    row.className = "rt-row" + (r.contained && r.recovered ? "" : " bad");
-    const head = document.createElement("div"); head.className = "badge-line";
-    const name = document.createElement("strong"); name.textContent = r.label; head.append(name);
+    const row = el("div", "rt-row" + (r.contained && r.recovered ? "" : " bad"));
+    const head = el("div", "badge-line");
+    head.append(el("strong", "", r.label));
     pill(head, r.contained ? "CONTAINED" : "ESCAPED", r.contained ? "ok" : "bad");
-    const code = r.outcome.ok ? "returned " + String(r.outcome.output) : (r.outcome.errorCode || "ERROR");
-    pill(head, code, "info");
+    pill(head, r.outcome.ok ? "returned " + String(r.outcome.output) : (r.outcome.errorCode || "ERROR"), "info");
     pill(head, r.elapsedMs + " ms", "info");
-    row.append(head);
-    const detail = document.createElement("div");
-    detail.textContent = r.outcome.ok ? r.description : (r.outcome.message || r.description);
-    row.append(detail);
-    const canary = document.createElement("div"); canary.className = "badge-line";
-    const c = document.createElement("span"); c.textContent = "canary 1 + 1 = "; const v = document.createElement("code"); v.textContent = String(r.canaryResult); c.append(v);
+    row.append(head, el("div", "", r.outcome.ok ? r.description : (r.outcome.message || r.description)));
+    const canary = el("div", "badge-line");
+    const c = el("span", "", "canary 1 + 1 = ");
+    c.append(el("code", "", String(r.canaryResult)));
     canary.append(c);
-    pill(canary, r.recovered ? (r.respawned ? "WORKER RESPAWNED & HEALTHY" : "WORKER HEALTHY (NO RESPAWN NEEDED)") : "WORKER NOT RECOVERED", r.recovered ? "ok" : "bad");
+    pill(canary, r.recovered ? (r.respawned ? "WORKER RESPAWNED & HEALTHY" : "NO RESPAWN NEEDED") : "WORKER NOT RECOVERED", r.recovered ? "ok" : "bad");
     row.append(canary);
     log.prepend(row);
   }
+  const snippet = (text) => text.replace(/\s+/g, " ").trim().slice(0, 120);
   async function attack(name, button) {
+    if (running) return;
+    running = true;
     buttons.forEach((b) => { b.disabled = true; });
-    const original = button.textContent;
-    button.textContent = "attacking...";
-    const pending = document.createElement("div"); pending.className = "rt-row"; pending.textContent = "Running " + name + " inside the sandbox worker...";
+    const label = button.textContent;
+    const pending = el("div", "rt-row rt-pending");
+    const head = el("div", "badge-line");
+    head.append(el("strong", "", label));
+    pill(head, "RUNNING ATTACK...", "run");
+    const timer = pill(head, "0.0 s", "info");
+    pending.append(head, el("div", "", "Running " + name + " inside the sandbox worker, then the canary probe 1 + 1 on the same pool."));
     log.prepend(pending);
+    const started = Date.now();
+    const tick = setInterval(() => { timer.textContent = ((Date.now() - started) / 1000).toFixed(1) + " s"; }, 100);
+    const ctl = new AbortController();
+    let timedOut = false;
+    const deadline = setTimeout(() => { timedOut = true; ctl.abort(); }, ATTACK_TIMEOUT_MS);
     try {
-      const res = await fetch("/api/redteam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attack: name }) });
-      const data = await res.json();
-      pending.remove();
+      const res = await fetch("/api/redteam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attack: name }), signal: ctl.signal });
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch (e) { data = null; }
       if (!res.ok) {
-        const row = document.createElement("div"); row.className = "rt-row bad";
-        row.textContent = "Red-team request refused: " + (data.error || "HTTP " + res.status);
-        log.prepend(row);
+        const status = "HTTP " + res.status + (res.statusText ? " " + res.statusText : "");
+        const why = data && typeof data.error === "string" ? data.error : data === null ? "non-JSON response from the server or its proxy" + (text ? ": " + snippet(text) : "") : "no error message";
+        failRow(label, status + ": " + why + (res.status === 429 ? " (another attack is still running)" : ""));
+        return;
+      }
+      if (!isResult(data)) {
+        failRow(label, "Unexpected response from /api/redteam: " + (text ? snippet(text) : "empty body"));
         return;
       }
       renderResult(data);
     } catch (err) {
-      pending.remove();
-      const row = document.createElement("div"); row.className = "rt-row bad";
-      row.textContent = "Red-team request failed: " + (err && err.message ? err.message : err);
-      log.prepend(row);
+      failRow(label, timedOut ? "No answer within " + ATTACK_TIMEOUT_MS / 1000 + " s (request timed out and was aborted)" : "Network error: " + (err && err.message ? err.message : String(err)));
     } finally {
-      button.textContent = original;
+      clearInterval(tick);
+      clearTimeout(deadline);
+      pending.remove();
+      running = false;
       buttons.forEach((b) => { b.disabled = false; });
     }
   }
@@ -2023,30 +2292,45 @@ pre { max-width: 100%; }
     });
     table.hidden = a.mutants.length === 0;
   }
+  let auditCtl = null, auditToken = 0;
   async function audit() {
-    if (busy || !lastResult) return;
+    if (!lastResult) return null;
     const schema = flatSchema();
     const modern = (modernOut.textContent || "").trim();
-    if (!schema || !modern) { scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit needs a single-function resurrection with a flat input schema."; return; }
+    if (!schema || !modern) { scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit needs a single-function resurrection with a flat input schema."; return null; }
+    if (auditCtl) auditCtl.abort();
+    const ctl = new AbortController();
+    auditCtl = ctl;
+    const mine = ++auditToken;
     busy = true; btn.disabled = true; btn.textContent = "INJECTING BUGS...";
     try {
-      const res = await fetch("/api/mutation-audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: modern, schema: schema, seed: 1337 }) });
+      const res = await fetch("/api/mutation-audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: modern, schema: schema, seed: 1337 }), signal: ctl.signal });
       const data = await res.json();
-      if (!res.ok) { scoreEl.className = "mut-score weak"; scoreEl.textContent = (data.code === "BUSY" ? "BUSY: " : "") + (data.error || "HTTP " + res.status); return; }
+      if (mine !== auditToken) return null;
+      if (!res.ok) { scoreEl.className = "mut-score weak"; scoreEl.textContent = (data.code === "BUSY" ? "BUSY: " : "") + (data.error || "HTTP " + res.status); return null; }
       renderAudit(data);
       document.dispatchEvent(new CustomEvent("lazarus:mutation", { detail: data }));
       window.lastMutationScore = data.baselineVerified && data.totalMutants > 0 ? { killed: data.killed, total: data.totalMutants } : null;
       if (window.LazarusCertificate && window.lastCertificate) window.LazarusCertificate.render(window.lastCertificate);
+      return data;
     } catch (err) {
+      if (mine !== auditToken) return null;
       scoreEl.className = "mut-score weak"; scoreEl.textContent = "Mutation audit failed: " + (err && err.message ? err.message : err);
+      return null;
     } finally {
-      busy = false; btn.disabled = false; btn.textContent = "ATTACK MY OWN PROOF (RUN MUTATION AUDIT)";
-      document.dispatchEvent(new CustomEvent("lazarus:mutation-end"));
+      if (mine === auditToken) {
+        auditCtl = null;
+        busy = false; btn.disabled = false; btn.textContent = "ATTACK MY OWN PROOF (RUN MUTATION AUDIT)";
+        document.dispatchEvent(new CustomEvent("lazarus:mutation-end"));
+      }
     }
   }
-  btn.addEventListener("click", audit);
+  btn.addEventListener("click", () => { audit(); });
   if (runBtn) runBtn.addEventListener("click", reset);
   window.LazarusMutation = {
+    /** Runs the audit for the current result (aborting one in flight); resolves with the result or null. */
+    run: audit,
+    abort() { if (auditCtl) auditCtl.abort(); auditCtl = null; auditToken++; busy = false; btn.disabled = false; btn.textContent = "ATTACK MY OWN PROOF (RUN MUTATION AUDIT)"; },
     onResult(r) {
       lastResult = r;
       window.lastTypeSignature = r.typeSignature || null;
@@ -2239,18 +2523,12 @@ pre { max-width: 100%; }
       tour.cleanups.push(() => { clearTimeout(timer); reject(new TourCancelled("cancelled")); });
     });
   }
-  /** Resolves with the detail of `okEvent` once `endEvent` fires (or rejects on timeout / cancel). */
-  function waitFor(okEvent, endEvent, timeoutMs, start) {
+  /** Rejects as soon as the tour is cancelled, or after `timeoutMs`; otherwise resolves with `promise`. */
+  function guard(promise, timeoutMs, what) {
     return new Promise((resolve, reject) => {
-      let detail = null;
-      const onOk = (e) => { detail = e.detail; };
-      const onEnd = () => { done(); detail ? resolve(detail) : reject(new Error("the live request finished without a result")); };
-      const timer = setTimeout(() => { done(); reject(new Error("no answer within " + Math.round(timeoutMs / 1000) + " s")); }, timeoutMs);
-      function done() { clearTimeout(timer); document.removeEventListener(okEvent, onOk); document.removeEventListener(endEvent, onEnd); }
-      document.addEventListener(okEvent, onOk);
-      document.addEventListener(endEvent, onEnd);
-      tour.cleanups.push(() => { done(); reject(new TourCancelled("cancelled")); });
-      start();
+      const timer = setTimeout(() => reject(new Error(what + ": no answer within " + Math.round(timeoutMs / 1000) + " s")), timeoutMs);
+      tour.cleanups.push(() => { clearTimeout(timer); reject(new TourCancelled("cancelled")); });
+      promise.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
     });
   }
   function finishControls() {
@@ -2273,8 +2551,11 @@ pre { max-width: 100%; }
       focusOn($("legacyCode"));
       await sleep(900);
       check();
-      const result = await waitFor("lazarus:result", "lazarus:run-end", 30000, () => $("runBtn").click());
+      // Starting the tour's run aborts any resurrection still streaming, so an earlier run can never answer for this one.
+      const result = await guard(window.LazarusRun.start(), 30000, "the resurrection");
       check();
+      if (!result) throw new Error("the stringHash32 resurrection did not finish (superseded, cancelled or failed; see the log)");
+      if (result.name !== "stringHash32") throw new Error("expected the stringHash32 result, got " + result.name);
       if (!result.success) throw new Error("the resurrection did not prove parity: " + (result.fuzzReport && result.fuzzReport.counterexample ? result.fuzzReport.counterexample.reason : "see the telemetry log"));
       const healed = !$("healingMatrix").hidden;
       focusOn(healed ? $("matrixDiffBlock") : modernOut);
@@ -2286,8 +2567,9 @@ pre { max-width: 100%; }
       // 2. Live mutation audit.
       say(2, "Attacking its own proof: injecting realistic rewrite bugs and fuzzing each one (POST /api/mutation-audit).");
       focusOn($("mutCard"));
-      const audit = await waitFor("lazarus:mutation", "lazarus:mutation-end", 20000, () => $("mutBtn").click());
+      const audit = await guard(window.LazarusMutation.run(), 20000, "the mutation audit");
       check();
+      if (!audit) throw new Error("the mutation audit did not finish (see the audit card)");
       say(2, audit.killed + "/" + audit.totalMutants + " mutants killed \u00b7 " + audit.killRatePercent + "% proof strength" + (audit.survived > 0 ? " (survivors are shown as they are)" : "") + ".");
       await sleep(3200);
 
@@ -2296,12 +2578,10 @@ pre { max-width: 100%; }
       const probeCard = $("probeCard");
       focusOn(probeCard);
       await sleep(700);
-      const chip = Array.from(document.querySelectorAll("#probeChips .probe-chip")).find((c) => c.dataset.value === "NaN");
-      const first = document.querySelector("#probeInputs input");
-      if (!chip || !first) throw new Error("the probe card has no input to try");
-      first.focus();
-      const probe = await waitFor("lazarus:probe", "lazarus:probe-end", 15000, () => chip.click());
+      if (!document.querySelector("#probeInputs input")) throw new Error("the probe card has no input to try");
+      const probe = await guard(window.LazarusProbe.run("NaN"), 15000, "the NaN probe");
       check();
+      if (!probe) throw new Error("the NaN probe did not finish (see the probe card)");
       say(3, probe.reason + " (legacy " + probe.legacy.display + ", resurrected " + probe.modern.display + ").", !probe.exactParity);
       await sleep(3000);
 
@@ -2314,7 +2594,7 @@ pre { max-width: 100%; }
     } catch (err) {
       focusOn(null);
       if (err instanceof TourCancelled) {
-        say(0, "Tour cancelled. Requests already sent finish on their own; nothing else will be triggered.");
+        say(0, "Tour cancelled. Its requests were aborted and their late answers are ignored.");
       } else {
         say(0, "Tour stopped: " + (err && err.message ? err.message : String(err)), true);
       }
@@ -2330,6 +2610,10 @@ pre { max-width: 100%; }
     if (!tour) return;
     tour.cancelled = true;
     tour.cleanups.splice(0).forEach((fn) => fn());
+    // Stop the tour's own requests too.
+    if (window.LazarusRun && $("runBtn").disabled) window.LazarusRun.abort("cancelled with the tour");
+    if (window.LazarusMutation) window.LazarusMutation.abort();
+    if (window.LazarusProbe) window.LazarusProbe.abort();
   });
 })();
 </script>
@@ -2402,6 +2686,244 @@ pre { max-width: 100%; }
     }
   });
 })();
+</script>
+<script>
+/* Kiro DNA drawer, smart paste, lab audio. Live data only; textContent only. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+
+  // ---- Kiro DNA drawer ----
+  const btn = $("dnaBtn"), drawer = $("dnaDrawer"), scrim = $("dnaScrim"), closeBtn = $("dnaClose");
+  const ORGANS = {
+    acorn: ["Acorn AST Parser", "Parses the legacy source without running it: finds the specimen function, infers the fuzz schema, detects idioms and applies the AST rewrite rules (var scoping, | 0, prototype classes, ...).", "src/sandbox/ast-scanner.ts, src/crew/ast-modernizer.ts"],
+    sandbox: ["Node VM Sandbox", "Runs legacy and candidate code in pooled worker processes: a fresh node:vm context per probe, 256 MB heap, 3000 ms watchdog, no network, typed JSON-RPC 2.0. Multi-file graphs use an in-memory module map.", "src/sandbox/pool.ts, src/sandbox/vm-executor.ts, src/sandbox/virtual-fs.ts"],
+    fuzzer: ["fast-check Differential Fuzzer", "Generates boundary-biased inputs, runs both sides, and compares outcomes with exact Object.is (tagged -0, NaN, undefined). A divergence becomes a shrunk counterexample that blames and rolls back an AST rule.", "src/fuzzer/differential.ts, src/crew/mutation-audit.ts"],
+    tsc: ["TypeScript tsc --strict", "Types inferred from the fuzz observations are written into the exported .ts and checked with the installed TypeScript 7 compiler API in memory under --strict, so the certificate's 0 errors is a real compiler result.", "src/crew/type-alchemist.ts, src/crew/ts-verifier.ts"],
+  };
+  function selectOrgan(key) {
+    document.querySelectorAll("#chimera .organ").forEach((g) => g.classList.toggle("active", g.dataset.organ === key));
+    const o = ORGANS[key];
+    const d = $("organDetail");
+    d.textContent = "";
+    d.append(el("b", "", o[0]), document.createElement("br"), document.createTextNode(o[1]), document.createElement("br"), el("code", "", o[2]));
+  }
+  document.querySelectorAll("#chimera .organ").forEach((g) => {
+    g.addEventListener("click", () => selectOrgan(g.dataset.organ));
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectOrgan(g.dataset.organ); } });
+  });
+  let loaded = false;
+  async function showDoc(spec, doc, button) {
+    const pre = $("dnaDoc");
+    pre.hidden = false;
+    pre.textContent = "Loading " + spec + "/" + doc + ".md ...";
+    try {
+      const res = await fetch("/api/kiro-dna?spec=" + encodeURIComponent(spec) + "&doc=" + encodeURIComponent(doc));
+      const data = await res.json();
+      pre.textContent = res.ok ? "// .kiro/specs/" + spec + "/" + doc + ".md\n\n" + data.text : (data.error || "HTTP " + res.status);
+    } catch (err) {
+      pre.textContent = "Could not load: " + (err && err.message ? err.message : err);
+    }
+    if (button) pre.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  async function load() {
+    if (loaded) return;
+    try {
+      const res = await fetch("/api/kiro-dna");
+      const dna = await res.json();
+      loaded = true;
+      $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules";
+      $("dnaAgentsTitle").textContent = "Kiro Crew agents (" + dna.agents.length + ")";
+      $("dnaSpecsTitle").textContent = "Specs (" + dna.specCount + ")";
+      const order = ["archaeologist", "architect", "necromancer", "exorcist"];
+      const agents = dna.agents.slice().sort((a, b) => (order.indexOf(a.name) + 99) % 99 - (order.indexOf(b.name) + 99) % 99);
+      const agentsEl = $("dnaAgents");
+      agentsEl.textContent = "";
+      agents.forEach((a) => {
+        const card = el("div", "dna-card");
+        card.append(el("div", "n", a.name.charAt(0).toUpperCase() + a.name.slice(1)), el("div", "t", "model: " + a.model + " \u00b7 .kiro/agents/" + a.file), el("div", "", a.description));
+        const chips = el("div", "chips");
+        a.tools.forEach((tool) => chips.append(el("span", "", tool)));
+        card.append(chips);
+        agentsEl.append(card);
+      });
+      const specsEl = $("dnaSpecs");
+      specsEl.textContent = "";
+      dna.specs.forEach((s) => {
+        const card = el("div", "dna-card");
+        const pct = s.taskCount > 0 ? Math.round((s.tasksDone / s.taskCount) * 100) : 0;
+        const bar = el("div", "bar"); const fill = document.createElement("i"); fill.style.width = pct + "%"; bar.append(fill);
+        card.append(el("div", "n", s.name), el("div", "t", s.title), el("div", "", s.requirementCount + " requirements (" + s.requirementStyle + ") \u00b7 " + s.tasksDone + "/" + s.taskCount + " tasks"), bar);
+        const docs = el("div", "docs");
+        ["requirements", "design", "tasks"].forEach((d) => {
+          if (!s.documents[d]) return;
+          const b = el("button", "", d); b.type = "button";
+          b.addEventListener("click", () => showDoc(s.name, d, b));
+          docs.append(b);
+        });
+        card.append(docs);
+        specsEl.append(card);
+      });
+      const steer = $("dnaSteering");
+      steer.textContent = "";
+      dna.steering.forEach((r) => {
+        const li = el("li");
+        li.append(el("b", "", r.title), document.createTextNode(" \u00b7 " + r.rules + " rules \u00b7 " + r.inclusion + (r.fileMatchPattern ? " "  : "")));
+        if (r.fileMatchPattern) li.append(el("code", "", r.fileMatchPattern));
+        li.append(document.createTextNode(" \u00b7 .kiro/steering/" + r.file));
+        steer.append(li);
+      });
+      $("badgeSpecs").textContent = dna.specCount + " Kiro Specs";
+    } catch (err) {
+      $("dnaSub").textContent = "Could not load .kiro metadata: " + (err && err.message ? err.message : err);
+    }
+  }
+  function open() {
+    drawer.hidden = false; scrim.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    closeBtn.focus();
+    load();
+  }
+  function close() {
+    drawer.hidden = true; scrim.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    btn.focus();
+  }
+  btn.addEventListener("click", open);
+  closeBtn.addEventListener("click", close);
+  scrim.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
+  // Keep the header badge honest without opening the drawer.
+  fetch("/api/kiro-dna").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && typeof d.specCount === "number") $("badgeSpecs").textContent = d.specCount + " Kiro Specs"; }).catch(() => undefined);
+  window.LazarusDna = { open: open, close: close };
+
+  // ---- Smart paste: auto-detect the signature and fill the schema ----
+  const code = $("legacyCode"), schema = $("schemaJson"), pill = $("pastePill");
+  const modName = $("modName");
+  let schemaTouched = false, nameTouched = false, seq = 0, timer = null;
+  schema.addEventListener("input", () => { schemaTouched = true; });
+  modName.addEventListener("input", () => { nameTouched = true; });
+  const preset = $("presetSelect");
+  if (preset) preset.addEventListener("change", () => { schemaTouched = false; nameTouched = false; pill.hidden = true; });
+  ["npmImportBtn", "importGithubBtn"].forEach((id) => { const b = $(id); if (b) b.addEventListener("click", () => { schemaTouched = false; nameTouched = false; pill.hidden = true; }); });
+  async function detect() {
+    const mine = ++seq;
+    const text = code.value;
+    if (!text.trim()) { pill.hidden = true; return; }
+    try {
+      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: text }) });
+      if (!res.ok || mine !== seq) return;
+      const r = await res.json();
+      if (mine !== seq) return;
+      pill.textContent = "";
+      pill.className = "paste-pill";
+      if (!r.parsed) {
+        pill.className = "paste-pill err";
+        pill.textContent = "Not parseable yet: " + (r.parseError || "syntax error");
+        pill.hidden = false;
+        return;
+      }
+      if (r.signatures.length === 0) { pill.hidden = true; return; }
+      const label = r.kind === "module" ? "Auto-detected module: " : r.kind === "script" ? "Auto-detected script inputs: " : "Auto-detected: ";
+      pill.append(document.createTextNode(label), el("code", "", r.signatures.join(", ")));
+      const filled = !schemaTouched && Object.keys(r.schema).length > 0;
+      if (!nameTouched && r.functionName && r.functionName !== "anonymous" && r.functionName !== "anonymousSpecimen") modName.value = r.functionName;
+      if (filled) {
+        schema.value = JSON.stringify(r.schema);
+        if (window.LazarusUI) window.LazarusUI.refreshProbeInputs();
+      }
+      pill.title = filled ? "The input schema was filled from this signature (edit it to take over)." : "Your hand-edited schema was kept.";
+      pill.hidden = false;
+    } catch (err) {
+      /* detection is a convenience; the editor keeps working without it */
+    }
+  }
+  code.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(detect, 350); });
+
+  // ---- Lab audio: muted by default, Web Audio only after the user turns it on ----
+  const audioBtn = $("audioBtn");
+  let ctx = null, on = false;
+  function tone(freqs, type, gap) {
+    if (!on || !ctx) return;
+    const t0 = ctx.currentTime + 0.02;
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      const start = t0 + i * gap;
+      osc.type = type;
+      osc.frequency.setValueAtTime(f, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.05, start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    });
+  }
+  audioBtn.addEventListener("click", () => {
+    on = !on;
+    if (on && !ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
+    if (on && ctx && ctx.state === "suspended") ctx.resume();
+    audioBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    audioBtn.textContent = on ? "Audio: ON" : "Audio: OFF";
+    if (on) tone([523.25], "sine", 0);
+  });
+  document.addEventListener("lazarus:crew", (e) => { if (e.detail && e.detail.type === "counterexample_found") tone([220, 185], "triangle", 0.12); });
+  document.addEventListener("lazarus:result", (e) => { if (e.detail && e.detail.success) tone([523.25, 659.25, 783.99], "sine", 0.09); });
+})();
+</script>
+<script>
+/* lz-stale:start */
+// Stale exports: the proof and every export belong to the exact source of the last successful run.
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const editor = $("legacyCode");
+  if (!editor) return;
+  const HINT = "Code changed — click Resurrect Specimen to refresh proof";
+  const EXPORT_IDS = ["exportBtn", "downloadZipBtn", "copyPrSummaryBtn", "copyBundleBtn", "downloadFileBtn", "downloadBundleBtn", "certSvgBtn"];
+  const PROOF_IDS = ["modernOut", "specOut", "parityBadge", "verifyDeck", "certCard", "bundlePanel"];
+  let pending = null, proven = null, stale = false;
+  const disabledByUs = new Set();
+  function setClass(el, name, on) {
+    const parts = String(el.className || "").split(/\s+/).filter((c) => c && c !== name);
+    if (on) parts.push(name);
+    el.className = parts.join(" ");
+  }
+  function apply() {
+    EXPORT_IDS.forEach((id) => {
+      const b = $(id);
+      if (!b) return;
+      if (stale) {
+        if (!b.disabled) { b.disabled = true; disabledByUs.add(id); }
+        b.title = HINT;
+        setClass(b, "lz-stale-off", true);
+      } else {
+        if (disabledByUs.has(id)) b.disabled = false;
+        disabledByUs.delete(id);
+        if (b.title === HINT) b.title = "";
+        setClass(b, "lz-stale-off", false);
+      }
+    });
+    PROOF_IDS.forEach((id) => { const el = $(id); if (el) setClass(el, "lz-stale", stale); });
+    const hint = $("staleHint");
+    if (hint) hint.hidden = !stale;
+  }
+  function check() {
+    stale = proven !== null && editor.value !== proven;
+    apply();
+    return stale;
+  }
+  editor.addEventListener("input", check);
+  const preset = $("presetSelect");
+  if (preset) preset.addEventListener("change", check);
+  document.addEventListener("lazarus:run-start", (e) => { pending = e.detail && typeof e.detail.source === "string" ? e.detail.source : editor.value; });
+  document.addEventListener("lazarus:result", (e) => {
+    if (e.detail && e.detail.success) proven = pending !== null ? pending : editor.value;
+    check();
+  });
+  window.LazarusStale = { check, isStale: () => stale, hint: HINT };
+})();
+/* lz-stale:end */
 </script>
 </body>
 </html>

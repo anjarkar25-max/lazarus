@@ -216,6 +216,81 @@ export function generateCertificate(input: CertificateInput): Certificate {
   };
 }
 
+/** XML-escapes text and drops characters XML 1.0 forbids. */
+export function escapeXml(text: string): string {
+  return text
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}\u2026` : text);
+
+/**
+ * Self-contained SVG badge of a certificate: no scripts, no external references, deterministic. It shows only what
+ * the certificate contains ("not audited" / "not checked" otherwise).
+ */
+export function renderCertificateSvg(cert: Certificate, options: { readonly name: string }): string {
+  const tc = cert.typecheck;
+  const tsc = tc === undefined ? "not checked" : describeTypecheck(tc).replace(/ \(.*\)$/, "");
+  const tscOk = tc !== undefined && tc.errorCount === 0;
+  const mutation = cert.mutation === undefined ? "not audited" : describeMutation(cert.mutation);
+  const mutationOk = cert.mutation !== undefined && cert.mutation.killed === cert.mutation.total;
+  const debtColor = cert.debtScore >= 50 ? "#ef4444" : cert.debtScore >= 20 ? "#f59e0b" : "#10b981";
+  const debtWidth = Math.round((Math.max(0, Math.min(100, cert.debtScore)) / 100) * 300);
+  const rows: Array<[string, string, string]> = [
+    ["SPECIMEN", clip(options.name, 48), "#e2e8f0"],
+    ["SHA-256", `${cert.shortDigest} \u00b7 ${cert.id}`, "#c4b5fd"],
+    ["PARITY PROOF", `exact Object.is \u00b7 ${cert.parity.runs} fuzz run${cert.parity.runs === 1 ? "" : "s"}${cert.parity.mode === "JSON-level" ? " (JSON-level)" : ""}`, "#10b981"],
+    ["SELF-HEALING", cert.parity.selfHealed ? `healed in ${cert.parity.attempts} attempts` : "first draft held", "#e2e8f0"],
+    ["MUTATION AUDIT", mutation, mutationOk ? "#10b981" : cert.mutation === undefined ? "#94a3b8" : "#f59e0b"],
+    ["TYPESCRIPT", tsc, tscOk ? "#10b981" : tc === undefined ? "#94a3b8" : "#ef4444"],
+  ];
+  const rowSvg = rows
+    .map(([label, value, color], i) => {
+      const y = 150 + i * 34;
+      return [
+        `  <text x="48" y="${y}" class="k">${escapeXml(label)}</text>`,
+        `  <text x="220" y="${y}" class="v" fill="${color}">${escapeXml(value)}</text>`,
+        `  <line x1="48" y1="${y + 12}" x2="712" y2="${y + 12}" stroke="#1e293b" stroke-width="1"/>`,
+      ].join("\n");
+    })
+    .join("\n");
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" role="img" aria-labelledby="t d">`,
+    `  <title id="t">Lazarus Resurrection Certificate ${escapeXml(cert.id)}</title>`,
+    `  <desc id="d">${escapeXml(`${options.name}: ${cert.parity.runs} exact Object.is fuzz runs; ${tsc}; ${mutation}; legacy debt ${cert.debtScore}/100.`)}</desc>`,
+    `  <defs>`,
+    `    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#10b981"/></linearGradient>`,
+    `    <radialGradient id="glow" cx="0.5" cy="0" r="0.9"><stop offset="0" stop-color="#111b33"/><stop offset="1" stop-color="#090d16"/></radialGradient>`,
+    `    <style>.h{font:700 13px ui-monospace,Menlo,Consolas,monospace;letter-spacing:4px}.k{font:700 11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;fill:#64748b}.v{font:600 15px ui-monospace,Menlo,Consolas,monospace}.s{font:11px ui-monospace,Menlo,Consolas,monospace;fill:#64748b}</style>`,
+    `  </defs>`,
+    `  <rect x="0" y="0" width="760" height="420" rx="18" fill="url(#glow)"/>`,
+    `  <rect x="8" y="8" width="744" height="404" rx="14" fill="none" stroke="url(#frame)" stroke-width="2"/>`,
+    `  <rect x="18" y="18" width="724" height="384" rx="10" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="4 6"/>`,
+    `  <text x="48" y="62" class="h" fill="#10b981">\u271D LAZARUS \u00b7 RESURRECTION CERTIFICATE</text>`,
+    `  <text x="48" y="88" class="s">${escapeXml(clip(cert.provenanceLine.replace(/\`/g, ""), 80))}</text>`,
+    `  <g transform="translate(640 78)">`,
+    `    <circle r="40" fill="none" stroke="#10b981" stroke-width="2"/>`,
+    `    <circle r="33" fill="none" stroke="#10b981" stroke-width="1" stroke-dasharray="2 4"/>`,
+    `    <text y="-4" text-anchor="middle" class="k" fill="#10b981" style="fill:#10b981">PARITY</text>`,
+    `    <text y="14" text-anchor="middle" class="k" style="fill:#10b981">PROVEN</text>`,
+    `  </g>`,
+    `  <text x="48" y="118" class="k">LEGACY DEBT</text>`,
+    `  <rect x="220" y="108" width="300" height="10" rx="5" fill="#1e293b"/>`,
+    `  <rect x="220" y="108" width="${debtWidth}" height="10" rx="5" fill="${debtColor}"/>`,
+    `  <text x="532" y="118" class="v" fill="${debtColor}">${cert.debtScore}/100 ${escapeXml(cert.debtGrade)}</text>`,
+    rowSvg,
+    `  <text x="48" y="392" class="s">Verified by differential fuzzing in an isolated sandbox \u00b7 parity over the fuzzed input domain</text>`,
+    `</svg>`,
+    ``,
+  ].join("\n");
+}
+
 /** Provenance from untrusted JSON (request bodies). Unknown or malformed values fall back to `paste`. */
 export function sanitizeProvenance(value: unknown): Provenance {
   if (typeof value !== "object" || value === null) return { kind: "paste", label: "pasted specimen" };
