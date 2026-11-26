@@ -65,7 +65,7 @@ describe("readKiroDna (live repository)", () => {
     expect(by["sandbox-security-guard.json"]?.run).toContain("child_process");
     expect(by["strict-typecheck-on-crew.json"]).toMatchObject({ format: "v1", trigger: "PostFileSave", action: "command", run: "npx tsc --noEmit" });
     expect(by["kiro-dna-sync-check.json"]).toMatchObject({ format: "v1", action: "command", run: "npx vitest run src/web/__tests__/kiro-dna.test.ts" });
-    expect(dna.generatedFrom).toBe(".kiro/{specs,agents,steering,hooks}");
+    expect(dna.generatedFrom).toBe(".kiro/{specs,agents,steering,hooks} + power-lazarus/");
   });
   it("hook matchers select exactly the paths they are meant for (both path separators)", () => {
     const matcher = (file: string): RegExp => new RegExp(dna.hooks.find((h) => h.file === file)?.matcher ?? "^$");
@@ -170,7 +170,7 @@ describe("readKiroDna (hostile fixture)", () => {
   it("returns an empty, valid result when .kiro is missing", () => {
     const empty = fs.mkdtempSync(nodePath.join(os.tmpdir(), "lazarus-dna-empty-"));
     try {
-      expect(readKiroDna(empty)).toMatchObject({ specCount: 0, specs: [], agents: [], steering: [], hooks: [], hookFiles: 0 });
+      expect(readKiroDna(empty)).toMatchObject({ specCount: 0, specs: [], agents: [], steering: [], hooks: [], hookFiles: 0, power: null });
     } finally {
       fs.rmSync(empty, { recursive: true, force: true });
     }

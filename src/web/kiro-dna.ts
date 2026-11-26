@@ -1,7 +1,8 @@
 // Read-only view of the repository's Kiro configuration for the "Kiro DNA" drawer.
 //
-// Only four directories are ever read: .kiro/specs (requirements/design/tasks of each spec), .kiro/agents (*.json),
-// .kiro/steering (*.md) and .kiro/hooks (*.json). Directory listings are enumerated by the server; request input is only ever compared
+// Only these are ever read: .kiro/specs (requirements/design/tasks of each spec), .kiro/agents (*.json),
+// .kiro/steering (*.md), .kiro/hooks (*.json), and the Kiro Power package power-lazarus/ (plugin.json, mcp.json,
+// skills/*/SKILL.md and skills/*/references/*.md; its scripts are never read). Directory listings are enumerated by the server; request input is only ever compared
 // against those listings. Every file path is resolved, symlinks are refused, and the real path must stay inside its
 // directory.
 import * as fs from "node:fs";
@@ -57,6 +58,41 @@ export interface HookSummary {
   readonly format: "v1" | "legacy";
 }
 
+export interface PowerSkill {
+  /** Folder under power-lazarus/skills (equal to `name`). */
+  readonly folder: string;
+  readonly name: string;
+  readonly description: string;
+  /** Files in the skill's references/ folder. */
+  readonly references: string[];
+}
+
+export interface PowerMcpServer {
+  readonly name: string;
+  readonly type: "stdio" | "streamable-http" | "sse";
+  /** stdio: the command token; HTTP transports: the URL. */
+  readonly command: string;
+  readonly args: string[];
+  /** How Kiro names the server once the Power is installed: power-<plugin>-<server>. */
+  readonly namespacedAs: string;
+}
+
+export interface PowerSummary {
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly keywords: string[];
+  readonly author: { readonly name: string; readonly url?: string };
+  readonly homepage?: string;
+  readonly repository?: string;
+  readonly license?: string;
+  readonly skills: PowerSkill[];
+  readonly mcpServers: PowerMcpServer[];
+  /** GitHub URL of the package folder, for Kiro's "Import power from a repository URL". */
+  readonly installUrl?: string;
+  readonly folder: string;
+}
+
 export interface KiroDna {
   readonly specCount: number;
   readonly specs: SpecSummary[];
@@ -65,6 +101,8 @@ export interface KiroDna {
   readonly hooks: HookSummary[];
   /** Number of hook files that were read (one file may define several hooks). */
   readonly hookFiles: number;
+  /** The installable Kiro Power in power-lazarus/, or null when its manifest is missing or invalid. */
+  readonly power: PowerSummary | null;
   /** Files that exist but were not used, with the reason (oversized, invalid, symlink). */
   readonly skipped: Array<{ readonly path: string; readonly reason: string }>;
   readonly generatedFrom: string;
@@ -153,6 +191,60 @@ export function parseHookFile(file: string, json: unknown): HookSummary[] | { er
   return { error: `not a Kiro hook (${v1.error.issues[0]?.message ?? "invalid"})` };
 }
 
+// ---- Kiro Power (Agent Plugins 1.0.0) ----
+export const POWER_FOLDER = "power-lazarus";
+export const PLUGIN_SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
+export const MCP_SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json";
+/** Agent Plugins name rule: 1-64 chars of a-z 0-9 . -, alphanumeric at both ends, no "--" or "..". */
+export const PLUGIN_NAME = /^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+/** Kiro skill name rule: lower-case letters, digits and hyphens, at most 64 characters. */
+export const SKILL_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+const GITHUB_REPO = /^https:\/\/github\.com\/[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
+
+/** plugin.json: the closed Agent Plugins schema, plus the fields Kiro requires (version, description, author.name, keywords). */
+export const PluginManifestSchema = z
+  .object({
+    $schema: z.literal(PLUGIN_SCHEMA_URL),
+    name: z.string().min(1).max(64).regex(PLUGIN_NAME, "name must be kebab-case per Agent Plugins"),
+    version: z.string().min(1).max(64),
+    description: z.string().min(1).max(2000),
+    author: z.object({ name: z.string().min(1).max(200), email: z.string().max(200).optional(), url: z.string().max(500).optional() }).strict(),
+    homepage: z.string().max(500).optional(),
+    repository: z.string().max(500).optional(),
+    license: z.string().max(100).optional(),
+    keywords: z.array(z.string().min(1).max(50)).min(1).max(50),
+    extensions: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  })
+  .strict();
+
+const StdioServerSchema = z
+  .object({
+    type: z.literal("stdio"),
+    command: z.string().min(1).max(500),
+    args: z.array(z.string().max(2000)).max(100).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    cwd: z.string().regex(/^(?:\.\/|\$\{PLUGIN_ROOT\}(?:\/|$)|\$\{PLUGIN_DATA\}(?:\/|$))/).optional(),
+  })
+  .strict()
+  .refine((s) => s.env === undefined || !("PLUGIN_ROOT" in s.env || "PLUGIN_DATA" in s.env), "env must not set PLUGIN_ROOT or PLUGIN_DATA");
+const HttpServerSchema = z
+  .object({ type: z.enum(["streamable-http", "sse"]), url: z.string().min(1).max(2000), headers: z.record(z.string(), z.string()).optional() })
+  .strict();
+/** mcp.json: the closed Agent Plugins MCP schema. */
+export const PluginMcpSchema = z
+  .object({
+    $schema: z.literal(MCP_SCHEMA_URL),
+    mcpServers: z.record(z.string().min(1).max(100), z.union([StdioServerSchema, HttpServerSchema])),
+  })
+  .strict();
+
+export const SkillFrontmatterSchema = z
+  .object({
+    name: z.string().regex(SKILL_NAME, "skill name must be lower-case letters, digits and hyphens (at most 64)"),
+    description: z.string().min(1).max(1024),
+  })
+  .passthrough();
+
 type Skipped = KiroDna["skipped"];
 
 /** Real path of `dir/name` if it is a regular file (not a symlink) inside `dir` and small enough; otherwise undefined. */
@@ -212,6 +304,90 @@ function listFiles(dir: string, extension: string): string[] {
 
 /** File text with a leading UTF-8 byte-order mark removed (several .kiro files have one) and LF line endings. */
 const read = (path: string | undefined): string | undefined => (path === undefined ? undefined : fs.readFileSync(path, "utf8").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"));
+
+function parseJsonFile(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reads power-lazarus/ with the same file checks as .kiro/. Returns null when there is no valid manifest. */
+function readPower(repoRoot: string, skipped: Skipped): PowerSummary | null {
+  const dir = nodePath.join(repoRoot, POWER_FOLDER);
+  const label = (rest: string): string => `${POWER_FOLDER}/${rest}`;
+  const manifestText = read(safeFile(dir, "plugin.json", skipped, label("plugin.json")));
+  if (manifestText === undefined) return null;
+  const manifestJson = parseJsonFile(manifestText);
+  if (manifestJson === undefined) {
+    skipped.push({ path: label("plugin.json"), reason: "not valid JSON" });
+    return null;
+  }
+  const manifest = PluginManifestSchema.safeParse(manifestJson);
+  if (!manifest.success) {
+    const issue = manifest.error.issues[0];
+    skipped.push({ path: label("plugin.json"), reason: `not a valid Agent Plugins manifest (${issue?.path.join(".") || "root"}: ${issue?.message ?? "invalid"})` });
+    return null;
+  }
+  const m = manifest.data;
+
+  const mcpServers: PowerMcpServer[] = [];
+  const mcpText = read(safeFile(dir, "mcp.json", skipped, label("mcp.json")));
+  if (mcpText !== undefined) {
+    const mcp = PluginMcpSchema.safeParse(parseJsonFile(mcpText));
+    if (!mcp.success) {
+      const issue = mcp.error.issues[0];
+      skipped.push({ path: label("mcp.json"), reason: `not a valid Agent Plugins MCP config (${issue?.path.join(".") || "root"}: ${issue?.message ?? "invalid"})` });
+    } else {
+      for (const [name, server] of Object.entries(mcp.data.mcpServers).sort(([a], [b]) => a.localeCompare(b))) {
+        mcpServers.push({
+          name,
+          type: server.type,
+          command: server.type === "stdio" ? server.command : server.url,
+          args: server.type === "stdio" ? (server.args ?? []) : [],
+          namespacedAs: `power-${m.name}-${name}`,
+        });
+      }
+    }
+  }
+
+  const skills: PowerSkill[] = [];
+  const skillsDir = nodePath.join(dir, "skills");
+  for (const folder of listDirs(skillsDir)) {
+    const skillDir = nodePath.join(skillsDir, folder);
+    const text = read(safeFile(skillDir, "SKILL.md", skipped, label(`skills/${folder}/SKILL.md`)));
+    if (text === undefined) continue;
+    const fm = SkillFrontmatterSchema.safeParse(frontMatter(text));
+    if (!fm.success) {
+      skipped.push({ path: label(`skills/${folder}/SKILL.md`), reason: `invalid frontmatter (${fm.error.issues[0]?.path.join(".") || "root"}: ${fm.error.issues[0]?.message ?? "invalid"})` });
+      continue;
+    }
+    if (fm.data.name !== folder) {
+      skipped.push({ path: label(`skills/${folder}/SKILL.md`), reason: `frontmatter name "${fm.data.name}" does not match its folder` });
+      continue;
+    }
+    const refsDir = nodePath.join(skillDir, "references");
+    const references = listFiles(refsDir, ".md").filter((f) => safeFile(refsDir, f, skipped, label(`skills/${folder}/references/${f}`)) !== undefined);
+    skills.push({ folder, name: fm.data.name, description: fm.data.description, references });
+  }
+
+  const repository = m.repository !== undefined && GITHUB_REPO.test(m.repository) ? m.repository : undefined;
+  return {
+    name: m.name,
+    version: m.version,
+    description: m.description,
+    keywords: m.keywords,
+    author: { name: m.author.name, ...(m.author.url !== undefined ? { url: m.author.url } : {}) },
+    ...(m.homepage !== undefined ? { homepage: m.homepage } : {}),
+    ...(m.repository !== undefined ? { repository: m.repository } : {}),
+    ...(m.license !== undefined ? { license: m.license } : {}),
+    skills,
+    mcpServers,
+    ...(repository !== undefined ? { installUrl: `${repository}/tree/main/${POWER_FOLDER}` } : {}),
+    folder: POWER_FOLDER,
+  };
+}
 
 /** Requirement count, using the first style the document actually uses. */
 export function countRequirements(text: string): { count: number; style: RequirementStyle } {
@@ -326,7 +502,9 @@ export function readKiroDna(repoRoot: string): KiroDna {
     hooks.push(...parsed);
   }
 
-  return { specCount: specs.length, specs, agents, steering, hooks, hookFiles, skipped, generatedFrom: ".kiro/{specs,agents,steering,hooks}" };
+  const power = readPower(repoRoot, skipped);
+
+  return { specCount: specs.length, specs, agents, steering, hooks, hookFiles, power, skipped, generatedFrom: ".kiro/{specs,agents,steering,hooks} + power-lazarus/" };
 }
 
 /**

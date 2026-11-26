@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lazarus-resurrection",
+  "version": "1.0.0",
+  "description": "Autonomously resurrects legacy ES5 / CommonJS code (single files or whole require() graphs) into ES2022 + strict TypeScript, and proves it: exact Object.is differential fuzzing in an isolated sandbox with speculative AST-rule rollback, AST mutation audits of the proof itself, and tsc --strict verification, ending in a SHA-256 Resurrection Certificate and a PR bundle.",
+  "author": {
+    "name": "Ashlesha Anjarkar",
+    "url": "https://github.com/anjarkar25-max/lazarus"
+  },
+  "homepage": "https://lazarus-yf0a.onrender.com",
+  "repository": "https://github.com/anjarkar25-max/lazarus",
+  "license": "MIT",
+  "keywords": ["legacy", "commonjs", "es5", "resurrect", "differential-fuzz", "mutation-audit", "lazarus", "modernize"]
+}

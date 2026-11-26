@@ -552,6 +552,16 @@ pre { max-width: 100%; }
 .link-note { display: inline-block; margin-left: 8px; font-size: 11px; color: #fecaca; vertical-align: middle; }
 .link-note.ok { color: #6ee7b7; }
 .link-note[hidden] { display: none; }
+.dna-power { display: grid; gap: 8px; }
+.dna-power .head { padding: 10px 12px; border: 1px solid var(--violet); border-radius: 8px; background: rgba(139, 92, 246, 0.08); font-size: 11px; color: #cbd5e1; }
+.dna-power .head .n { color: #f1f5f9; font-weight: 700; font-size: 13px; }
+.dna-power .head .n small { color: #c4b5fd; font-weight: 600; margin-left: 6px; }
+.dna-power .install { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.dna-power .install code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 8px; border-radius: 6px; background: #020617; border: 1px solid var(--border); color: #6ee7b7; font-size: 11px; }
+.dna-power .install button { font-size: 11px; padding: 5px 10px; border-radius: 6px; white-space: nowrap; }
+.dna-power .lbl { color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin: 8px 0 4px; }
+.dna-power .head .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.dna-power .head .chips span { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid #334155; color: #c4b5fd; }
 .dna-card code.run { display: block; margin-top: 6px; padding: 5px 7px; border-radius: 6px; background: #020617; border: 1px solid var(--border); color: #c4b5fd; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
 .stale-hint { display: inline-block; margin-left: 10px; font-size: 11px; color: #fbbf24; vertical-align: middle; }
 .stale-hint[hidden] { display: none; }
@@ -569,8 +579,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">825 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">19 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">852 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">20 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -888,7 +898,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
   <div class="dna-scrim" id="dnaScrim" hidden></div>
 <aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
   <div class="dna-head">
-    <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents, .kiro/steering and .kiro/hooks</small></h2>
+    <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents, .kiro/steering, .kiro/hooks and power-lazarus/</small></h2>
     <button type="button" class="hdr-btn" id="dnaClose" aria-label="Close Kiro DNA">Close</button>
   </div>
   <div class="dna-body">
@@ -912,6 +922,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <path class="flow proof" d="M135 300 L135 322 L560 322" marker-end="url(#cmArrowOk)"/><text x="300" y="316" class="f-label proof">Resurrection Certificate &middot; PR bundle</text>
         </svg>
     <div class="organ-detail" id="organDetail">Select an organ to see what it does and where it lives in the code.</div>
+    <h3 id="dnaPowerTitle">Installable Kiro Power</h3>
+    <div class="dna-power" id="dnaPower"></div>
     <h3 id="dnaAgentsTitle">Kiro Crew agents</h3>
     <div class="dna-grid" id="dnaAgents"></div>
     <h3 id="dnaSpecsTitle">Specs</h3>
@@ -2900,13 +2912,73 @@ function lzDecodeSpecimen(hash) {
     }
     if (button) pre.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
+  function renderPower(power) {
+    const box = $("dnaPower");
+    box.textContent = "";
+    if (!power) {
+      $("dnaPowerTitle").textContent = "Installable Kiro Power";
+      box.append(el("div", "dna-card", "No valid power-lazarus/plugin.json found."));
+      return;
+    }
+    $("dnaPowerTitle").textContent = "Installable Kiro Power (" + power.name + ")";
+    const head = el("div", "head");
+    const title = el("div", "n", power.name);
+    title.append(el("small", "", "v" + power.version + (power.license ? " \u00b7 " + power.license : "")));
+    head.append(title, el("div", "t", "Agent Plugins 1.0.0 \u00b7 " + power.folder + "/ \u00b7 by " + power.author.name), el("div", "", power.description));
+    head.append(el("div", "lbl", "Activation keywords"));
+    const chips = el("div", "chips");
+    power.keywords.forEach((k) => chips.append(el("span", "", k)));
+    head.append(chips);
+    box.append(head);
+    const grid = el("div", "dna-grid");
+    power.skills.forEach((sk) => {
+      const card = el("div", "dna-card");
+      card.append(el("div", "n", sk.name), el("div", "t", "skill \u00b7 " + power.folder + "/skills/" + sk.folder + "/SKILL.md"), el("div", "", sk.description));
+      if (sk.references.length) {
+        const refs = el("div", "chips");
+        sk.references.forEach((r) => refs.append(el("span", "", "references/" + r)));
+        card.append(refs);
+      }
+      grid.append(card);
+    });
+    power.mcpServers.forEach((m) => {
+      const card = el("div", "dna-card");
+      card.append(el("div", "n", m.name), el("div", "t", "MCP server \u00b7 " + m.type + " \u00b7 Kiro namespaces it as " + m.namespacedAs));
+      card.append(el("code", "run", [m.command].concat(m.args).join(" ")));
+      grid.append(card);
+    });
+    box.append(grid);
+    if (power.installUrl) {
+      box.append(el("div", "lbl", "Install: Kiro \u2192 Powers \u2192 Add Custom Power \u2192 Import power from a repository URL"));
+      const row = el("div", "install");
+      const code = el("code", "", power.installUrl);
+      code.title = power.installUrl;
+      const copy = el("button", "", "Copy");
+      copy.type = "button";
+      copy.id = "dnaPowerCopy";
+      copy.addEventListener("click", async () => {
+        let ok = false;
+        try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(power.installUrl); ok = true; } } catch (e) { ok = false; }
+        if (!ok) {
+          const ta = document.createElement("textarea"); ta.value = power.installUrl; ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.append(ta); ta.select();
+          try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+          ta.remove();
+        }
+        copy.textContent = ok ? "Copied" : "Copy failed";
+        setTimeout(() => { copy.textContent = "Copy"; }, 1800);
+      });
+      row.append(code, copy);
+      box.append(row);
+    }
+  }
   async function load() {
     if (loaded) return;
     try {
       const res = await fetch("/api/kiro-dna");
       const dna = await res.json();
       loaded = true;
-      $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules \u00b7 " + dna.hooks.length + " hooks";
+      $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules \u00b7 " + dna.hooks.length + " hooks" + (dna.power ? " \u00b7 Power " + dna.power.name + " v" + dna.power.version : "");
       $("dnaAgentsTitle").textContent = "Kiro Crew agents (" + dna.agents.length + ")";
       $("dnaSpecsTitle").textContent = "Specs (" + dna.specCount + ")";
       const order = ["archaeologist", "architect", "necromancer", "exorcist"];
@@ -2947,6 +3019,7 @@ function lzDecodeSpecimen(hash) {
         li.append(document.createTextNode(" \u00b7 .kiro/steering/" + r.file));
         steer.append(li);
       });
+      renderPower(dna.power);
       $("dnaHooksTitle").textContent = "Agent hooks (" + dna.hooks.length + ")";
       const hooksEl = $("dnaHooks");
       hooksEl.textContent = "";

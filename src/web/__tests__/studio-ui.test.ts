@@ -978,9 +978,13 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks in the Kiro DNA drawer and the 19-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 20-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">19 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">20 Kiro Specs</span>');
+    expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
+    expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
+    expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
+    expect(pageHtml.indexOf('id="dnaPower"')).toBeLessThan(pageHtml.indexOf('id="dnaAgents"'));
   });
 });
