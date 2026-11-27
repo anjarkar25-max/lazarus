@@ -68,6 +68,12 @@ export interface ProbeParams {
   readonly files?: Readonly<Record<string, string>>;
   /** File the probe code is considered to live in: the base directory for its relative `require()` calls. */
   readonly entry?: string;
+  /**
+   * Async probe: when the code evaluates to a promise, settle it inside the sandbox (deterministic virtual timers,
+   * promise jobs inside the vm time budget) and return its value. A rejection is an EXECUTION_ERROR, a promise that
+   * never settles is a TIMEOUT.
+   */
+  readonly settle?: boolean;
 }
 
 export interface ProbeResult {
@@ -88,6 +94,8 @@ export interface ProbeExecutor {
    * lets the fuzzer compare `-0`, `NaN`, `Infinity` and `undefined` exactly. Absent means plain JSON only.
    */
   readonly supportsTaggedEncoding?: boolean;
+  /** True when the executor honours `ProbeParams.settle` (async probes). */
+  readonly supportsSettle?: boolean;
 }
 
 export interface PingResult {

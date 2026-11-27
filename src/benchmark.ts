@@ -56,6 +56,22 @@ async function runPreset(preset: BenchmarkPreset, fuzzRuns: number, seed: number
       durationMs: Math.round(performance.now() - started),
     };
   }
+  if (preset.async === true) {
+    // The same path as POST /api/resurrect for an error-first callback module.
+    const asyncResult = await new ResurrectionOrchestrator().resurrectErrorFirst({ name: preset.name, source: preset.code, schema: preset.schema as InputSchema, fuzzRuns, seed });
+    const asyncVerified = asyncResult.success
+      ? await buildExportBundle({ specimenName: preset.name, legacyCode: preset.code, modernCode: asyncResult.modernCode, fuzzRuns: asyncResult.fuzzReport.totalRuns, attempts: asyncResult.attempts, schema: preset.schema as InputSchema })
+      : undefined;
+    return {
+      specimen: preset.name,
+      success: asyncResult.success,
+      attempts: asyncResult.attempts,
+      fuzzRuns: asyncResult.fuzzReport.totalRuns,
+      tscPassed: asyncVerified?.typecheck.passed === true,
+      tsc: asyncVerified !== undefined ? describeTypecheck(asyncVerified.typecheck) : "not checked (no parity)",
+      durationMs: Math.round(performance.now() - started),
+    };
+  }
   const schema = preset.schema as InputSchema;
   // The same path as POST /api/resurrect: extracted specimen, exact Object.is, observed types, verified bundle.
   const result = await new ResurrectionOrchestrator().resurrect({

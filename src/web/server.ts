@@ -12,6 +12,9 @@ import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
+import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
+import { generateAsyncVerifiedBundle } from "../exporter/async-bundle.js";
+import { renderType, type TypeSignature } from "../crew/type-alchemist.js";
 import { formatInputs, formatOutcome } from "../crew/exact-format.js";
 import { DifferentialFuzzer } from "../fuzzer/differential.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
@@ -228,10 +231,49 @@ export type ExportRequest = {
  * Builds the PR bundle and verifies its TypeScript with the real compiler under --strict. The certificate and SPEC.md
  * carry that server-computed result; any client-supplied claim about it is ignored.
  */
+/** The error-first entry when `legacyCode` is a callback module and `modernCode` its resurrected async TypeScript. */
+export function asyncEntryOf(legacyCode: string, modernCode: string, name?: string): ErrorFirstFunction | undefined {
+  const entry = detectErrorFirst(legacyCode, name !== undefined ? { entryName: name } : {}).entry;
+  return entry !== undefined && stripAsyncTypes(modernCode, entry) !== undefined ? entry : undefined;
+}
 export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string }> {
   const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
+  const asyncEntry = asyncEntryOf(parsed.legacyCode, parsed.modernCode, parsed.specimenName);
+  if (asyncEntry !== undefined) {
+    const flat = parsed.schema === undefined ? {} : flatSchemaOf(parsed.schema as InputSchema, asyncEntry.name);
+    const schema = Object.fromEntries(asyncEntry.params.map((p) => [p, flat[p] ?? "string"]));
+    const asyncCertificate = (typecheck: TypecheckReport): CertificateInput => ({
+      provenance: sanitizeProvenance(parsed.provenance),
+      legacySource: parsed.legacyCode,
+      modernCode: parsed.modernCode,
+      fuzz: { totalRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS, exact: true },
+      attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : 1,
+      esmComplete: false,
+      ...(mutationScore !== undefined ? { mutation: mutationScore } : {}),
+      typecheck,
+    });
+    const verified = await generateAsyncVerifiedBundle(
+      {
+        specimenName: asyncEntry.name,
+        legacySource: parsed.legacyCode,
+        modernTs: parsed.modernCode,
+        entry: asyncEntry,
+        schema,
+        fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
+        attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : 1,
+        specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
+      },
+      (typecheck) => generateCertificate(asyncCertificate(typecheck)).markdown
+    );
+    const name = sanitizeIdentifier(asyncEntry.name);
+    return {
+      ...verified,
+      prSummary: buildGitHubPrSummary({ ...asyncCertificate(verified.typecheck), name }),
+      certificateSvg: renderCertificateSvg(generateCertificate(asyncCertificate(verified.typecheck)), { name }),
+    };
+  }
   const fnEntries = (parsed.functions ?? []).filter(
     (f): f is { name: string; schema?: Record<string, string>; modernCode: string } =>
       typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0
@@ -528,6 +570,36 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             }
           : {};
       try {
+        const errorFirst = detectErrorFirst(body.legacyCode, { entryName: request.name }).entry;
+        if (errorFirst !== undefined) {
+          // Additive async pass: Node.js error-first callback -> async/await, both settlements fuzzed in the sandbox.
+          const flat = flatSchemaOf(body.schema, errorFirst.name);
+          const scanned = scanLegacyAst(body.legacyCode, { functionName: errorFirst.name }).suggestedSchema;
+          const schema: InputSchema = Object.fromEntries(errorFirst.params.map((p) => [p, flat[p] ?? scanned[p] ?? "string"]));
+          const resurrected = await orchestrator.resurrectErrorFirst({
+            name: request.name,
+            source: body.legacyCode,
+            schema,
+            ...(request.fuzzRuns !== undefined ? { fuzzRuns: request.fuzzRuns } : {}),
+            ...(request.seed !== undefined ? { seed: request.seed } : {}),
+            ...(request.onEvent !== undefined ? { onEvent: request.onEvent } : {}),
+          });
+          const verified = resurrected.success
+            ? await buildExportBundle({ specimenName: errorFirst.name, legacyCode: body.legacyCode, modernCode: resurrected.modernCode, fuzzRuns: resurrected.fuzzReport.totalRuns, attempts: resurrected.attempts, schema })
+            : undefined;
+          if (verified !== undefined) traceTypecheck(verified.typecheck);
+          const sig: TypeSignature | undefined = resurrected.typeSignature;
+          const returns = sig === undefined ? "unknown" : verified?.typecheck.widenedReturn === true ? "unknown" : renderType(sig.returns);
+          const result = {
+            ...resurrected,
+            events: [...serverTraces.slice(0, 1), ...resurrected.events, ...serverTraces.slice(1)],
+            ...certificateFor(resurrected, false, verified?.typecheck),
+            ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
+            ...(sig !== undefined ? { typeSignature: sig, typeSignatureText: `${errorFirst.name}(${sig.params.map((p) => `${p.name}: ${renderType(p.type)}`).join(", ")}): Promise<${returns}>` } : {}),
+          };
+          res.write(`data: ${JSON.stringify({ kind: "result", result })}\n\n`);
+          return;
+        }
         const moduleFunctions = listModuleFunctions(body.legacyCode).functions;
         if (moduleFunctions.length >= 2) {
           // Multi-export CommonJS: one resurrection per function, merged into one result.
@@ -901,14 +973,31 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         auditLegacy ??= new PooledProbeRunner();
         auditModern ??= new PooledProbeRunner();
         const body = checked.data;
-        const result = await runMutationAudit({
-          // The oracle runs exactly what /api/resurrect ran: the extracted specimen expression.
-          legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
-          modernCode: body.modernCode,
-          schema: body.schema,
-          executors: { legacy: auditLegacy, modern: auditModern },
-          ...(body.seed !== undefined ? { seed: body.seed } : {}),
-        });
+        const asyncEntry = asyncEntryOf(body.legacyCode, body.modernCode);
+        const asyncJs = asyncEntry !== undefined ? stripAsyncTypes(body.modernCode, asyncEntry) : undefined;
+        const result =
+          asyncEntry !== undefined && asyncJs !== undefined
+            ? await runMutationAudit({
+                // Error-first module: the legacy settle harness against the async module (and its mutants), settled in the sandbox.
+                legacyCode: buildLegacyHarness(body.legacyCode, asyncEntry),
+                modernCode: asyncJs,
+                schema: Object.fromEntries(asyncEntry.params.map((p) => [p, body.schema[p] ?? "string"])),
+                executors: { legacy: auditLegacy, modern: auditModern },
+                asyncHarness: {
+                  wrap: (code) => buildModernHarness(code, asyncEntry.name, asyncEntry.params),
+                  // The same literal dictionary the resurrection fuzzed with, so validation branches are reached.
+                  examples: literalExamples(body.legacyCode, Object.fromEntries(asyncEntry.params.map((p) => [p, body.schema[p] ?? "string"]))),
+                },
+                ...(body.seed !== undefined ? { seed: body.seed } : {}),
+              })
+            : await runMutationAudit({
+                // The oracle runs exactly what /api/resurrect ran: the extracted specimen expression.
+                legacyCode: scanLegacyAst(body.legacyCode).primaryExpression,
+                modernCode: body.modernCode,
+                schema: body.schema,
+                executors: { legacy: auditLegacy, modern: auditModern },
+                ...(body.seed !== undefined ? { seed: body.seed } : {}),
+              });
         reply(200, { ...result });
       } catch (err: unknown) {
         reply(500, { error: err instanceof Error ? err.message : "Mutation audit failed", code: "INTERNAL_ERROR" });

@@ -1,5 +1,6 @@
 // "Paste anything": what Lazarus understood from a pasted snippet, for the editor's signature pill and schema.
 // Parse-only (acorn via the AST scanner). Nothing here executes the code.
+import { detectErrorFirst } from "../crew/async-callback.js";
 import { listModuleFunctions } from "../crew/module-resurrection.js";
 import type { InputSchema, ParamKind } from "../fuzzer/types.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
@@ -29,6 +30,13 @@ export function describePaste(source: string): SmartPasteResult {
   const scan = scanLegacyAst(source);
   if (!scan.parsed) {
     return { parsed: false, ...(scan.parseError !== undefined ? { parseError: scan.parseError } : {}), kind: "none", schema: {}, signatures: [], idioms: scan.detectedIdioms };
+  }
+  // Node.js error-first callback: the callback is the calling convention, not an input to fuzz.
+  const errorFirst = detectErrorFirst(source).entry;
+  if (errorFirst !== undefined) {
+    const scanned = scanLegacyAst(source, { functionName: errorFirst.name }).suggestedSchema;
+    const schema: InputSchema = Object.fromEntries(errorFirst.params.map((p) => [p, scanned[p] ?? "string"]));
+    return { parsed: true, kind: "function", schema, signatures: [`${errorFirst.name}(${renderParams(schema)}) \u2192 Promise (error-first ${errorFirst.callback})`], functionName: errorFirst.name, idioms: scan.detectedIdioms };
   }
   const exported = listModuleFunctions(source).functions;
   if (exported.length >= 2) {

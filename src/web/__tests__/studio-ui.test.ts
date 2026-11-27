@@ -978,10 +978,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 21-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 22-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1321,7 +1321,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(21);
+    expect(body["specs"]).toBe(22);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1354,7 +1354,7 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 21 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>');
+  it("shows 22 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>');
   });
 });

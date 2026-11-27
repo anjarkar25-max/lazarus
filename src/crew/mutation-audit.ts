@@ -313,6 +313,11 @@ export interface AuditInput {
   readonly runsPerMutant?: number;
   readonly seed?: number;
   readonly maxMutants?: number;
+  /**
+   * Async (error-first callback) audit: `legacyCode` is the legacy settle harness, `modernCode` the lifted async module;
+   * the original and every mutant are wrapped by `wrap` and fuzzed as settling probes.
+   */
+  readonly asyncHarness?: { readonly wrap: (code: string) => string; readonly examples?: ReadonlyArray<Record<string, unknown>> };
 }
 
 const displayInputs = (inputs: Record<string, unknown>): string =>
@@ -326,8 +331,9 @@ export async function runMutationAudit(input: AuditInput): Promise<MutationAudit
   const fuzzer = new DifferentialFuzzer(input.executors);
   // Boundary corpus first (half the budget), random boundary-biased runs after, no shrinking: kills are fast and
   // every counterexample is a concrete, readable boundary input whenever one works.
-  const options = { numRuns: runs, exact: true, boundary: true, shrink: false, ...(input.seed !== undefined ? { seed: input.seed } : {}) } as const;
-  const baseline = await fuzzer.fuzz(input.legacyCode, input.modernCode, input.schema, options);
+  const options = { numRuns: runs, exact: true, boundary: true, shrink: false, ...(input.seed !== undefined ? { seed: input.seed } : {}), ...(input.asyncHarness !== undefined ? { settle: true, examples: input.asyncHarness.examples ?? [] } : {}) } as const;
+  const wrap = (code: string): string => (input.asyncHarness !== undefined ? input.asyncHarness.wrap(code) : code);
+  const baseline = await fuzzer.fuzz(input.legacyCode, wrap(input.modernCode), input.schema, options);
   const summary = (mutants: MutantResult[], baselineVerified: boolean, note?: string): MutationAuditResult => {
     const killed = mutants.filter((m) => m.status === "KILLED").length;
     return {
@@ -349,7 +355,7 @@ export async function runMutationAudit(input: AuditInput): Promise<MutationAudit
   const results: MutantResult[] = [];
   for (const mutant of mutants) {
     const t = Date.now();
-    const report: FuzzReport = await fuzzer.fuzz(input.legacyCode, mutant.code, input.schema, options);
+    const report: FuzzReport = await fuzzer.fuzz(input.legacyCode, wrap(mutant.code), input.schema, options);
     const cx = report.counterexample;
     // The audit stops at the first failure. A boundary-corpus kill is already minimal; a random-phase kill is replayed
     // with shrinking (same seed) so the autopsy shows the smallest input fast-check can find.
@@ -359,7 +365,7 @@ export async function runMutationAudit(input: AuditInput): Promise<MutationAudit
       if (report.boundaryRuns !== undefined && report.boundaryRuns === report.totalRuns) {
         source = "boundary-corpus";
       } else {
-        const replay = await fuzzer.fuzz(input.legacyCode, mutant.code, input.schema, { ...options, shrink: true, seed: report.seed });
+        const replay = await fuzzer.fuzz(input.legacyCode, wrap(mutant.code), input.schema, { ...options, shrink: true, seed: report.seed });
         if (!replay.passed && replay.counterexample !== undefined) {
           killer = replay.counterexample;
           source = "shrunk";

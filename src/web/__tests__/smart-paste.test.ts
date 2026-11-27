@@ -52,7 +52,11 @@ describe("smart paste: parameter inference on custom pasted functions", () => {
   });
 
   it("leaves the inferred schema of every curated preset unchanged", () => {
-    const wrong = BENCHMARK_PRESETS.filter((p) => p.module !== true && p.name !== "legacyLeftPad").filter((p) => JSON.stringify(scanLegacyAst(p.code).suggestedSchema) !== JSON.stringify(p.schema));
+    const wrong = BENCHMARK_PRESETS.filter((p) => p.module !== true && p.async !== true && p.name !== "legacyLeftPad").filter((p) => JSON.stringify(scanLegacyAst(p.code).suggestedSchema) !== JSON.stringify(p.schema));
+    // Error-first callback presets: smart paste drops the callback from the schema.
+    const asyncWrong = BENCHMARK_PRESETS.filter((p) => p.async === true).filter((p) => JSON.stringify(describePaste(p.code).schema) !== JSON.stringify(p.schema));
+    expect(asyncWrong.map((p) => p.name)).toEqual([]);
+    expect(describePaste(BENCHMARK_PRESETS.find((p) => p.async === true)?.code ?? "").signatures).toEqual(["legacyReadConfigCb(text: string) \u2192 Promise (error-first cb)"]);
     expect(wrong.map((p) => p.name)).toEqual([]);
   });
 });

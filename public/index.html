@@ -602,6 +602,9 @@ pre { max-width: 100%; }
 .wake-pill[hidden] { display: none; }
 .wake-pill.err { border-color: var(--crimson); color: #fecaca; }
 .wake-pill button { font-size: 10px; padding: 2px 8px; border-radius: 999px; }
+.async-note { margin: 6px 0; padding: 6px 10px; border: 1px solid var(--violet); border-radius: 8px; background: rgba(139, 92, 246, 0.08); color: #ddd6fe; font-size: 11px; line-height: 1.5; }
+.async-note[hidden] { display: none; }
+.async-note b { color: #f1f5f9; }
 .stale-hint { display: inline-block; margin-left: 10px; font-size: 11px; color: #fbbf24; vertical-align: middle; }
 .stale-hint[hidden] { display: none; }
 .lz-stale { opacity: 0.45; filter: grayscale(0.6); transition: opacity 0.2s; }
@@ -618,8 +621,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">918 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">957 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -730,6 +733,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <div>
             <label>Necromancer Resurrected ES2022 Code</label>
             <div class="sig-pill" id="sigPill" hidden></div>
+            <div class="async-note" id="asyncNote" role="status" hidden></div>
             <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
             <div class="out-actions">
               <span class="tsc-badge" id="tscBadge" hidden></span>
@@ -1341,6 +1345,14 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       bug: false
     }
   );
+  extraPresets.push({
+    value: "legacyReadConfigCb",
+    label: "Preset 11: Node.js Error-First Callback (cb(err, config) -> async/await)",
+    name: "legacyReadConfigCb",
+    code: "// Legacy config reader (Node 0.10 era): \"port=8080\" or \"8080\" -> settings object, error-first callback.\nfunction parsePort(raw, cb) {\n  var text = String(raw).trim();\n  if (text.indexOf(\"port=\") === 0) text = text.slice(5);\n  var port = parseInt(text, 10);\n  if (isNaN(port)) return cb(new TypeError(\"Port must be a number: \" + JSON.stringify(raw)));\n  if (port < 1 || port > 65535) return cb(new RangeError(\"Port out of range: \" + port));\n  cb(null, port);\n}\n\nfunction legacyReadConfigCb(text, cb) {\n  if (typeof text !== \"string\") return cb(new TypeError(\"Config must be a string\"));\n  parsePort(text, function (err, port) {\n    if (err) return cb(err);\n    var config = { port: port, secure: port === 443 || port === 8443, source: \"legacy-ini\" };\n    setTimeout(function () {\n      cb(null, config);\n    }, 0);\n  });\n}\n\nmodule.exports = legacyReadConfigCb;",
+    schema: '{"text": "string"}',
+    bug: false
+  });
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -3311,7 +3323,8 @@ function lzDecodeSpecimen(hash) {
   });
   document.addEventListener("lazarus:result", (e) => {
     const r = e.detail;
-    if (!r || !r.success || r.module) { reset(); return; }
+    // Synchronous tool: not offered for multi-export modules or async (error-first callback) resurrections.
+    if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }
     const schema = flatSchema(pendingSchema);
     if (!schema) { reset(); return; }
     proven = { source: pendingSource !== null ? pendingSource : code.value, schema: schema, modernCode: r.modernCode || "", runs: r.fuzzReport ? r.fuzzReport.totalRuns : 0, attempts: r.attempts || 1, typecheck: r.typecheck || null, name: r.name || "" };
@@ -3446,6 +3459,33 @@ function lzHealthGuard(deps) {
   });
   window.LazarusHealth = guard;
   guard.run();
+})();
+</script>
+<script>
+/* Async Callback Necromancer: error-first callback results (the Probe card is a synchronous tool and is hidden). */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const note = $("asyncNote"), probe = $("probeCard");
+  if (!note) return;
+  const el = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; };
+  function clear() { note.hidden = true; note.textContent = ""; if (probe) probe.hidden = false; }
+  document.addEventListener("lazarus:run-start", clear);
+  document.addEventListener("lazarus:result", (e) => {
+    const r = e.detail;
+    if (!r || !r.asyncCallback) { clear(); return; }
+    const a = r.asyncCallback;
+    note.textContent = "";
+    note.append(
+      el("b", "Error-first callback \u2192 async/await. "),
+      document.createTextNode(a.entry + "(" + a.params.concat([a.callback]).join(", ") + ") became await " + a.entry + "(" + a.params.join(", ") + ") via " + a.strategy + ". "),
+      document.createTextNode(r.success
+        ? "Both settlements proven: " + a.outcomes.resolved + " resolved and " + a.outcomes.rejected + " rejected inputs matched exactly (Object.is values, error name + message)."
+        : "Parity not proven: " + ((r.fuzzReport && r.fuzzReport.counterexample && r.fuzzReport.counterexample.reason) || "see the telemetry log") + ".")
+    );
+    note.hidden = false;
+    if (probe) probe.hidden = true;
+  });
 })();
 </script>
 <script>

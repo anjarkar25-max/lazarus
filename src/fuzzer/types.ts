@@ -51,6 +51,10 @@ export interface FuzzOptions {
   shrink?: boolean;
   /** Called for every evaluated input with the wire-form inputs and both outcomes (used by the Type Alchemist). */
   observe?: (inputs: Record<string, unknown>, legacy: ProbeOutcome, modern: ProbeOutcome) => void;
+  /** Async probes: both sides return a promise that the sandbox settles (see ProbeParams.settle). Needs executors with supportsSettle. */
+  settle?: boolean;
+  /** Extra deterministic inputs (plain values) run first, before the boundary corpus, e.g. a dictionary of literals from the specimen. */
+  examples?: ReadonlyArray<Record<string, unknown>>;
 }
 
 export interface FuzzReport {

@@ -189,11 +189,12 @@ export class DifferentialFuzzer {
     executor: ProbeExecutor,
     code: string,
     context: Record<string, unknown>,
-    exact: boolean
+    exact: boolean,
+    settle = false
   ): Promise<ProbeOutcome> {
     const start = Date.now();
     try {
-      const res = await executor.run({ code, context, ...(exact ? { encoding: "tagged" as const } : {}) });
+      const res = await executor.run({ code, context, ...(exact ? { encoding: "tagged" as const } : {}), ...(settle ? { settle: true } : {}) });
       return {
         ok: true,
         output: res.output,
@@ -243,12 +244,16 @@ export class DifferentialFuzzer {
       executors.legacy.supportsTaggedEncoding === true && executors.modern.supportsTaggedEncoding === true;
     const exact = supportsTagged && (options.exact ?? true);
     const boundary = exact && (options.boundary ?? numRuns >= BOUNDARY_MIN_RUNS);
+    const settle = options.settle === true;
+    if (settle && (executors.legacy.supportsSettle !== true || executors.modern.supportsSettle !== true)) {
+      throw new Error("Async (settle) fuzzing needs executors that support ProbeParams.settle (the pooled sandbox runner)");
+    }
 
     const evaluate = async (inputs: Record<string, unknown>): Promise<boolean> => {
       const wire = exact ? (encodeTagged(inputs) as Record<string, unknown>) : inputs;
       const [legacy, modern] = await Promise.all([
-        this.runSingle(executors.legacy, legacyCode, wire, exact),
-        this.runSingle(executors.modern, modernCode, wire, exact),
+        this.runSingle(executors.legacy, legacyCode, wire, exact, settle),
+        this.runSingle(executors.modern, modernCode, wire, exact, settle),
       ]);
       options.observe?.(wire, legacy, modern);
       const { matched, reason } = compareOutcomes(legacy, modern, exact);
@@ -261,7 +266,8 @@ export class DifferentialFuzzer {
       return matched;
     };
 
-    const corpus = boundary ? buildBoundaryCorpus(schema, Math.floor(numRuns / 2)) : [];
+    const examples = (options.examples ?? []).slice(0, Math.floor(numRuns / 2));
+    const corpus = [...examples, ...(boundary ? buildBoundaryCorpus(schema, Math.max(0, Math.floor(numRuns / 2) - examples.length)) : [])];
     let corpusExecuted = 0;
     for (const inputs of corpus) {
       corpusExecuted++;

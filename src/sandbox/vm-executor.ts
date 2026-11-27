@@ -15,6 +15,71 @@ import { VIRTUAL_REQUIRE_SOURCE } from "./virtual-fs.js";
 
 /** vm-level budget. The pool's watchdog (3000 ms) is the hard outer limit. */
 export const VM_TIMEOUT_MS = 2800;
+/** Most virtual timers an async probe may run before it is stopped as a runaway. */
+export const MAX_VIRTUAL_TIMERS = 10_000;
+
+/**
+ * Async probes only (ProbeParams.settle). Deterministic virtual timers, created inside the context so no host
+ * function is ever reachable from probe code: callbacks run in (due time, insertion) order on a virtual clock, one per
+ * `__lz.tick()`, and promise jobs drain after every evaluation (microtaskMode "afterEvaluate", inside the vm budget).
+ */
+const ASYNC_BOOTSTRAP = `(function () {
+  "use strict";
+  var g = globalThis;
+  var queue = [];
+  var seq = 0;
+  var clock = 0;
+  var ran = 0;
+  var state = { status: "pending", value: undefined, error: undefined };
+  function add(fn, ms, args, kind) {
+    if (typeof fn !== "function") throw new TypeError("The \\"callback\\" argument must be of type function");
+    var delay = Number(ms);
+    if (!(delay >= 1) || delay !== delay) delay = kind === "timeout" ? 1 : 0;
+    var id = ++seq;
+    queue.push({ id: id, due: clock + Math.floor(delay), seq: id, fn: fn, args: args });
+    return id;
+  }
+  function cancel(id) {
+    for (var i = 0; i < queue.length; i++) if (queue[i].id === id) { queue.splice(i, 1); return; }
+  }
+  function rest(a, from) { var out = []; for (var i = from; i < a.length; i++) out.push(a[i]); return out; }
+  function define(name, value) { Object.defineProperty(g, name, { value: value, writable: true, configurable: true, enumerable: false }); }
+  define("setTimeout", function (fn, ms) { return add(fn, ms, rest(arguments, 2), "timeout"); });
+  define("setInterval", function () { throw new Error("setInterval is not available in async probes"); });
+  define("setImmediate", function (fn) { return add(fn, 0, rest(arguments, 1), "immediate"); });
+  define("clearTimeout", cancel);
+  define("clearImmediate", cancel);
+  define("clearInterval", cancel);
+  define("queueMicrotask", function (fn) { Promise.resolve().then(function () { fn(); }); });
+  g.process.nextTick = function (fn) { var args = rest(arguments, 1); Promise.resolve().then(function () { fn.apply(undefined, args); }); };
+  Object.defineProperty(g, "__lzt", {
+    value: Object.freeze({
+      watch: function (p) {
+        if (p === null || (typeof p !== "object" && typeof p !== "function") || typeof p.then !== "function") {
+          state.status = "resolved"; state.value = p; return;
+        }
+        p.then(function (v) { if (state.status === "pending") { state.status = "resolved"; state.value = v; } },
+               function (e) { if (state.status === "pending") { state.status = "rejected"; state.error = e; } });
+      },
+      poll: function () { return state.status; },
+      value: function () { return state.value; },
+      error: function () { return state.error; },
+      tick: function () {
+        if (queue.length === 0) return "idle";
+        if (++ran > ${MAX_VIRTUAL_TIMERS}) return "runaway";
+        var best = 0;
+        for (var i = 1; i < queue.length; i++) {
+          if (queue[i].due < queue[best].due || (queue[i].due === queue[best].due && queue[i].seq < queue[best].seq)) best = i;
+        }
+        var t = queue.splice(best, 1)[0];
+        if (t.due > clock) clock = t.due;
+        t.fn.apply(undefined, t.args);
+        return "ran";
+      }
+    }),
+    writable: false, configurable: false, enumerable: false
+  });
+})()`;
 
 const BOOTSTRAP = `(function () {
   "use strict";
@@ -117,8 +182,32 @@ function ownDataString(value: unknown, key: string): string | undefined {
   return desc !== undefined && typeof desc.value === "string" ? desc.value : undefined;
 }
 
+/** Thrown inside settleInContext for a rejected async probe; turned into EXECUTION_ERROR by the caller. */
+class AsyncRejection {
+  constructor(readonly thrown: unknown) {}
+}
+
 export class VmProbeExecutor implements ProbeExecutor {
   readonly supportsTaggedEncoding = true;
+  readonly supportsSettle = true;
+
+  /**
+   * Settles the probe's promise inside the context: alternately lets promise jobs drain (afterEvaluate, inside each
+   * runInContext budget) and runs the next virtual timer. Only strings and context values cross the boundary.
+   */
+  private settleInContext(ctx: object, sandbox: Record<string, unknown>, output: unknown, budgetLeft: () => number): unknown {
+    sandbox["__lzOut"] = output;
+    runInContext("__lzt.watch(__lzOut)", ctx, { timeout: budgetLeft() });
+    for (;;) {
+      if (budgetLeft() <= 1) throw new SandboxError("TIMEOUT", `Async probe did not settle within ${VM_TIMEOUT_MS}ms`);
+      const status: unknown = runInContext("__lzt.poll()", ctx, { timeout: budgetLeft() });
+      if (status === "resolved") return runInContext("__lzt.value()", ctx, { timeout: budgetLeft() });
+      if (status === "rejected") throw new AsyncRejection(runInContext("__lzt.error()", ctx, { timeout: budgetLeft() }));
+      const tick: unknown = runInContext("__lzt.tick()", ctx, { timeout: budgetLeft() });
+      if (tick === "idle") throw new SandboxError("TIMEOUT", "Async probe never settled: the callback was never called and no timer is pending");
+      if (tick === "runaway") throw new SandboxError("TIMEOUT", `Async probe scheduled more than ${MAX_VIRTUAL_TIMERS} timers without settling`);
+    }
+  }
 
   async run(params: ProbeParams): Promise<ProbeResult> {
     const startedAt = Date.now();
@@ -133,7 +222,8 @@ export class VmProbeExecutor implements ProbeExecutor {
       sandbox["__lzFiles"] = JSON.stringify(params.files);
       if (params.entry !== undefined) sandbox["__lzEntry"] = params.entry;
     }
-    const ctx = createContext(sandbox, { codeGeneration: { strings: true, wasm: false } });
+    const settle = params.settle === true;
+    const ctx = createContext(sandbox, { codeGeneration: { strings: true, wasm: false }, ...(settle ? { microtaskMode: "afterEvaluate" as const } : {}) });
 
     const describeThrown = (thrown: unknown): string => {
       // Host-realm native errors (compile errors, vm timeout) are safe to read directly.
@@ -150,10 +240,12 @@ export class VmProbeExecutor implements ProbeExecutor {
 
     try {
       runInContext(BOOTSTRAP, ctx, { timeout: VM_TIMEOUT_MS, filename: "lazarus-bootstrap.js" });
-      const output: unknown = runInContext(params.code, ctx, {
-        timeout: VM_TIMEOUT_MS,
+      if (settle) runInContext(ASYNC_BOOTSTRAP, ctx, { timeout: budgetLeft(), filename: "lazarus-async-bootstrap.js" });
+      let output: unknown = runInContext(params.code, ctx, {
+        timeout: settle ? budgetLeft() : VM_TIMEOUT_MS,
         filename: "legacy-probe.js",
       });
+      if (settle) output = this.settleInContext(ctx, sandbox, output, budgetLeft);
 
       sandbox["__lzOut"] = output;
       const json: unknown = runInContext(tagged ? "__lz.stringifyTagged(__lzOut)" : "__lz.stringify(__lzOut)", ctx, {
@@ -180,10 +272,11 @@ export class VmProbeExecutor implements ProbeExecutor {
         stderr,
       };
     } catch (thrown: unknown) {
+      if (thrown instanceof SandboxError) throw thrown;
       if (ownDataString(thrown, "code") === "ERR_SCRIPT_EXECUTION_TIMEOUT") {
         throw new SandboxError("TIMEOUT", `Probe exceeded ${VM_TIMEOUT_MS}ms execution limit`);
       }
-      throw new SandboxError("EXECUTION_ERROR", describeThrown(thrown));
+      throw new SandboxError("EXECUTION_ERROR", describeThrown(thrown instanceof AsyncRejection ? thrown.thrown : thrown));
     }
   }
 }

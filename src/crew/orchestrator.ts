@@ -6,6 +6,7 @@ import type { ProbeExecutor } from "../sandbox/types.js";
 import { modernize, summarizeForSpec } from "./ast-modernizer.js";
 import { DeterministicModernizer } from "./synthesizer.js";
 import { plural } from "../text/plural.js";
+import { resurrectErrorFirstWith, type ErrorFirstRequest, type ErrorFirstResult } from "./async-callback.js";
 import type {
   AgentRole,
   CodeSynthesizer,
@@ -76,6 +77,17 @@ export class ResurrectionOrchestrator {
     return await this.resurrectWith({ runner: this.runner ?? legacyPool, fuzzer, pools }, request);
   }
 
+  /**
+   * Additive async pass: a Node.js error-first callback module (`fn(a, cb)`) is lifted to `async fn(a)` and both
+   * settlements are fuzzed in the pooled sandbox (see async-callback.ts). `resurrect()` is unchanged.
+   */
+  async resurrectErrorFirst(request: ErrorFirstRequest): Promise<ErrorFirstResult> {
+    if (this.fuzzer !== undefined) return resurrectErrorFirstWith(this.fuzzer, request);
+    await using legacyPool = new PooledProbeRunner();
+    await using modernPool = new PooledProbeRunner();
+    // `return await` keeps both pools alive until the session has finished.
+    return await resurrectErrorFirstWith(new DifferentialFuzzer({ legacy: legacyPool, modern: modernPool }), request);
+  }
   private async resurrectWith(deps: SessionDeps, request: ResurrectionRequest): Promise<ResurrectionResult> {
     const events: CrewEvent[] = [];
     const emit = (

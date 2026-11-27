@@ -8,6 +8,7 @@ import { parse, type Options } from "acorn";
 import type * as ESTree from "estree";
 import { walk } from "./crew/ast-scope.js";
 import { analyzeGraph } from "./crew/graph-resurrector.js";
+import { detectErrorFirst, liftErrorFirst } from "./crew/async-callback.js";
 import { resolveRelative } from "./sandbox/virtual-fs.js";
 
 export const MAX_AUDIT_FILES = 500;
@@ -15,7 +16,7 @@ export const MAX_AUDIT_FILE_BYTES = 256 * 1024;
 export const IGNORED_DIRS: ReadonlySet<string> = new Set(["node_modules", ".git", "dist"]);
 
 export type Severity = "high" | "medium" | "info";
-export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "require-graph" | "external-require" | "parse-error";
+export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error";
 
 export interface Finding {
   readonly kind: FindingKind;
@@ -182,6 +183,19 @@ export function auditDirectory(dir: string): AuditReport {
       continue;
     }
     const scan = scanProgram(ast);
+    const errorFirst = detectErrorFirst(source).functions;
+    if (errorFirst.length > 0) {
+      const lift = liftErrorFirst(source);
+      for (const f of errorFirst) {
+        const liftable = lift.ok && lift.lifted.includes(f.name);
+        scan.findings.push({
+          kind: "error-first-callback",
+          severity: "medium",
+          line: f.line,
+          message: `${f.name}(${[...f.params, f.callback].join(", ")}) is a Node.js error-first callback (\`${f.callback}(err)\` / \`${f.callback}(null, value)\`): ${liftable ? "Lazarus lifts it to async/await and proves both settlements" : `not liftable as is (${lift.ok ? "not reached by the lift" : lift.reason}); Lazarus falls back to a promise wrapper`}`,
+        });
+      }
+    }
     for (const r of scan.requires) {
       if (r.specifier.startsWith("./") || r.specifier.startsWith("../")) {
         const resolved = resolveRelative(known, rel, r.specifier);
