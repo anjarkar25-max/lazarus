@@ -153,3 +153,88 @@ describe("POST /api/compare-naive (real Exorcist, pooled sandbox)", () => {
     expect(typeof data["passed"]).toBe("boolean");
   });
 });
+
+describe("POST /api/probe with compareNaive: 3-way Legacy vs Naive AI vs Lazarus", () => {
+  const server = createWebServer();
+  let baseUrl = "";
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+  interface Side { ok: boolean; display: string }
+  interface ThreeWay { legacy: Side; modern: Side; naive?: Side; naiveCode?: string; naiveApplies?: boolean; naiveDiverges?: boolean; naiveReason?: string; lazarusMatchesLegacy?: boolean; exactParity: boolean }
+  const probe = async (body: Record<string, unknown>): Promise<{ status: number; data: ThreeWay }> => {
+    const res = await fetch(`${baseUrl}/api/probe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    return { status: res.status, data: (await res.json()) as ThreeWay };
+  };
+  const LAZARUS_HALVE = "Math.trunc(n / 2) || 0";
+  const tagged = (kind: string): { $lazarus: string } => ({ $lazarus: kind });
+  const halve = (n: unknown) => probe({ legacyCode: HALVE, modernCode: LAZARUS_HALVE, context: { n }, compareNaive: true });
+
+  it("keeps the 2-way response unchanged without the flag", async () => {
+    const { status, data } = await probe({ legacyCode: HALVE, modernCode: LAZARUS_HALVE, context: { n: -3 } });
+    expect(status).toBe(200);
+    expect(data.naive).toBeUndefined();
+    expect(data.naiveDiverges).toBeUndefined();
+    expect(data.exactParity).toBe(true);
+  });
+
+  it("flags Naive AI as diverging on -3 (Math.floor) while Lazarus matches Legacy", async () => {
+    const { data } = await halve(-3);
+    expect(data.legacy.display).toBe("-1");
+    expect(data.naive?.display).toBe("-2");
+    expect(data.modern.display).toBe("-1");
+    expect(data.naiveApplies).toBe(true);
+    expect(data.naiveDiverges).toBe(true);
+    expect(data.naiveReason).toContain("naive");
+    expect(data.lazarusMatchesLegacy).toBe(true);
+    expect(data.exactParity).toBe(true);
+    expect(data.naiveCode).toContain("Math.floor");
+  });
+
+  it("keeps -0 and +0 apart: Naive AI returns -0 where Legacy and Lazarus return +0", async () => {
+    const { data } = await halve(tagged("-0"));
+    expect(data.legacy.display).toBe("+0");
+    expect(data.modern.display).toBe("+0");
+    expect(data.naive?.display).toBe("-0");
+    expect(data.naiveDiverges).toBe(true);
+    expect(data.lazarusMatchesLegacy).toBe(true);
+  });
+
+  it("handles NaN: Naive AI keeps NaN where Legacy (| 0) yields +0", async () => {
+    const { data } = await halve(tagged("NaN"));
+    expect(data.legacy.display).toBe("+0");
+    expect(data.naive?.display).toBe("NaN");
+    expect(data.naiveDiverges).toBe(true);
+    expect(data.lazarusMatchesLegacy).toBe(true);
+  });
+
+  it("reports no divergence when the naive rewrite happens to agree", async () => {
+    const { data } = await halve(8);
+    expect(data.naive?.display).toBe("4");
+    expect(data.naiveDiverges).toBe(false);
+    expect(data.lazarusMatchesLegacy).toBe(true);
+  });
+
+  it("works for a string specimen (stringHash32 style): the naive rewrite loses the 32-bit wrap", async () => {
+    const { data } = await probe({ legacyCode: HASH, modernCode: HASH, context: { text: "the quick brown fox jumps" }, compareNaive: true });
+    expect(data.naiveApplies).toBe(true);
+    expect(data.naiveDiverges).toBe(true);
+    expect(data.lazarusMatchesLegacy).toBe(true);
+    expect(data.legacy.display).toBe(data.modern.display);
+    expect(data.naive?.display).not.toBe(data.legacy.display);
+  });
+
+  it("says so when the specimen has no naive-trap pattern", async () => {
+    const { data } = await probe({ legacyCode: "n + 1", modernCode: "n + 1", context: { n: 1 }, compareNaive: true });
+    expect(data.naiveApplies).toBe(false);
+    expect(data.naiveDiverges).toBe(false);
+  });
+
+  it("rejects a non-boolean compareNaive", async () => {
+    expect((await probe({ legacyCode: HALVE, modernCode: LAZARUS_HALVE, context: { n: 1 }, compareNaive: "yes" })).status).toBe(400);
+  });
+});

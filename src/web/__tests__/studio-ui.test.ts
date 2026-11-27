@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import type { AddressInfo } from "node:net";
 import * as nodePath from "node:path";
@@ -978,10 +979,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 22-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 23-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1321,7 +1322,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(22);
+    expect(body["specs"]).toBe(23);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1354,7 +1355,246 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 22 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>');
+  it("shows 23 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
+  });
+});
+
+describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const server = createWebServer();
+  let baseUrl = "";
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
+  };
+
+  describe("Self-Healing Causal Strip", () => {
+    type Node = { kind: string; step: string; label: string };
+    const nodes = (r: unknown): Node[] => {
+      const fn = runInlineScript(`${regionOf("lz-causal")}; lzCausalNodes`, {}) as (r: unknown, fmt: (v: unknown) => string) => Node[];
+      return fn(r, (v) => JSON.stringify(v));
+    };
+    it("sits in the Verification Deck above the diffs, and adds no tab", () => {
+      const deck = html.slice(html.indexOf('<section class="verify-deck"'), html.indexOf('<div class="studio-pane" id="pane-graph"'));
+      expect(deck).toContain('<div id="causalStrip" class="causal-strip" role="list" aria-label="Self-Healing Causal Strip" hidden></div>');
+      expect(deck.indexOf('id="causalStrip"')).toBeLessThan(deck.indexOf('id="healingMatrix"'));
+      expect(deck.indexOf('id="causalStrip"')).toBeLessThan(deck.indexOf('id="legacyDiffBlock"'));
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    });
+    it("shows Draft 1 -> Counterexample Caught -> Rule Rolled Back -> Draft 2 Proven after a rollback", () => {
+      const result = {
+        success: true,
+        attempts: 2,
+        modernCode: "// ast-rules: bitor0-trunc=off\n// ast-refine: attempt 2 blamed bitor0-trunc; rolled back bitor0-trunc;\nx",
+        events: [{ type: "counterexample_found", payload: { counterexample: { inputs: { text: "abcdefgh" } } } }],
+        certificate: { rolledBack: ["| 0 → Math.trunc(x) || 0"] },
+      };
+      expect(nodes(result).map((n) => n.label)).toEqual(["Draft 1", 'Counterexample Caught (text = "abcdefgh")', "Rule Rolled Back (bitor0-trunc)", "Draft 2 Proven (Object.is 100%)"]);
+      expect(nodes(result).map((n) => n.kind)).toEqual(["bad", "bad", "heal", "ok"]);
+    });
+    it("falls back to the certificate's rolled-back rule, and truncates a long input", () => {
+      const result = { success: true, attempts: 2, modernCode: "x", events: [{ type: "counterexample_found", payload: { counterexample: { inputs: { n: "z".repeat(80) } } } }], certificate: { rolledBack: ["var → const/let"] } };
+      const labels = nodes(result).map((n) => n.label);
+      expect(labels[1]?.length).toBeLessThan(80);
+      expect(labels[2]).toBe("Rule Rolled Back (var → const/let)");
+    });
+    it("shows AST Lifted -> Exorcist Fuzzed -> Zero Divergences -> 100% Exact Parity when draft 1 passed", () => {
+      expect(nodes({ success: true, attempts: 1, modernCode: "x", events: [], certificate: { rolledBack: [] } }).map((n) => n.label)).toEqual(["AST Lifted", "Exorcist Fuzzed", "Zero Divergences", "100% Exact Parity"]);
+    });
+    it("shows nothing for a failed run, and is rebuilt (not accumulated) on every result", () => {
+      expect(nodes({ success: false, attempts: 3, modernCode: "x", events: [] })).toEqual([]);
+      const script = html.slice(html.indexOf("function renderCausalStrip(r)"), html.indexOf("// ---- Probe Custom Edge Case"));
+      expect(script).toContain('strip.textContent = "";');
+      expect(script).toContain("strip.hidden = nodes.length === 0;");
+      expect(html).toContain("renderCausalStrip(r);");
+      expect(html).toContain('strip.hidden = true; strip.textContent = "";');
+    });
+  });
+
+  describe("Guided Tour auto-dock", () => {
+    interface Rig { dock: { dock(): void; dismiss(): void; resume(): void; reset(): void; isDocked(): boolean; dismissed(): boolean }; hud: { hidden: boolean }; body: { on: boolean }; doc: FakeDocument }
+    const rig = (): Rig => {
+      const makeClassList = (cls: string, flag: { on: boolean } | undefined, set: Set<string>) => ({
+        add: (c: string) => { set.add(c); if (flag !== undefined && c === cls) flag.on = true; },
+        remove: (c: string) => { set.delete(c); if (flag !== undefined && c === cls) flag.on = false; },
+        contains: (c: string) => set.has(c),
+      });
+      const hud = { hidden: false, classList: makeClassList("docked", undefined, new Set<string>()) };
+      const body = { on: false, classList: makeClassList("tour-docked", undefined, new Set<string>()) };
+      const flagBody = { get on(): boolean { return body.classList.contains("tour-docked"); } };
+      const doc = new FakeDocument();
+      const make = runInlineScript(`${regionOf("lz-dock")}; lzMakeDock`, {}) as (h: unknown, b: unknown, d: unknown) => Rig["dock"];
+      return { dock: make(hud, body, doc), hud, body: flagBody as { on: boolean }, doc };
+    };
+    const click = (doc: FakeDocument, selectorHit: boolean): void => {
+      doc.dispatchEvent({ type: "click", ...({ target: { closest: () => (selectorHit ? {} : null) } } as object) });
+    };
+    it("collapses to a pill when a resurrection completes", () => {
+      const { dock, doc, body } = rig();
+      expect(dock.isDocked()).toBe(false);
+      doc.dispatchEvent({ type: "lazarus:result", detail: { success: true } });
+      expect(dock.isDocked()).toBe(true);
+      expect(body.on).toBe(true);
+    });
+    it("collapses when the Trap Card, Mutant Autopsy or Certificate controls are clicked, not on other clicks", () => {
+      const { dock, doc } = rig();
+      click(doc, false);
+      expect(dock.isDocked()).toBe(false);
+      click(doc, true);
+      expect(dock.isDocked()).toBe(true);
+    });
+    it("Resume Tour expands the banner again, and x dismisses it until the next tour", () => {
+      const { dock, doc, hud, body } = rig();
+      doc.dispatchEvent({ type: "lazarus:result" });
+      dock.resume();
+      expect(dock.isDocked()).toBe(false);
+      expect(body.on).toBe(false);
+      doc.dispatchEvent({ type: "lazarus:result" });
+      dock.dismiss();
+      expect(hud.hidden).toBe(true);
+      expect(dock.dismissed()).toBe(true);
+      expect(dock.isDocked()).toBe(false);
+      hud.hidden = false;
+      doc.dispatchEvent({ type: "lazarus:result" });
+      expect(dock.isDocked()).toBe(false);
+      dock.reset();
+      doc.dispatchEvent({ type: "lazarus:result" });
+      expect(dock.isDocked()).toBe(true);
+    });
+    it("does not dock a hidden banner, and undocks when the user leaves Tab 1", () => {
+      const { dock, doc, hud } = rig();
+      hud.hidden = true;
+      doc.dispatchEvent({ type: "lazarus:result" });
+      expect(dock.isDocked()).toBe(false);
+      hud.hidden = false;
+      doc.dispatchEvent({ type: "lazarus:result" });
+      doc.dispatchEvent({ type: "lazarus:tab", detail: { name: "graph" } });
+      expect(dock.isDocked()).toBe(false);
+    });
+    it("ships the pill markup, the CSS that keeps it in a corner, and keeps the original tour hooks", () => {
+      expect(html).toContain('id="tourResume">Resume Tour</button>');
+      expect(html).toContain('id="tourPillClose"');
+      expect(html).toContain(".tour-hud.docked { left: auto; right: 14px; bottom: 14px; transform: none;");
+      expect(html).toContain(".tour-hud.docked > :not(.tour-pill) { display: none; }");
+      expect(html).toContain("body.tour-docked { padding-bottom: 64px; }");
+      expect(html).toContain('id="tourHud" role="status" aria-live="polite" hidden');
+      expect(html).toContain('resumeBtn.addEventListener("click", () => dock.resume());');
+      expect(html).toContain('pillClose.addEventListener("click", () => dock.dismiss());');
+    });
+  });
+
+  describe("Ed25519 badge and Simulate 1-Byte Tamper (shipped script, live /api/verify-certificate)", () => {
+    const LEGACY = "function half(n) { return (n / 2) | 0; }";
+    async function resurrect(): Promise<{ modernCode: string; certificate: { signature: { keyId: string; payload: Record<string, unknown>; signatureB64: string; publicKeyPem: string } } }> {
+      const res = await fetch(`${baseUrl}/api/resurrect`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "half", legacyCode: LEGACY, schema: { n: "integer" }, fuzzRuns: 60, seed: 7 }) });
+      const text = await res.text();
+      const line = text.split("\n").filter((l) => l.startsWith("data: ")).map((l) => JSON.parse(l.slice(6)) as { kind: string; result?: unknown }).find((m) => m.kind === "result");
+      return line?.result as Awaited<ReturnType<typeof resurrect>>;
+    }
+    it("/api/resurrect attaches an Ed25519 signature that verifies against the resurrected code", async () => {
+      const r = await resurrect();
+      const sig = r.certificate.signature;
+      expect(sig.keyId).toMatch(/^[0-9a-f]{16}$/);
+      expect(Object.keys(sig.payload)).toEqual(["legacySha256", "resurrectedSha256", "paritySummary", "mutantsKilled", "tscStrictErrors", "issuedAt"]);
+      const ok = await fetch(`${baseUrl}/api/verify-certificate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload: sig.payload, signatureB64: sig.signatureB64, publicKeyPem: sig.publicKeyPem, resurrectedCode: r.modernCode, legacyCode: LEGACY }) });
+      expect(((await ok.json()) as { valid: boolean }).valid).toBe(true);
+    }, 60_000);
+    it("flips the badge to TAMPER DETECTED on a 1-byte change and back with Restore Verified", async () => {
+      const r = await resurrect();
+      const doc = new FakeDocument();
+      const window = { lastResurrectedCode: r.modernCode };
+      const calls: string[] = [];
+      const fetchImpl = (url: string, init?: RequestInit): Promise<Response> => {
+        calls.push(String(init?.body ?? ""));
+        return fetch(`${baseUrl}${url}`, init);
+      };
+      const signatureRow = runInlineScript(`${regionOf("lz-sig")}; signatureRow`, { document: doc, window, fetch: fetchImpl }) as (sig: unknown) => FakeElement;
+      const row = signatureRow(r.certificate.signature);
+      const find = (id: string): FakeElement => {
+        const walk = (el: FakeElement): FakeElement | undefined => (el.id === id ? el : el.children.map(walk).find((x) => x !== undefined));
+        const hit = walk(row);
+        if (hit === undefined) throw new Error(`no #${id}`);
+        return hit;
+      };
+      await settle();
+      expect(find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(find("certRestoreBtn").hidden).toBe(true);
+      find("certTamperBtn").click();
+      await settle();
+      expect(find("certSigBadge").textContent).toBe("TAMPER DETECTED (Digest / Signature Mismatch)");
+      expect(find("certSigBadge").className).toContain("tamper");
+      expect(find("certRestoreBtn").hidden).toBe(false);
+      // Exactly one character of a copy changed; the real code is untouched.
+      const sent = JSON.parse(calls[1] ?? "{}") as { resurrectedCode: string };
+      let differing = 0;
+      for (let i = 0; i < r.modernCode.length; i++) if (sent.resurrectedCode[i] !== r.modernCode[i]) differing++;
+      expect(sent.resurrectedCode.length).toBe(r.modernCode.length);
+      expect(differing).toBe(1);
+      expect(window.lastResurrectedCode).toBe(r.modernCode);
+      find("certRestoreBtn").click();
+      await settle();
+      expect(find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(find("certRestoreBtn").hidden).toBe(true);
+    }, 60_000);
+    it("renders the badge from certificate.signature and keeps old certificates (no signature) unchanged", () => {
+      expect(html).toContain("if (c.signature) card.append(signatureRow(c.signature));");
+      expect(html).toContain("window.lastResurrectedCode = r.modernCode;");
+      expect(html).toContain('badge.textContent = "Ed25519 Signed \\u00b7 VERIFYING..."');
+    });
+  });
+
+  describe("3-way Judge Probe card", () => {
+    it("has Legacy, Naive AI and Lazarus cells, a RUN PROBE button, and still hides for the async preset", () => {
+      const card = html.slice(html.indexOf('<div id="probeCard"'), html.indexOf("</section>", html.indexOf('<div id="probeCard"')));
+      expect(card).toContain('id="probeBtn" type="button" class="primary">RUN PROBE</button>');
+      expect(card.indexOf('id="probeLegacySide"')).toBeLessThan(card.indexOf('id="probeNaiveSide"'));
+      expect(card.indexOf('id="probeNaiveSide"')).toBeLessThan(card.indexOf('id="probeModernSide"'));
+      expect(card).toContain("<h4>Naive AI</h4>");
+      expect(card).toContain("<h4>Lazarus Proven</h4>");
+      expect(html).toContain("compareNaive: !$(\"probeCard\").hidden");
+      expect(html).toContain("if (probe) probe.hidden = true;");
+      expect(html).toContain("naive-diverges");
+      expect(html).toContain("(Object.is: true)");
+    });
+  });
+
+  describe("scope guard", () => {
+    const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+    const between = (a: string, b: string): string => {
+      const s = html.indexOf(a);
+      const e = html.indexOf(b, s + a.length);
+      expect(s).toBeGreaterThan(0);
+      expect(e).toBeGreaterThan(s);
+      return html.slice(s, e);
+    };
+    it("changes 0 Tab 3 Red-Team lines (CSS, pane markup and script hashes equal V12)", () => {
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html.match(/^.*(?:redteam|\.rt-|Red-Team Lab).*$/gm)?.filter((l) => /^\s*</.test(l) === false)).toHaveLength(30);
+    });
+    it("needs no external API key or new dependency", () => {
+      const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string>; scripts: Record<string, string> };
+      expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
+      expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
+    });
+    it("shows 23 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
+    });
   });
 });

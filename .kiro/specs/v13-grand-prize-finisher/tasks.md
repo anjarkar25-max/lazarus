@@ -1,0 +1,11 @@
+# Tasks: V13 Grand Prize Finisher
+- [x] 1. `src/exporter/cert-crypto.ts`: canonical payload, key handling, sign, verify, SVG/Markdown helpers, zip verify.
+- [x] 2. Server: signature on `/api/resurrect` certificate, `certificate.json` in `/api/export-zip`, SVG metadata, `POST /api/verify-certificate`.
+- [x] 3. CLI `lazarus verify <bundle.zip>` and `npm run verify`.
+- [x] 4. `/api/probe` `compareNaive` 3-way extension.
+- [x] 5. UI: Guided Tour auto-dock pill.
+- [x] 6. UI: Self-Healing Causal Strip.
+- [x] 7. UI: Ed25519 badge, Simulate 1-Byte Tamper, Restore Verified.
+- [x] 8. UI: 3-way Judge Probe rendering (async preset unchanged).
+- [x] 9. Tests: `cert-crypto.test.ts`, extend `naive-refactor`, `studio-ui`, `kiro-dna`, probe route tests.
+- [x] 10. Verify: `tsc --noEmit`, full `vitest run`, leak check, `#badgeSpecs` = 23, `#badgeTests` = final count, README sync not required.

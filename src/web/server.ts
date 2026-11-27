@@ -19,7 +19,8 @@ import { formatInputs, formatOutcome } from "../crew/exact-format.js";
 import { DifferentialFuzzer } from "../fuzzer/differential.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
-import { generateCertificate, renderCertificateSvg, sanitizeProvenance, type CertificateInput } from "../exporter/certificate.js";
+import { buildCertificateJson, embedSignatureInSvg, SIGNED_SUBJECT_FILE, signCertificate, verifyCertificate, CERTIFICATE_JSON_FILE, type SignatureBlock } from "../exporter/cert-crypto.js";
+import { generateCertificate, renderCertificateSvg, sanitizeProvenance, sha256Hex, type CertificateInput } from "../exporter/certificate.js";
 import { readKiroDna, resolveKiroDocument, SPEC_DOCUMENTS } from "./kiro-dna.js";
 import { describePaste } from "./smart-paste.js";
 import { buildGitHubPrSummary } from "../exporter/pr-summary.js";
@@ -67,6 +68,8 @@ export const ProbeBodySchema = z
     /** Probe this exported function of a multi-export module (name or export name). */
     functionName: z.string().min(1).max(200).optional(),
     modernCode: z.string().min(1, "modernCode is required").max(MAX_CODE_CHARS),
+    /** 3-way probe: also run the deterministic Naive AI rewrite of the legacy code (synchronous specimens only). */
+    compareNaive: z.boolean().optional(),
     context: z
       .record(ContextKey, z.unknown())
       .refine((record) => Object.keys(record).length <= 32, "context may have at most 32 keys")
@@ -74,6 +77,16 @@ export const ProbeBodySchema = z
   })
   .strict();
 
+export const VerifyCertificateBodySchema = z
+  .object({
+    payload: z.record(z.string(), z.unknown()),
+    signatureB64: z.string().min(1).max(200),
+    publicKeyPem: z.string().min(1).max(2000),
+    resurrectedCode: z.string().max(MAX_CODE_CHARS),
+    /** When given, its SHA-256 must also equal payload.legacySha256. */
+    legacyCode: z.string().max(MAX_CODE_CHARS).optional(),
+  })
+  .strict();
 export interface ProbeSide {
   ok: boolean;
   /** Human-readable value that keeps -0, NaN and undefined distinguishable. */
@@ -93,6 +106,16 @@ export interface ProbeResponse {
   exactParity: boolean;
   /** Why the sides match or differ. */
   reason: string;
+  /** Present only for `compareNaive: true`. */
+  naive?: ProbeSide;
+  naiveCode?: string;
+  /** False when the specimen has no naive-trap pattern (the Naive AI rewrite is the legacy code unchanged). */
+  naiveApplies?: boolean;
+  /** Naive AI differs from Legacy under Object.is (or throws where legacy does not, and vice versa). */
+  naiveDiverges?: boolean;
+  naiveReason?: string;
+  /** Lazarus matches Legacy bit-for-bit under Object.is. */
+  lazarusMatchesLegacy?: boolean;
 }
 
 async function probeSide(runner: PooledProbeRunner, code: string, context: Record<string, unknown>): Promise<{ side: ProbeSide; value: unknown }> {
@@ -236,7 +259,7 @@ export function asyncEntryOf(legacyCode: string, modernCode: string, name?: stri
   const entry = detectErrorFirst(legacyCode, name !== undefined ? { entryName: name } : {}).entry;
   return entry !== undefined && stripAsyncTypes(modernCode, entry) !== undefined ? entry : undefined;
 }
-export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string }> {
+async function buildUnsignedExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string }> {
   const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const mutationScore = checkedScore?.success === true ? checkedScore.data : undefined;
@@ -327,7 +350,21 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
     certificateSvg: renderCertificateSvg(generateCertificate(certificateInput(verified.typecheck)), { name }),
   };
 }
-export interface WebServerOptions {
+/** The unsigned bundle plus the Ed25519 signature over its final `resurrected.ts` (see cert-crypto.ts). */
+export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string; certificateJson: string; signature: SignatureBlock }> {
+  const built = await buildUnsignedExportBundle(parsed);
+  const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
+  const runs = parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS;
+  const attempts = typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1;
+  const signature = signCertificate({
+    legacySource: parsed.legacyCode,
+    resurrectedSource: built.bundle.files[SIGNED_SUBJECT_FILE],
+    paritySummary: `exact Object.is parity, ${runs} fuzz runs, ${attempts} attempt${attempts === 1 ? "" : "s"}`,
+    mutantsKilled: checkedScore?.success === true ? checkedScore.data.killed : null,
+    tscStrictErrors: built.typecheck.errorCount,
+  });
+  return { ...built, certificateSvg: embedSignatureInSvg(built.certificateSvg, signature), certificateJson: buildCertificateJson(signature), signature };
+}export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
   npmFetch?: FetchLike;
   /** `fetch` used by POST /api/import/github-dir (api.github.com + raw.githubusercontent.com). Injected by tests. */
@@ -555,18 +592,27 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       const legacySource = body.legacyCode;
       const provenance = sanitizeProvenance(body.provenance);
       /** The certificate exists only for a verified resurrection. */
-      const certificateFor = (r: ResurrectionResult, esmComplete: boolean, typecheck?: TypecheckReport): { certificate?: ReturnType<typeof generateCertificate> } =>
+      const certificateFor = (r: ResurrectionResult, esmComplete: boolean, typecheck?: TypecheckReport): { certificate?: ReturnType<typeof generateCertificate> & { signature: SignatureBlock } } =>
         r.success
           ? {
-              certificate: generateCertificate({
-                provenance,
-                legacySource,
-                modernCode: r.modernCode,
-                fuzz: { totalRuns: r.fuzzReport.totalRuns, exact: r.fuzzReport.exact === true, ...(r.fuzzReport.boundaryRuns !== undefined ? { boundaryRuns: r.fuzzReport.boundaryRuns } : {}) },
-                attempts: r.attempts,
-                esmComplete,
-                ...(typecheck !== undefined ? { typecheck } : {}),
-              }),
+              certificate: {
+                ...generateCertificate({
+                  provenance,
+                  legacySource,
+                  modernCode: r.modernCode,
+                  fuzz: { totalRuns: r.fuzzReport.totalRuns, exact: r.fuzzReport.exact === true, ...(r.fuzzReport.boundaryRuns !== undefined ? { boundaryRuns: r.fuzzReport.boundaryRuns } : {}) },
+                  attempts: r.attempts,
+                  esmComplete,
+                  ...(typecheck !== undefined ? { typecheck } : {}),
+                }),
+                // Ed25519 signature over the resurrected code shown in the Studio (cert-crypto.ts).
+                signature: signCertificate({
+                  legacySource,
+                  resurrectedSource: r.modernCode,
+                  paritySummary: `exact Object.is parity, ${r.fuzzReport.totalRuns} fuzz runs, ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}`,
+                  tscStrictErrors: typecheck?.errorCount ?? null,
+                }),
+              },
             }
           : {};
       try {
@@ -728,9 +774,9 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const { bundle, typecheck, prSummary, certificateSvg } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
+        const { bundle, typecheck, prSummary, certificateSvg, certificateJson, signature } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
         if (routePath === "/api/export-zip") {
-          const archive = createZip(bundleToZipEntries(bundle));
+          const archive = createZip([...bundleToZipEntries(bundle), { name: CERTIFICATE_JSON_FILE, data: certificateJson }]);
           res.writeHead(200, {
             "Content-Type": "application/zip",
             "Content-Disposition": "attachment; filename=\"lazarus-pr-bundle.zip\"",
@@ -741,7 +787,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...bundle, typecheck, prSummary, certificateSvg }));
+        res.end(JSON.stringify({ ...bundle, typecheck, prSummary, certificateSvg, certificateJson, signature }));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -1101,7 +1147,31 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       }
       return;
     }
-    if (req.method === "POST" && routePath === "/api/probe") {
+    if (req.method === "POST" && routePath === "/api/verify-certificate") {
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        res.writeHead(tooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: tooLarge ? "Payload too large" : "Invalid JSON body" }));
+        return;
+      }
+      const checkedBody = VerifyCertificateBodySchema.safeParse(rawBody);
+      if (!checkedBody.success) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Invalid verification request: ${checkedBody.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` }));
+        return;
+      }
+      let verdict = verifyCertificate(checkedBody.data);
+      const signedLegacy = checkedBody.data.payload.legacySha256;
+      if (verdict.valid && checkedBody.data.legacyCode !== undefined && sha256Hex(checkedBody.data.legacyCode) !== signedLegacy) {
+        verdict = { ...verdict, valid: false, reason: "Legacy digest mismatch: the legacy code differs from the signed SHA-256" };
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(verdict));
+      return;
+    }    if (req.method === "POST" && routePath === "/api/probe") {
       let raw: unknown;
       try {
         raw = await readJsonUnknown(req);
@@ -1122,7 +1192,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         );
         return;
       }
-      const { legacyCode, modernCode, context, functionName } = parsed.data;
+      const { legacyCode, modernCode, context, functionName, compareNaive } = parsed.data;
       const pools = probePools();
       // Legacy runs exactly what /api/resurrect ran: the extracted specimen expression.
       const legacyRunnable = scanLegacyAst(legacyCode, functionName === undefined ? {} : { functionName }).primaryExpression;
@@ -1130,8 +1200,30 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         probeSide(pools.legacy, legacyRunnable, context),
         probeSide(pools.modern, modernCode, context),
       ]);
+      const base = compareProbeSides(legacy, modern);
+      if (compareNaive !== true) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(base));
+        return;
+      }
+      const naiveResult = naiveRefactor(legacyRunnable);
+      const naive = await probeSide(pools.modern, naiveResult.naiveCode, context);
+      const vsLegacy = compareProbeSides(legacy, naive);
+      // 3-way view: positive zero is shown as "+0" so it reads differently from "-0".
+      const exact = (entry: { side: ProbeSide; value: unknown }): ProbeSide => (entry.side.ok && Object.is(entry.value, 0) ? { ...entry.side, display: "+0" } : entry.side);
+      const response: ProbeResponse = {
+        ...base,
+        legacy: exact(legacy),
+        modern: exact(modern),
+        naive: exact(naive),
+        naiveCode: naiveResult.naiveCode,
+        naiveApplies: naiveResult.parseError === undefined && naiveResult.rewrites.length > 0,
+        naiveDiverges: !vsLegacy.exactParity,
+        naiveReason: vsLegacy.reason.replace(/modern/g, "naive"),
+        lazarusMatchesLegacy: base.exactParity,
+      };
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(compareProbeSides(legacy, modern)));
+      res.end(JSON.stringify(response));
       return;
     }
 

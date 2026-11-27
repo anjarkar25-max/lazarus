@@ -11,7 +11,8 @@
         "typecheck": "tsc --noEmit",
         "resurrect": "npx tsx src/cli.ts",
         "benchmark": "npx tsx src/benchmark.ts",
-        "audit": "tsx src/cli.ts audit"
+        "audit": "tsx src/cli.ts audit",
+        "verify": "tsx src/cli.ts verify"
     },
     "repository": {
         "type": "git",

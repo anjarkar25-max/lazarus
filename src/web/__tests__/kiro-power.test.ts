@@ -256,8 +256,8 @@ describe("readKiroDna: the installable Kiro Power", () => {
   const dna = readKiroDna(repoRoot);
 
   it("returns the live power metadata next to all specs, agents, hooks and steering rules", () => {
-    expect(dna.specCount).toBe(22);
-    expect(specDirs).toHaveLength(22);
+    expect(dna.specCount).toBe(23);
+    expect(specDirs).toHaveLength(23);
     expect(dna.specs.map((s) => s.name)).toContain("kiro-power-package");
     expect(dna.agents).toHaveLength(4);
     expect(dna.hookFiles).toBe(4);
@@ -363,11 +363,11 @@ describe("GET /api/kiro-dna with the Kiro Power", () => {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   });
 
-  it("returns the power alongside 22 specs, 4 agents, 4 hooks and the steering rules", async () => {
+  it("returns the power alongside 23 specs, 4 agents, 4 hooks and the steering rules", async () => {
     const res = await fetch(`${baseUrl}/api/kiro-dna`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { specCount: number; agents: unknown[]; hookFiles: number; steering: unknown[]; power: { name: string; installUrl: string; skills: Array<{ name: string }>; mcpServers: Array<{ name: string }> } };
-    expect(body.specCount).toBe(22);
+    expect(body.specCount).toBe(23);
     expect(body.agents).toHaveLength(4);
     expect(body.hookFiles).toBe(4);
     expect(body.steering).toHaveLength(3);

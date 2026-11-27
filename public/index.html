@@ -439,6 +439,34 @@ pre { max-width: 100%; }
 @keyframes tourPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.0); } 50% { box-shadow: 0 0 18px 2px rgba(139, 92, 246, 0.45); } }
 @media (prefers-reduced-motion: reduce) { .tour-focus { animation: none; } .tour-progress i { transition: none; } }
 
+/* ---- V13: Guided Tour auto-dock pill ------------------------------------------ */
+.tour-pill { display: none; align-items: center; gap: 8px; }
+.tour-pill .tour-pill-text { flex: 1 1 auto; min-width: 0; font-size: 11px; color: #c4b5fd; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tour-pill button { font-size: 11px; padding: 4px 10px; border-radius: 999px; }
+.tour-pill .tour-pill-x { padding: 4px 8px; }
+.tour-hud.docked { left: auto; right: 14px; bottom: 14px; transform: none; width: auto; max-width: min(360px, calc(100vw - 28px)); padding: 6px 8px; border-radius: 999px; }
+.tour-hud.docked .tour-pill { display: flex; }
+.tour-hud.docked > :not(.tour-pill) { display: none; }
+body.tour-docked { padding-bottom: 64px; }
+/* ---- V13: Self-Healing Causal Strip ------------------------------------------ */
+.causal-strip { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #090d16; }
+.causal-strip[hidden] { display: none; }
+.causal-node { flex: 1 1 150px; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid #1e293b; background: #111827; font-size: 11px; font-weight: 700; color: #cbd5e1; word-break: break-word; }
+.causal-node i { display: block; font-style: normal; font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.causal-node.ok { border-color: var(--emerald); color: #6ee7b7; background: rgba(16, 185, 129, 0.08); }
+.causal-node.bad { border-color: var(--crimson); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
+.causal-node.heal { border-color: var(--violet); color: #c4b5fd; background: rgba(139, 92, 246, 0.1); }
+.causal-arrow { align-self: center; color: var(--muted); font-size: 14px; }
+/* ---- V13: Ed25519 signature badge + tamper simulator ------------------------- */
+.sig-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e293b; }
+.sig-badge { font-size: 11px; font-weight: 800; letter-spacing: .5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--emerald); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+.sig-badge.tamper { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
+.sig-badge.pending { border-color: #334155; color: var(--muted); background: transparent; }
+.sig-row button { font-size: 11px; padding: 4px 10px; }
+.sig-meta { flex-basis: 100%; font-size: 10px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.probe-side.naive-diverges { border-color: var(--crimson); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.35); }
+.probe-side.naive-diverges .val { color: #fca5a5; }
+.probe-side.lazarus-match { border-color: var(--emerald); }
 /* ---- Verification Deck ---------------------------------------------------- */
 .verify-deck { margin: 0 24px 24px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #0b1120; }
 .deck-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -621,8 +649,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">957 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">22 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">995 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -643,6 +671,11 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     <div class="tour-text" id="tourText"></div>
     <div class="tour-progress"><i id="tourBar"></i></div>
     <div class="tour-actions" id="tourActions"></div>
+    <div class="tour-pill" id="tourPill">
+      <span class="tour-pill-text" id="tourPillText">Guided Tour</span>
+      <button type="button" class="tour-btn" id="tourResume">Resume Tour</button>
+      <button type="button" class="tour-cancel tour-pill-x" id="tourPillClose" aria-label="Close the tour banner" title="Close the tour banner">&times;</button>
+    </div>
   </div>
   <div class="studio-pane" id="pane-single" role="tabpanel" aria-labelledby="tab-single">
     <div class="pane-toolbar">
@@ -771,6 +804,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
         <small>Self-healing diff, certificate, mutation audit, PR bundle and edge-case probes, at full width.</small>
       </div>
       <div class="deck-wide">
+        <!-- Self-Healing Causal Strip: the real run pipeline in 4 nodes, shown once a resurrection succeeds -->
+        <div id="causalStrip" class="causal-strip" role="list" aria-label="Self-Healing Causal Strip" hidden></div>
         <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
         <div id="healingMatrix" class="matrix" hidden>
           <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
@@ -854,12 +889,13 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
               <button type="button" class="probe-chip" data-value='""'>&quot;&quot;</button>
             </div>
             <div class="probe-actions">
-              <button id="probeBtn" type="button" class="primary">PROBE BOTH</button>
+              <button id="probeBtn" type="button" class="primary">RUN PROBE</button>
               <span id="probeStatus" class="muted">Run RESURRECT SPECIMEN, then try your own adversarial input. Fields accept JSON plus NaN, -0, Infinity and undefined.</span>
             </div>
             <div id="probeResults" class="probe-results" hidden>
               <div class="probe-side" id="probeLegacySide"><h4>Legacy</h4><code class="val" id="probeLegacyVal"></code><span class="meta" id="probeLegacyMeta"></span></div>
-              <div class="probe-side" id="probeModernSide"><h4>Resurrected</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
+              <div class="probe-side" id="probeNaiveSide" hidden><h4>Naive AI</h4><code class="val" id="probeNaiveVal"></code><span class="meta" id="probeNaiveMeta"></span></div>
+              <div class="probe-side" id="probeModernSide"><h4>Lazarus Proven</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
             </div>
             <div id="probeVerdict" class="verdict" hidden></div>
           </div>
@@ -1169,6 +1205,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
               window.lastFuzzRuns = r.fuzzReport.totalRuns;
               window.lastModuleFunctions = r.module ? r.module.functions : null;
               window.lastAttempts = r.attempts;
+              window.lastResurrectedCode = r.modernCode;
               if (window.LazarusCertificate) window.LazarusCertificate.render(r.certificate);
               if (window.LazarusMutation) window.LazarusMutation.onResult(r);
               document.dispatchEvent(new CustomEvent("lazarus:result", { detail: r }));
@@ -1635,6 +1672,53 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     matrix.hidden = false;
   }
 
+  // ---- Self-Healing Causal Strip (pure node builder, so studio-ui.test.ts can run it) ----
+  /* lz-causal:start */
+  function lzCausalNodes(r, fmt) {
+    if (!r || !r.success) return [];
+    var events = Array.isArray(r.events) ? r.events : [];
+    var cxEvent = events.find(function (e) { return e.type === "counterexample_found" && e.payload; });
+    var cx = cxEvent ? cxEvent.payload.counterexample : null;
+    var refine = /\/\/ ast-refine: .*?blamed (\S+); rolled back ([^;]+);/.exec(r.modernCode || "");
+    var cert = r.certificate;
+    var rolled = cert && Array.isArray(cert.rolledBack) ? cert.rolledBack : [];
+    var rollback = r.attempts > 1 || !!refine;
+    if (!rollback) {
+      return [
+        { kind: "ok", step: "1", label: "AST Lifted" },
+        { kind: "ok", step: "2", label: "Exorcist Fuzzed" },
+        { kind: "ok", step: "3", label: "Zero Divergences" },
+        { kind: "ok", step: "4", label: "100% Exact Parity" }
+      ];
+    }
+    var input = cx && cx.inputs ? Object.keys(cx.inputs).map(function (k) { return k + " = " + fmt(cx.inputs[k]); }).join(", ") : "n/a";
+    if (input.length > 48) input = input.slice(0, 47) + "\u2026";
+    var rule = refine ? refine[2].trim() : rolled.length ? rolled.join(", ") : "draft rewrite";
+    return [
+      { kind: "bad", step: "1", label: "Draft 1" },
+      { kind: "bad", step: "2", label: "Counterexample Caught (" + input + ")" },
+      { kind: "heal", step: "3", label: "Rule Rolled Back (" + rule + ")" },
+      { kind: "ok", step: "4", label: "Draft " + r.attempts + " Proven (Object.is 100%)" }
+    ];
+  }
+  /* lz-causal:end */
+  function renderCausalStrip(r) {
+    const strip = $("causalStrip");
+    if (!strip) return;
+    strip.textContent = "";
+    const nodes = lzCausalNodes(r, show);
+    strip.hidden = nodes.length === 0;
+    nodes.forEach((n, idx) => {
+      if (idx > 0) { const a = document.createElement("span"); a.className = "causal-arrow"; a.textContent = "\u2192"; a.setAttribute("aria-hidden", "true"); strip.append(a); }
+      const el = document.createElement("div");
+      el.className = "causal-node " + n.kind;
+      el.setAttribute("role", "listitem");
+      const s = document.createElement("i"); s.textContent = "Step " + n.step;
+      el.append(s, n.label);
+      strip.append(el);
+    });
+  }
+
   // ---- Probe Custom Edge Case ---------------------------------------------
   function setStatus(text, isError) {
     probeStatus.textContent = text;
@@ -1719,13 +1803,31 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     const differs = !data.exactParity && data.legacy.ok && data.modern.ok;
     fillSide("probeLegacy", data.legacy, differs);
     fillSide("probeModern", data.modern, differs);
+    // 3-way probe: Legacy | Naive AI | Lazarus. Naive AI turns crimson when it diverges from Legacy under Object.is.
+    const naiveBox = $("probeNaiveSide");
+    const threeWay = !!data.naive;
+    naiveBox.hidden = !threeWay;
+    if (threeWay) {
+      fillSide("probeNaive", data.naive, false);
+      naiveBox.className = "probe-side" + (data.naive.ok ? "" : " error") + (data.naiveDiverges ? " naive-diverges" : "");
+      if (!data.naiveApplies) $("probeNaiveMeta").textContent += " \u00b7 no naive-trap pattern in this specimen";
+    }
+    $("probeModernSide").className += threeWay && data.lazarusMatchesLegacy ? " lazarus-match" : "";
     probeResults.hidden = false;
     probeVerdict.hidden = false;
     probeVerdict.className = "verdict " + (data.exactParity ? "pass" : "fail");
     probeVerdict.textContent = "";
     const head = document.createElement("strong");
-    head.textContent = data.exactParity ? "Object.is PARITY \u2713 " : "MISMATCH \u2717 ";
+    head.textContent = threeWay
+      ? (data.lazarusMatchesLegacy ? "Lazarus = Legacy bit-for-bit (Object.is: true) \u2713 " : "Lazarus MISMATCH (Object.is: false) \u2717 ")
+      : (data.exactParity ? "Object.is PARITY \u2713 " : "MISMATCH \u2717 ");
     probeVerdict.append(head, data.reason);
+    if (threeWay && data.naiveDiverges) {
+      const trap = document.createElement("strong");
+      trap.textContent = " \u00b7 Naive AI DIVERGES from Legacy: ";
+      trap.style.color = "#fca5a5";
+      probeVerdict.append(trap, data.naiveReason || "values differ");
+    }
     setStatus("Probed " + Object.keys(context).map((k) => k + " = " + show(context[k])).join(", "));
   }
   let probeCtl = null, probeToken = 0;
@@ -1751,7 +1853,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       const res = await fetch("/api/probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: chosen && chosen.modernCode ? chosen.modernCode : modern, context, functionName: chosen ? chosen.exportedAs : undefined }),
+        body: JSON.stringify({ legacyCode: legacyCode.value, modernCode: chosen && chosen.modernCode ? chosen.modernCode : modern, context, functionName: chosen ? chosen.exportedAs : undefined, compareNaive: !$("probeCard").hidden }),
         signal: controller.signal
       });
       const data = await res.json();
@@ -1806,12 +1908,16 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       matrix.hidden = true;
       probeResults.hidden = true;
       probeVerdict.hidden = true;
+      $("probeNaiveSide").hidden = true;
+      const strip = $("causalStrip");
+      if (strip) { strip.hidden = true; strip.textContent = ""; }
       setStatus("Resurrecting...");
     },
     onResult(r) {
       renderMatrix(r);
+      renderCausalStrip(r);
       renderProbeInputs();
-      setStatus("Resurrection complete. Click a quick input, or type your own adversarial value and press PROBE BOTH.");
+      setStatus("Resurrection complete. Click a quick input, or type your own adversarial value and press RUN PROBE: Legacy, Naive AI and Lazarus run side by side.");
     },
     refreshProbeInputs: renderProbeInputs
   };
@@ -1953,9 +2059,66 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       if (c.typecheck) card.append(row("TypeScript strict", "tsc --strict: " + c.typecheck.errorCount + " error" + (c.typecheck.errorCount === 1 ? "" : "s") + " (" + c.typecheck.filesChecked + " file" + (c.typecheck.filesChecked === 1 ? "" : "s") + ", TypeScript " + c.typecheck.tsVersion + ")", c.typecheck.errorCount === 0 ? "ok" : "warn"));
       const mutScore = window.lastMutationScore;
       if (mutScore) card.append(row("Proof strength", mutScore.killed + "/" + mutScore.total + " mutants killed (" + Math.round(mutScore.killed / mutScore.total * 100) + "% proof strength)", mutScore.killed === mutScore.total ? "ok" : "warn"));
+      if (c.signature) card.append(signatureRow(c.signature));
       card.style.display = "block";
     }
   };
+  // ---- Ed25519 signature badge + "Simulate 1-Byte Tamper" (POST /api/verify-certificate) ----
+  /* lz-sig:start */
+  /** A copy of `code` with exactly one character changed (the original is never touched). */
+  function flipOneChar(code) {
+    const i = code.search(/[A-Za-z0-9]/);
+    if (i < 0) return code + " ";
+    const ch = code.charAt(i);
+    const next = ch === "z" ? "a" : ch === "Z" ? "A" : ch === "9" ? "0" : String.fromCharCode(ch.charCodeAt(0) + 1);
+    return code.slice(0, i) + next + code.slice(i + 1);
+  }
+  async function verifySignature(sig, code) {
+    const res = await fetch("/api/verify-certificate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: sig.payload, signatureB64: sig.signatureB64, publicKeyPem: sig.publicKeyPem, resurrectedCode: code })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+  function signatureRow(sig) {
+    const wrap = document.createElement("div"); wrap.className = "sig-row"; wrap.id = "certSigRow";
+    const badge = document.createElement("span"); badge.id = "certSigBadge"; badge.className = "sig-badge pending"; badge.textContent = "Ed25519 Signed \u00b7 VERIFYING...";
+    const tamperBtn = document.createElement("button"); tamperBtn.type = "button"; tamperBtn.className = "cert-copy"; tamperBtn.id = "certTamperBtn"; tamperBtn.textContent = "Simulate 1-Byte Tamper";
+    const restoreBtn = document.createElement("button"); restoreBtn.type = "button"; restoreBtn.className = "cert-copy"; restoreBtn.id = "certRestoreBtn"; restoreBtn.textContent = "Restore Verified"; restoreBtn.hidden = true;
+    const meta = document.createElement("div"); meta.className = "sig-meta";
+    meta.textContent = "key " + sig.keyId + " \u00b7 signed SHA-256 of the resurrected code " + sig.payload.resurrectedSha256.slice(0, 16) + "... \u00b7 issued " + sig.payload.issuedAt;
+    let seq = 0;
+    function show(kind, text, title) { badge.className = "sig-badge" + (kind ? " " + kind : ""); badge.textContent = text; badge.title = title || ""; }
+    async function check(code, tampered) {
+      const mine = ++seq;
+      show("pending", "Ed25519 Signed \u00b7 VERIFYING...");
+      try {
+        const v = await verifySignature(sig, code);
+        if (mine !== seq) return;
+        if (v.valid) show("", "Ed25519 Signed \u00b7 VERIFIED", v.reason);
+        else show("tamper", "TAMPER DETECTED (Digest / Signature Mismatch)", v.reason + " (expected " + v.expectedDigest.slice(0, 12) + ", got " + v.actualDigest.slice(0, 12) + ")");
+        tamperBtn.disabled = tampered;
+        restoreBtn.hidden = !tampered;
+      } catch (err) {
+        if (mine !== seq) return;
+        show("pending", "Ed25519 Signed \u00b7 verifier unreachable", err && err.message ? err.message : String(err));
+        tamperBtn.disabled = false;
+      }
+    }
+    tamperBtn.addEventListener("click", () => {
+      const code = String(window.lastResurrectedCode || "");
+      if (!code) { show("pending", "Ed25519 Signed \u00b7 no resurrected code to tamper with"); return; }
+      tamperBtn.disabled = true;
+      check(flipOneChar(code), true);
+    });
+    restoreBtn.addEventListener("click", () => { restoreBtn.hidden = true; check(String(window.lastResurrectedCode || ""), false); });
+    wrap.append(badge, tamperBtn, restoreBtn, meta);
+    check(String(window.lastResurrectedCode || ""), false);
+    return wrap;
+  }
+  /* lz-sig:end */
   runBtn.addEventListener("click", () => window.LazarusCertificate.hide());
 })();
 </script>
@@ -2740,9 +2903,15 @@ function lzDecodeSpecimen(hash) {
   const stepEl = $("tourStep"), textEl = $("tourText"), bar = $("tourBar"), actions = $("tourActions");
   const STEPS = 4;
   let tour = null;
+  // V13 auto-dock: the banner collapses into a corner pill (Resume Tour / x) so it never covers the Trap Card,
+  // Mutant Autopsy or Certificate controls (lzMakeDock below). The pill's x dismisses it until the next tour starts.
+  const pillText = $("tourPillText"), resumeBtn = $("tourResume"), pillClose = $("tourPillClose");
+  let dock = null;
   class TourCancelled extends Error {}
   function say(step, text, isError) {
-    hud.hidden = false;
+    if (!dock.dismissed()) hud.hidden = false;
+    pillText.textContent = (step >= STEPS ? "Tour complete" : step > 0 ? "Tour " + step + "/" + STEPS : isError ? "Tour stopped" : "Tour") + " \u00b7 " + text;
+    pillText.title = text;
     stepEl.textContent = step > 0 ? "Guided Judge Tour \u00b7 step " + step + " of " + STEPS : "Guided Judge Tour";
     textEl.textContent = text;
     textEl.className = "tour-text" + (isError ? " error" : "");
@@ -2779,6 +2948,7 @@ function lzDecodeSpecimen(hash) {
     tourBtn.disabled = true;
     tourCancel.hidden = false;
     actions.textContent = "";
+    dock.reset();
     try {
       // 1. Live self-healing resurrection of the 32-bit string hash.
       switchTab("single", false);
@@ -2843,6 +3013,39 @@ function lzDecodeSpecimen(hash) {
       finishControls();
     }
   }
+  /* lz-dock:start */
+  /** Corner-pill state for the tour banner. Docks on a finished resurrection and on the Trap Card, Mutant Autopsy and Certificate controls. */
+  function lzMakeDock(hud, body, doc) {
+    let dismissed = false;
+    function dock() {
+      if (hud.hidden || dismissed) return;
+      hud.classList.add("docked");
+      body.classList.add("tour-docked");
+    }
+    function undock() {
+      hud.classList.remove("docked");
+      body.classList.remove("tour-docked");
+    }
+    doc.addEventListener("lazarus:result", () => dock());
+    doc.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t && typeof t.closest === "function" && t.closest("#naiveBtn, #mutScore, #mutBtn, #certCard, #trapCard")) dock();
+    }, true);
+    doc.addEventListener("lazarus:tab", (e) => { if (e.detail && e.detail.name !== "single") undock(); });
+    return {
+      dock: dock,
+      undock: undock,
+      dismissed: () => dismissed,
+      isDocked: () => hud.classList.contains("docked"),
+      resume() { dismissed = false; undock(); },
+      dismiss() { dismissed = true; hud.hidden = true; undock(); },
+      reset() { dismissed = false; undock(); }
+    };
+  }
+  /* lz-dock:end */
+  dock = lzMakeDock(hud, document.body, document);
+  resumeBtn.addEventListener("click", () => dock.resume());
+  pillClose.addEventListener("click", () => dock.dismiss());
   tourBtn.addEventListener("click", runTour);
   // A finished (or stopped) tour's banner never covers Tab 2 or Tab 3; on Tab 1 it stays until Close.
   document.addEventListener("lazarus:tab", (e) => { if (!tour && e.detail && e.detail.name !== "single") hud.hidden = true; });

@@ -19,6 +19,7 @@ import { describeTypecheck } from "./crew/ts-verifier.js";
 import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
 import { runAuditCli } from "./cli-audit.js";
+import { verifyBundleZip } from "./exporter/cert-crypto.js";
 
 export interface CliIo {
   stdout: (text: string) => void;
@@ -120,6 +121,7 @@ const PROGRESS_TYPES = new Set<CrewEvent["type"]>(["agent_started", "counterexam
 export async function main(argv: readonly string[], io: CliIo = defaultIo()): Promise<number> {
   // `lazarus audit <dir>`: the static Legacy Risk Report (nothing is executed).
   if (argv[0] === "audit") return runAuditCli(argv.slice(1), io);
+  if (argv[0] === "verify") return runVerifyCli(argv.slice(1), io);
   const args = parseArgs(argv);
   if ("error" in args) {
     io.stderr(`error: ${args.error}\n\n${USAGE}\n`);
@@ -272,6 +274,28 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
   for (const [file, content] of files) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
   if (!esm.complete) io.stdout(`  note: kept CommonJS (${esm.notes.join("; ") || "no exports"})\n`);
   return 0;
+}
+
+export const VERIFY_USAGE = "usage: lazarus verify <bundle.zip>   (npm run verify -- <bundle.zip>)\nChecks the Ed25519 signature in certificate.json and the SHA-256 of the file it names. Exit 0 valid, 1 invalid, 2 bad usage.";
+
+/** `lazarus verify <bundle.zip>`: offline check of a signed Resurrection Certificate inside an exported bundle. */
+export function runVerifyCli(argv: readonly string[], io: CliIo): number {
+  const file = argv.find((a) => !a.startsWith("-"));
+  if (file === undefined || argv.length !== 1) {
+    io.stderr(`${VERIFY_USAGE}\n`);
+    return 2;
+  }
+  let archive: Buffer;
+  try {
+    archive = fs.readFileSync(nodePath.resolve(io.cwd, file));
+  } catch (err: unknown) {
+    io.stderr(`error: cannot read ${file}: ${err instanceof Error ? err.message : String(err)}\n`);
+    return 2;
+  }
+  const result = verifyBundleZip(archive);
+  io.stdout(`${result.valid ? "VERIFIED" : "INVALID"}: ${result.reason}\n`);
+  io.stdout(`  file:     ${result.subjectFile}\n  key id:   ${result.keyId}${result.trustedKey ? " (this installation's signing key)" : " (not this installation's key)"}\n  expected: ${result.expectedDigest}\n  actual:   ${result.actualDigest}\n`);
+  return result.valid ? 0 : 1;
 }
 
 async function runModule(source: string, idioms: string[], args: ParsedArgs, inputPath: string, io: CliIo): Promise<number> {
