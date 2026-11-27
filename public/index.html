@@ -563,6 +563,45 @@ pre { max-width: 100%; }
 .dna-power .head .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .dna-power .head .chips span { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid #334155; color: #c4b5fd; }
 .dna-card code.run { display: block; margin-top: 6px; padding: 5px 7px; border-radius: 6px; background: #020617; border: 1px solid var(--border); color: #c4b5fd; font-size: 10px; white-space: pre-wrap; word-break: break-word; }
+/* ---- V12: Mutant Autopsy, Naive AI trap card, cold-start pill ---------------------- */
+.mut-score[role="button"] { cursor: pointer; }
+.mut-score[role="button"]:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.mut-score .autopsy-hint { display: block; margin-top: 3px; font-size: 10px; font-weight: 700; letter-spacing: .5px; color: #c4b5fd; }
+.mut-autopsy { margin-top: 8px; display: grid; gap: 6px; }
+.mut-autopsy[hidden] { display: none; }
+.autopsy-row { border: 1px solid #1e293b; border-left: 3px solid var(--emerald); border-radius: 6px; padding: 6px 8px; background: #0b1120; font-size: 11px; color: #cbd5e1; min-width: 0; }
+.autopsy-row.survived { border-left-color: var(--crimson); }
+.autopsy-row .ah { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-weight: 700; color: #f1f5f9; }
+.autopsy-row pre { margin: 4px 0; padding: 4px 6px; background: #020617; border-radius: 4px; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+.autopsy-row pre .del { color: #fca5a5; }
+.autopsy-row pre .add { color: #6ee7b7; }
+.autopsy-row dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 8px; margin: 0; }
+.autopsy-row dt { color: var(--muted); }
+.autopsy-row dd { margin: 0; font-family: ui-monospace, Consolas, monospace; word-break: break-word; }
+.autopsy-row dd.bad { color: #fca5a5; }
+.autopsy-row dd.ok { color: #6ee7b7; }
+.naive-toggle { margin-left: 6px; border-color: var(--crimson); color: #fecaca; background: #2a0f14; }
+.naive-toggle[aria-pressed="true"] { background: var(--crimson); color: #fff; }
+.naive-toggle[hidden] { display: none; }
+.trap-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.trap-card[hidden] { display: none; }
+@media (max-width: 900px) { .trap-card { grid-template-columns: 1fr; } }
+.trap-side { min-width: 0; padding: 10px; border-radius: 8px; border: 1px solid; font-size: 11px; color: #cbd5e1; background: #0b1120; }
+.trap-side.naive { border-color: var(--crimson); box-shadow: inset 3px 0 0 var(--crimson); }
+.trap-side.naive.honest { border-color: #475569; box-shadow: inset 3px 0 0 #475569; }
+.trap-side.lazarus { border-color: var(--emerald); box-shadow: inset 3px 0 0 var(--emerald); }
+.trap-side h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; }
+.trap-side.naive h3 { color: #fca5a5; }
+.trap-side.lazarus h3 { color: #6ee7b7; }
+.trap-side pre { margin: 6px 0; max-height: 220px; overflow: auto; padding: 6px 8px; background: #020617; border-radius: 6px; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
+.trap-side .verdict-line { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
+.trap-side.naive .verdict-line { color: #fecaca; }
+.trap-side.lazarus .verdict-line { color: #a7f3d0; }
+.trap-side ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
+.wake-pill { position: fixed; left: 16px; bottom: 16px; z-index: 70; display: flex; gap: 8px; align-items: center; max-width: min(420px, calc(100vw - 32px)); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--violet); background: rgba(9, 13, 22, 0.95); color: #ddd6fe; font-size: 11px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+.wake-pill[hidden] { display: none; }
+.wake-pill.err { border-color: var(--crimson); color: #fecaca; }
+.wake-pill button { font-size: 10px; padding: 2px 8px; border-radius: 999px; }
 .stale-hint { display: inline-block; margin-left: 10px; font-size: 11px; color: #fbbf24; vertical-align: middle; }
 .stale-hint[hidden] { display: none; }
 .lz-stale { opacity: 0.45; filter: grayscale(0.6); transition: opacity 0.2s; }
@@ -579,8 +618,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">852 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">20 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">918 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -695,6 +734,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
             <div class="out-actions">
               <span class="tsc-badge" id="tscBadge" hidden></span>
               <button type="button" class="diff-toggle" id="legacyDiffToggle" aria-pressed="false" aria-controls="legacyDiff" disabled>Legacy vs. Resurrected Diff</button>
+              <button type="button" class="diff-toggle naive-toggle" id="naiveBtn" aria-pressed="false" aria-controls="trapCard" title="Run a deterministic naive LLM-style rewrite through the same exact Object.is Exorcist (no API key)" hidden>Compare vs. Naive AI</button>
             </div>
           </div>
   
@@ -756,6 +796,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <div class="diff-head"><span>Legacy specimen (&minus;) vs resurrected code (+)</span><span class="diff-stats" id="legacyDiffStats"></span></div>
           <div class="diff-view" id="legacyDiff" role="table" aria-label="Line diff from the legacy specimen to the resurrected code"></div>
         </div>
+        <div class="trap-card" id="trapCard" aria-live="polite" hidden></div>
       </div>
       <div class="deck-grid">
         <div class="deck-col">
@@ -770,6 +811,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
               <thead><tr><th>Injected bug</th><th>Status</th><th>Killing counterexample</th></tr></thead>
               <tbody id="mutRows"></tbody>
             </table>
+            <div class="mut-autopsy" id="mutAutopsy" aria-label="Mutant Autopsy Inspector" hidden></div>
             <div class="mut-note" id="mutNote">Injects up to 5 realistic rewrite bugs into the resurrected code and checks that the exact Object.is Exorcist catches each one. Survivors are reported as they are.</div>
           </div>
         </div>
@@ -896,6 +938,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
 
 
   <div class="dna-scrim" id="dnaScrim" hidden></div>
+<div class="wake-pill" id="wakePill" role="status" aria-live="polite" hidden></div>
 <aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
   <div class="dna-head">
     <h2 id="dnaTitle">Kiro DNA<small id="dnaSub">Live from .kiro/specs, .kiro/agents, .kiro/steering, .kiro/hooks and power-lazarus/</small></h2>
@@ -3176,6 +3219,233 @@ function lzDecodeSpecimen(hash) {
   openFromHash(false);
   window.addEventListener("hashchange", () => openFromHash(true));
   window.LazarusLink = { open: () => openFromHash(true) };
+})();
+</script>
+<script>
+/* Mutant Autopsy Inspector: the mutation score toggles a collapsed, per-mutant fault / killer / divergence view. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const score = $("mutScore"), box = $("mutAutopsy");
+  if (!score || !box) return;
+  let open = false;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  function setOpen(v) {
+    open = v;
+    box.hidden = !v;
+    score.setAttribute("aria-expanded", v ? "true" : "false");
+    const hint = score.querySelector(".autopsy-hint");
+    if (hint) hint.textContent = v ? "\u25be Hide Mutant Autopsy" : "\u25b8 Open Mutant Autopsy (injected fault, killer input, Object.is divergence)";
+  }
+  function disarm() {
+    setOpen(false);
+    box.textContent = "";
+    score.removeAttribute("role"); score.removeAttribute("tabindex"); score.removeAttribute("aria-expanded"); score.removeAttribute("aria-controls");
+  }
+  function row(m) {
+    const a = m.autopsy;
+    const r = el("div", "autopsy-row " + a.status);
+    const head = el("div", "ah");
+    head.append(el("span", "", a.id), el("span", "", a.operator), el("span", "mut-pill " + a.status, a.status.toUpperCase()));
+    const pre = el("pre");
+    pre.append(el("span", "del", "- " + a.originalLine), document.createTextNode("\n"), el("span", "add", "+ " + a.mutatedLine));
+    const dl = el("dl");
+    const pair = (k, v, cls) => { dl.append(el("dt", "", k), el("dd", cls || "", v)); };
+    if (a.killerInput) {
+      pair("killer input", a.killerInput.display + (a.killerInput.source === "shrunk" ? "  (shrunk by fast-check)" : a.killerInput.source === "boundary-corpus" ? "  (boundary corpus)" : "  (first failing input)"));
+      pair("legacy", a.legacyOutput, "ok");
+      pair("mutant", a.mutantOutput, "bad");
+      pair("Object.is", a.divergence || "outputs differ");
+    } else {
+      pair("result", "survived: no input among " + m.runs + " exact probes told it apart (an equivalent mutant, or a schema too narrow to reach it)");
+    }
+    r.append(head, pre, dl);
+    return r;
+  }
+  function arm(result) {
+    disarm();
+    const list = result && Array.isArray(result.mutants) ? result.mutants.filter((m) => m && m.autopsy) : [];
+    if (list.length === 0) return;
+    list.forEach((m) => box.append(row(m)));
+    score.setAttribute("role", "button");
+    score.setAttribute("tabindex", "0");
+    score.setAttribute("aria-controls", "mutAutopsy");
+    score.append(el("span", "autopsy-hint"));
+    setOpen(false);
+  }
+  score.addEventListener("click", () => { if (score.getAttribute("role") === "button") setOpen(!open); });
+  score.addEventListener("keydown", (e) => {
+    if (score.getAttribute("role") !== "button" || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    setOpen(!open);
+  });
+  document.addEventListener("lazarus:mutation", (e) => arm(e.detail));
+  document.addEventListener("lazarus:run-start", disarm);
+  window.LazarusAutopsy = { arm: arm, toggle: () => setOpen(!open), isOpen: () => open };
+})();
+</script>
+<script>
+/* Naive AI vs. Lazarus: a deterministic naive rewrite, fuzzed by the same Exorcist (POST /api/compare-naive). */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const btn = $("naiveBtn"), card = $("trapCard"), code = $("legacyCode"), schemaJson = $("schemaJson");
+  if (!btn || !card || !code) return;
+  let proven = null, ctl = null, token = 0, shown = false;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  function flatSchema(text) {
+    try { const s = JSON.parse(text || "{}"); return s && typeof s === "object" && !Array.isArray(s) && Object.values(s).every((v) => typeof v === "string") ? s : null; } catch (e) { return null; }
+  }
+  function hide() { shown = false; card.hidden = true; btn.setAttribute("aria-pressed", "false"); }
+  function reset() {
+    if (ctl) ctl.abort();
+    ctl = null; token++;
+    proven = null; hide(); card.textContent = "";
+    btn.hidden = true; btn.disabled = false; btn.textContent = "Compare vs. Naive AI";
+  }
+  let pendingSource = null, pendingSchema = null;
+  document.addEventListener("lazarus:run-start", (e) => {
+    reset();
+    pendingSource = e.detail && typeof e.detail.source === "string" ? e.detail.source : code.value;
+    pendingSchema = schemaJson ? schemaJson.value : "{}";
+  });
+  document.addEventListener("lazarus:result", (e) => {
+    const r = e.detail;
+    if (!r || !r.success || r.module) { reset(); return; }
+    const schema = flatSchema(pendingSchema);
+    if (!schema) { reset(); return; }
+    proven = { source: pendingSource !== null ? pendingSource : code.value, schema: schema, modernCode: r.modernCode || "", runs: r.fuzzReport ? r.fuzzReport.totalRuns : 0, attempts: r.attempts || 1, typecheck: r.typecheck || null, name: r.name || "" };
+    btn.hidden = false;
+  });
+  // The audit script dispatches this event before it sets window.lastMutationScore, so the score is read from the event.
+  document.addEventListener("lazarus:mutation", (e) => {
+    const a = e.detail;
+    if (proven && a && typeof a.killed === "number") proven.score = a.baselineVerified && a.totalMutants > 0 ? { killed: a.killed, total: a.totalMutants } : null;
+    if (shown && proven && proven.last) render(proven.last);
+  });
+  function lazarusSide() {
+    const side = el("section", "trap-side lazarus");
+    side.append(el("h3", "", "Lazarus Proven"));
+    side.append(el("div", "verdict-line", "100% Exact Object.is Parity \u00b7 " + proven.runs + " fuzz runs \u00b7 " + proven.attempts + " attempt" + (proven.attempts === 1 ? "" : "s")));
+    side.append(el("pre", "", proven.modernCode));
+    const s = proven.score !== undefined ? proven.score : window.lastMutationScore;
+    side.append(el("div", "", s ? "Mutation audit: " + s.killed + "/" + s.total + " mutants killed (" + Math.round(s.killed / s.total * 100) + "% proof strength)" : "Mutation audit: not run yet (ATTACK MY OWN PROOF in the deck)"));
+    const tc = proven.typecheck;
+    if (tc && typeof tc.errorCount === "number") side.append(el("div", "", "tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s")));
+    return side;
+  }
+  function render(data) {
+    card.textContent = "";
+    const naive = el("section", "trap-side naive" + (data.passed ? " honest" : ""));
+    naive.append(el("h3", "", "Naive AI Refactor"));
+    if (data.counterexample) {
+      naive.append(el("div", "verdict-line", data.counterexample.input + " \u2192 Legacy: " + data.counterexample.legacyOutput + " vs Naive: " + data.counterexample.naiveOutput));
+      naive.append(el("div", "", data.counterexample.reason + " \u00b7 caught after " + data.totalRuns + " exact run" + (data.totalRuns === 1 ? "" : "s")));
+    } else {
+      naive.append(el("div", "verdict-line", "No trap: " + (data.note || "the naive rewrite matched on every run")));
+    }
+    naive.append(el("pre", "", data.naiveCode));
+    if (Array.isArray(data.rewrites) && data.rewrites.length) {
+      const ul = el("ul");
+      data.rewrites.forEach((w) => ul.append(el("li", "", w.before + "  \u2192  " + w.after + " \u2014 " + w.why)));
+      naive.append(ul);
+    }
+    card.append(naive, lazarusSide());
+    shown = true; card.hidden = false; btn.setAttribute("aria-pressed", "true");
+  }
+  async function compare() {
+    if (!proven) return;
+    if (shown) { hide(); return; }
+    if (proven.last) { render(proven.last); return; }
+    if (ctl) ctl.abort();
+    const mine = ++token;
+    ctl = new AbortController();
+    const timer = setTimeout(() => ctl && ctl.abort(), 30000);
+    btn.disabled = true; btn.textContent = "Running naive rewrite through the Exorcist...";
+    try {
+      const res = await fetch("/api/compare-naive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: proven.source, schema: proven.schema, seed: 1337 }), signal: ctl.signal });
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (mine !== token) return;
+      if (!res.ok || !data || typeof data.naiveCode !== "string") {
+        card.textContent = "";
+        card.append(el("section", "trap-side naive", "Naive comparison failed (HTTP " + res.status + "): " + ((data && data.error) || "unexpected response")));
+        card.hidden = false; shown = true; btn.setAttribute("aria-pressed", "true");
+        return;
+      }
+      proven.last = data;
+      render(data);
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (err) {
+      if (mine !== token) return;
+      card.textContent = "";
+      card.append(el("section", "trap-side naive", "Naive comparison failed: " + (err && err.name === "AbortError" ? "no answer within 30 s" : (err && err.message) || err)));
+      card.hidden = false; shown = true;
+    } finally {
+      clearTimeout(timer);
+      if (mine === token) { ctl = null; btn.disabled = false; btn.textContent = "Compare vs. Naive AI"; }
+    }
+  }
+  btn.addEventListener("click", compare);
+  window.LazarusNaive = { compare: compare, reset: reset };
+})();
+</script>
+<script>
+/* lz-health:start */
+// Render cold-start guard. Pure core (tested in node:vm): ping /api/health, show the pill only after 1.5 s, one retry
+// on 502/503/504 or a network error, then a clear message with a Retry button.
+function lzHealthGuard(deps) {
+  const RETRYABLE = [502, 503, 504];
+  let shownTimer = null, done = false;
+  function settle() { done = true; if (shownTimer !== null) deps.clearTimeout(shownTimer); shownTimer = null; }
+  async function ping() {
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const t = deps.setTimeout(() => { if (ctl) ctl.abort(); }, deps.timeoutMs || 8000);
+    try {
+      const res = await deps.fetch("/api/health", { cache: "no-store", ...(ctl ? { signal: ctl.signal } : {}) });
+      return { status: res.status, ok: res.ok };
+    } catch (err) {
+      return { status: 0, ok: false, error: (err && err.message) || String(err) };
+    } finally {
+      deps.clearTimeout(t);
+    }
+  }
+  async function run() {
+    done = false;
+    shownTimer = deps.setTimeout(() => { if (!done) deps.show("Waking Lazarus sandbox on Render\u2026"); }, deps.slowMs || 1500);
+    let r = await ping();
+    if (!r.ok && (r.status === 0 || RETRYABLE.indexOf(r.status) >= 0)) {
+      if (!done) deps.show(r.status ? "Lazarus is still booting (HTTP " + r.status + "); retrying once\u2026" : "Lazarus did not answer yet; retrying once\u2026");
+      await new Promise((resolve) => deps.setTimeout(resolve, deps.retryMs || 2000));
+      r = await ping();
+    }
+    settle();
+    if (r.ok) { deps.hide(); return "ok"; }
+    deps.fail(r.status ? "Lazarus sandbox is not ready (HTTP " + r.status + "). Render may still be starting the service." : "Cannot reach the Lazarus server" + (r.error ? " (" + r.error + ")" : "") + ".");
+    return "failed";
+  }
+  return { run: run };
+}
+/* lz-health:end */
+(function () {
+  "use strict";
+  const pill = document.getElementById("wakePill");
+  if (!pill || typeof fetch !== "function") return;
+  const guard = lzHealthGuard({
+    fetch: (u, o) => fetch(u, o),
+    setTimeout: (f, ms) => setTimeout(f, ms),
+    clearTimeout: (id) => clearTimeout(id),
+    show: (text) => { pill.className = "wake-pill"; pill.textContent = text; pill.hidden = false; },
+    hide: () => { pill.hidden = true; pill.textContent = ""; },
+    fail: (text) => {
+      pill.className = "wake-pill err"; pill.textContent = text + " ";
+      const b = document.createElement("button"); b.type = "button"; b.textContent = "Retry";
+      b.addEventListener("click", () => { pill.hidden = true; guard.run(); });
+      pill.append(b); pill.hidden = false;
+    },
+  });
+  window.LazarusHealth = guard;
+  guard.run();
 })();
 </script>
 <script>

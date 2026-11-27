@@ -18,6 +18,7 @@ import { buildGraphBundle } from "./exporter/graph-bundle.js";
 import { describeTypecheck } from "./crew/ts-verifier.js";
 import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection.js";
 import { describeValue } from "./sandbox/tagged.js";
+import { runAuditCli } from "./cli-audit.js";
 
 export interface CliIo {
   stdout: (text: string) => void;
@@ -52,7 +53,8 @@ CommonJS dependency graph, leaves first, then the stitched ES module graph is fu
 the original. --entry <file> picks the entry module; --schema then describes its export(s), either flat
 or as {"exportName": {...}}. Writes src/, legacy/, resurrected.test.ts, SPEC.md, the CI workflow and
 resurrection.patch, or nothing when parity fails.
-Exit codes: 0 parity proven, 1 not resurrected, 2 bad usage.`;
+Exit codes: 0 parity proven, 1 not resurrected, 2 bad usage.
+Risk scan without running anything: lazarus audit <dir> [--json] (npm run audit -- <dir>).`;
 
 interface ParsedArgs {
   file?: string;
@@ -116,6 +118,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs | { error: string } {
 const PROGRESS_TYPES = new Set<CrewEvent["type"]>(["agent_started", "counterexample_found", "self_healed", "fuzz_completed"]);
 
 export async function main(argv: readonly string[], io: CliIo = defaultIo()): Promise<number> {
+  // `lazarus audit <dir>`: the static Legacy Risk Report (nothing is executed).
+  if (argv[0] === "audit") return runAuditCli(argv.slice(1), io);
   const args = parseArgs(argv);
   if ("error" in args) {
     io.stderr(`error: ${args.error}\n\n${USAGE}\n`);

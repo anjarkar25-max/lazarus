@@ -11,6 +11,7 @@ import { describeValue, decodeTagged } from "../sandbox/tagged.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { parseProgram, printProgram } from "./ast-modernizer.js";
 import { walk } from "./ast-scope.js";
+import { formatInputs, formatOutcome } from "./exact-format.js";
 
 export type MutationOperator = "boundary-flip" | "truncation-sabotage" | "arithmetic-flip" | "guard-sabotage" | "equality-flip";
 
@@ -29,6 +30,10 @@ export interface Mutant {
   readonly line: number;
   /** "- before\n+ after" for the first changed line. */
   readonly diffSnippet: string;
+  /** The first changed line before the mutation, trimmed. */
+  readonly originalLine: string;
+  /** The same line after the mutation, trimmed. */
+  readonly mutatedLine: string;
 }
 
 interface Site {
@@ -176,13 +181,17 @@ function collectSites(ast: ESTree.Program): Site[] {
 /** Normalizes printed code so formatting-only differences never count as a mutation. */
 const canonical = (code: string): string => code.replace(/\s+/g, " ").trim();
 
-function firstDiff(before: string, after: string): { line: number; snippet: string } {
+function firstDiff(before: string, after: string): { line: number; snippet: string; originalLine: string; mutatedLine: string } {
   const a = before.split("\n");
   const b = after.split("\n");
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a[i] !== b[i]) return { line: i + 1, snippet: `- ${(a[i] ?? "").trim()}\n+ ${(b[i] ?? "").trim()}` };
+    if (a[i] !== b[i]) {
+      const originalLine = (a[i] ?? "").trim();
+      const mutatedLine = (b[i] ?? "").trim();
+      return { line: i + 1, snippet: `- ${originalLine}\n+ ${mutatedLine}`, originalLine, mutatedLine };
+    }
   }
-  return { line: 0, snippet: "" };
+  return { line: 0, snippet: "", originalLine: "", mutatedLine: "" };
 }
 
 const DESCRIPTIONS: Record<MutationOperator, string> = {
@@ -238,6 +247,8 @@ export function generateMutants(code: string, max = MAX_MUTANTS): Mutant[] {
         code: printed,
         line: diff.line,
         diffSnippet: diff.snippet,
+        originalLine: diff.originalLine,
+        mutatedLine: diff.mutatedLine,
       });
     }
   }
@@ -255,6 +266,27 @@ export interface MutantResult {
   readonly killingCounterexample: { readonly inputs: Record<string, unknown>; readonly display: string; readonly reason: string } | null;
   readonly runs: number;
   readonly elapsedMs: number;
+  /** Everything the Mutant Autopsy Inspector shows: the injected fault, the killer input and the exact divergence. */
+  readonly autopsy: MutantAutopsy;
+}
+
+/** Where a killer input came from: the boundary corpus (already minimal), a fast-check shrink, or the first failure. */
+export type KillerSource = "boundary-corpus" | "shrunk" | "first-failure";
+
+export interface MutantAutopsy {
+  readonly id: string;
+  /** Human-readable operator, e.g. "Math.trunc → Math.floor" or "strip | 0". */
+  readonly operator: string;
+  readonly status: "killed" | "survived";
+  readonly originalLine: string;
+  readonly mutatedLine: string;
+  /** The input that told the mutant apart from the legacy code; null for a survivor. */
+  readonly killerInput: { readonly display: string; readonly inputs: Record<string, unknown>; readonly source: KillerSource } | null;
+  /** Legacy and mutant outcomes for the killer input ("+0", "-0", "NaN", "throws TIMEOUT"...); null for a survivor. */
+  readonly legacyOutput: string | null;
+  readonly mutantOutput: string | null;
+  /** The Exorcist's reason for the divergence; null for a survivor. */
+  readonly divergence: string | null;
 }
 
 export interface MutationAuditResult {
@@ -319,6 +351,33 @@ export async function runMutationAudit(input: AuditInput): Promise<MutationAudit
     const t = Date.now();
     const report: FuzzReport = await fuzzer.fuzz(input.legacyCode, mutant.code, input.schema, options);
     const cx = report.counterexample;
+    // The audit stops at the first failure. A boundary-corpus kill is already minimal; a random-phase kill is replayed
+    // with shrinking (same seed) so the autopsy shows the smallest input fast-check can find.
+    let killer = cx;
+    let source: KillerSource = "first-failure";
+    if (!report.passed && cx !== undefined) {
+      if (report.boundaryRuns !== undefined && report.boundaryRuns === report.totalRuns) {
+        source = "boundary-corpus";
+      } else {
+        const replay = await fuzzer.fuzz(input.legacyCode, mutant.code, input.schema, { ...options, shrink: true, seed: report.seed });
+        if (!replay.passed && replay.counterexample !== undefined) {
+          killer = replay.counterexample;
+          source = "shrunk";
+        }
+      }
+    }
+    const k = report.passed ? undefined : killer;
+    const autopsy: MutantAutopsy = {
+      id: mutant.id,
+      operator: mutant.label,
+      status: report.passed ? "survived" : "killed",
+      originalLine: mutant.originalLine,
+      mutatedLine: mutant.mutatedLine,
+      killerInput: k !== undefined ? { display: formatInputs(k.inputs), inputs: k.inputs, source } : null,
+      legacyOutput: k !== undefined ? formatOutcome(k.legacy) : null,
+      mutantOutput: k !== undefined ? formatOutcome(k.modern) : null,
+      divergence: k !== undefined ? k.reason : null,
+    };
     results.push({
       id: mutant.id,
       operator: mutant.operator,
@@ -329,6 +388,7 @@ export async function runMutationAudit(input: AuditInput): Promise<MutationAudit
       killingCounterexample: report.passed || cx === undefined ? null : { inputs: cx.inputs, display: displayInputs(cx.inputs), reason: cx.reason },
       runs: report.totalRuns,
       elapsedMs: Date.now() - t,
+      autopsy,
     });
   }
   return summary(results, true, mutants.length === 0 ? "no mutation site was found in the resurrected code" : undefined);

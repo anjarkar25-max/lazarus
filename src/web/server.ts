@@ -11,6 +11,9 @@ import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from
 import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/graph-bundle.js";
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
+import { naiveRefactor } from "../crew/naive-refactor.js";
+import { formatInputs, formatOutcome } from "../crew/exact-format.js";
+import { DifferentialFuzzer } from "../fuzzer/differential.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
 import { generateCertificate, renderCertificateSvg, sanitizeProvenance, type CertificateInput } from "../exporter/certificate.js";
@@ -316,6 +319,24 @@ export const MutationAuditBodySchema = z
     seed: z.number().int().optional(),
   })
   .strict();
+/** Body of POST /api/compare-naive. `schema` defaults to the scanner's suggested schema. */
+export const CompareNaiveBodySchema = z
+  .object({
+    legacyCode: z.string().min(1).max(MAX_CODE_CHARS),
+    schema: z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/), KindSchema).refine((s) => Object.keys(s).length <= 16, "at most 16 parameters").optional(),
+    seed: z.number().int().optional(),
+  })
+  .strict();
+export const COMPARE_NAIVE_RUNS = 100;
+/** Verified test count shown on the Studio's badge (read once from the served page). */
+function badgeTestCount(publicDirectory: string): number | null {
+  try {
+    const m = /id="badgeTests">(\d+) Verified Tests</.exec(fs.readFileSync(nodePath.join(publicDirectory, "index.html"), "utf8"));
+    return m?.[1] !== undefined ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
 const MutationScoreSchema = z.object({ killed: z.number().int().min(0), total: z.number().int().min(1).max(50) }).strict().refine((m) => m.killed <= m.total);
 /** Bundles of recent successful graph resurrections, so the zip button never has to trust client-sent code. */
 const GRAPH_BUNDLE_CACHE = 16;
@@ -367,6 +388,12 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   let auditLegacy: PooledProbeRunner | undefined;
   let auditModern: PooledProbeRunner | undefined;
   let auditBusy = false;
+  // Dedicated workers for the Naive AI trap comparison, one comparison at a time.
+  let naiveLegacy: PooledProbeRunner | undefined;
+  let naiveModern: PooledProbeRunner | undefined;
+  let naiveBusy = false;
+  const serverStarted = Date.now();
+  let healthTests: number | null | undefined;
   const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
     probeLegacy ??= new PooledProbeRunner();
     probeModern ??= new PooledProbeRunner();
@@ -383,6 +410,13 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       return;
     }
 
+    if (method === "GET" && url.split("?")[0] === "/api/health") {
+      // Lightweight liveness probe for the Studio's cold-start guard (never touches the sandbox).
+      healthTests ??= badgeTestCount(publicDir);
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ ok: true, uptimeSec: Math.round((Date.now() - serverStarted) / 1000), tests: healthTests, specs: readKiroDna(repoRoot).specCount }));
+      return;
+    }
     if (method === "GET" && (url === "/" || url === "/index.html")) {
       const indexPath = nodePath.join(publicDir, "index.html");
       if (!fs.existsSync(indexPath)) {
@@ -883,6 +917,68 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       }
       return;
     }
+    if (req.method === "POST" && routePath === "/api/compare-naive") {
+      const reply = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        reply(err instanceof PayloadTooLarge ? 413 : 400, { error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" });
+        return;
+      }
+      const checked = CompareNaiveBodySchema.safeParse(rawBody);
+      if (!checked.success) {
+        reply(400, { error: `Invalid comparison request: ${checked.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` });
+        return;
+      }
+      // Parse only: the legacy code runs exclusively inside the sandbox workers below.
+      const scan = scanLegacyAst(checked.data.legacyCode);
+      const schema = checked.data.schema ?? scan.suggestedSchema;
+      if (Object.keys(schema).length === 0) {
+        reply(422, { error: "No input to fuzz: give a schema or a specimen with parameters", code: "NO_SCHEMA" });
+        return;
+      }
+      const legacy = scan.primaryExpression;
+      const naive = naiveRefactor(legacy);
+      if (naive.parseError !== undefined) {
+        reply(422, { error: `The specimen does not parse: ${naive.parseError}`, code: "PARSE_ERROR" });
+        return;
+      }
+      if (naive.rewrites.length === 0) {
+        reply(200, { naiveCode: naive.naiveCode, rewrites: [], passed: true, totalRuns: 0, schema, note: "No naive-trap pattern (| 0, >> 0, ~~, ==, var) in this specimen: a typical LLM rewrite would leave it as is, so there is nothing to compare." });
+        return;
+      }
+      if (naiveBusy) {
+        reply(429, { error: "A naive comparison is already running", code: "BUSY" });
+        return;
+      }
+      naiveBusy = true;
+      try {
+        naiveLegacy ??= new PooledProbeRunner();
+        naiveModern ??= new PooledProbeRunner();
+        const fuzzer = new DifferentialFuzzer({ legacy: naiveLegacy, modern: naiveModern });
+        const report = await fuzzer.fuzz(legacy, naive.naiveCode, schema, { numRuns: COMPARE_NAIVE_RUNS, exact: true, boundary: true, seed: checked.data.seed ?? 1337 });
+        const cx = report.counterexample;
+        reply(200, {
+          naiveCode: naive.naiveCode,
+          rewrites: naive.rewrites,
+          passed: report.passed,
+          totalRuns: report.totalRuns,
+          schema,
+          ...(report.passed || cx === undefined
+            ? { note: `The naive rewrite matched the legacy code on all ${report.totalRuns} exact Object.is runs: no trap for this specimen over the fuzzed domain.` }
+            : { counterexample: { input: formatInputs(cx.inputs), inputs: cx.inputs, legacyOutput: formatOutcome(cx.legacy), naiveOutput: formatOutcome(cx.modern), reason: cx.reason } }),
+        });
+      } catch (err: unknown) {
+        reply(500, { error: err instanceof Error ? err.message : "Naive comparison failed", code: "INTERNAL_ERROR" });
+      } finally {
+        naiveBusy = false;
+      }
+      return;
+    }
     if (req.method === "POST" && routePath === "/api/redteam") {
       const reply = (status: number, payload: Record<string, unknown>): void => {
         res.writeHead(status, { "Content-Type": "application/json" });
@@ -955,7 +1051,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), closeSharedTsVerifier()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), naiveLegacy?.close(), naiveModern?.close(), closeSharedTsVerifier()]);
   });
   return server;
 }

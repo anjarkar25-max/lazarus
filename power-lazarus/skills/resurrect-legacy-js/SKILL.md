@@ -14,6 +14,9 @@ comparison. Follow these steps in order and report the real outputs; never claim
 - The hosted studio: https://lazarus-yf0a.onrender.com (same HTTP routes as below).
 
 ## 1. Scan the specimen
+- For a whole folder, start with `npm run audit -- <dir>` (`lazarus audit <dir>`, add `--json` for machine-readable
+  output). It parses every `.js`/`.cjs` file without running it, flags `| 0` truncation traps, prototype chains, `var`
+  / `arguments` usage and the `require()` graph, and prints a readiness score and the exact resurrect command.
 - Read the code first. Note `var` scoping, `x | 0` truncation, `arguments`, `fn.apply`, loose `==`, constructor +
   `prototype` pairs, and `require()` / `module.exports` usage.
 - Lazarus extracts the specimen with acorn and infers a fuzz schema from how parameters are used (`number` for

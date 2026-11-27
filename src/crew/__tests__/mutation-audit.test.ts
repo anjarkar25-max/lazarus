@@ -143,3 +143,65 @@ describe("runMutationAudit", () => {
     expect(result.note).toContain("diverges");
   });
 });
+
+describe("mutant autopsy payloads", () => {
+  it("records the injected fault, the boundary-corpus killer and the exact Object.is outputs (legacy-int-halve)", async () => {
+    const preset = PRESETS[0] as Preset;
+    const { legacy, modern } = prepare(preset);
+    const result = await runMutationAudit({ legacyCode: legacy, modernCode: modern, schema: preset.schema, executors, seed: 1 });
+    for (const m of result.mutants) {
+      expect(m.autopsy.id).toBe(m.id);
+      expect(m.autopsy.operator).toBe(m.label);
+      expect(m.autopsy.status).toBe(m.status === "KILLED" ? "killed" : "survived");
+      expect(m.diffSnippet).toBe(`- ${m.autopsy.originalLine}\n+ ${m.autopsy.mutatedLine}`);
+      expect(m.autopsy.originalLine).not.toBe(m.autopsy.mutatedLine);
+    }
+    const floor = result.mutants.find((m) => m.label === "Math.trunc → Math.floor");
+    expect(floor?.autopsy).toEqual({
+      id: floor?.id,
+      operator: "Math.trunc → Math.floor",
+      status: "killed",
+      originalLine: "const half = Math.trunc(n / 2) || 0;",
+      mutatedLine: "const half = Math.floor(n / 2) || 0;",
+      killerInput: { display: "n = -1", inputs: { n: -1 }, source: "boundary-corpus" },
+      legacyOutput: "+0",
+      mutantOutput: "-1",
+      divergence: floor?.killingCounterexample?.reason,
+    });
+    // The pre-existing fields are unchanged.
+    expect(floor?.status).toBe("KILLED");
+    expect(floor?.killingCounterexample?.display).toBe("n = -1");
+  });
+
+  it("shows +0 and -0 distinctly, and nulls everything a survivor cannot have", async () => {
+    const preset = PRESETS[3] as Preset;
+    const { legacy, modern } = prepare(preset);
+    const result = await runMutationAudit({ legacyCode: legacy, modernCode: modern, schema: preset.schema, executors, seed: 3 });
+    const survivors = result.mutants.filter((m) => m.autopsy.status === "survived");
+    expect(survivors.length).toBe(2);
+    for (const m of survivors) expect(m.autopsy).toMatchObject({ killerInput: null, legacyOutput: null, mutantOutput: null, divergence: null });
+    for (const m of result.mutants.filter((x) => x.autopsy.status === "killed")) {
+      expect(m.autopsy.killerInput?.display).toMatch(/^n = /);
+      expect(m.autopsy.legacyOutput).not.toBe(m.autopsy.mutantOutput);
+    }
+  });
+
+  it("replays a random-phase kill with fast-check shrinking and reports the shrunk input", async () => {
+    // Executors without tagged support: no boundary corpus, so every kill comes from the random phase.
+    const plain = (p: PooledProbeRunner): { run: PooledProbeRunner["run"] } => ({ run: (x) => p.run(x) });
+    const result = await runMutationAudit({
+      legacyCode: "(n / 2) | 0",
+      modernCode: "const half = Math.trunc(n / 2) || 0;\nhalf;",
+      schema: { n: "integer" },
+      executors: { legacy: plain(legacyPool), modern: plain(modernPool) },
+      seed: 11,
+    });
+    const times = result.mutants.find((m) => m.label === "/ → *");
+    expect(times?.autopsy.killerInput?.source).toBe("shrunk");
+    // The first failing input was large; the shrunk one is the smallest n that tells n * 2 from n / 2.
+    expect(times?.killingCounterexample?.display).not.toBe("n = 1");
+    expect(times?.autopsy.killerInput?.display).toBe("n = 1");
+    expect(times?.autopsy).toMatchObject({ legacyOutput: "+0", mutantOutput: "2" });
+    for (const m of result.mutants.filter((x) => x.status === "KILLED")) expect(["shrunk", "first-failure"]).toContain(m.autopsy.killerInput?.source);
+  });
+});

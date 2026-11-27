@@ -10,7 +10,8 @@
         "mcp": "npx tsx src/mcp/server.ts",
         "typecheck": "tsc --noEmit",
         "resurrect": "npx tsx src/cli.ts",
-        "benchmark": "npx tsx src/benchmark.ts"
+        "benchmark": "npx tsx src/benchmark.ts",
+        "audit": "tsx src/cli.ts audit"
     },
     "repository": {
         "type": "git",

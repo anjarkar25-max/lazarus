@@ -978,13 +978,383 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 20-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 21-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">20 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
     expect(pageHtml.indexOf('id="dnaPower"')).toBeLessThan(pageHtml.indexOf('id="dnaAgents"'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V12: Mutant Autopsy Inspector, Naive AI trap card, cold-start guard, /api/health, untouched Tab 3
+// ---------------------------------------------------------------------------
+const v12Script = (marker: string): string => {
+  const found = inlineScripts.find((s) => s.includes(marker));
+  expect(found, marker).toBeDefined();
+  return found ?? "";
+};
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+};
+
+describe("V12 Mutant Autopsy Inspector (shipped script, minimal DOM)", () => {
+  const AUDIT = {
+    totalMutants: 2,
+    killed: 1,
+    mutants: [
+      {
+        id: "M1",
+        runs: 2,
+        autopsy: {
+          id: "M1",
+          operator: "Math.trunc → Math.floor",
+          status: "killed",
+          originalLine: "const half = Math.trunc(n / 2) || 0;",
+          mutatedLine: "const half = Math.floor(n / 2) || 0;",
+          killerInput: { display: "n = -1", inputs: { n: -1 }, source: "boundary-corpus" },
+          legacyOutput: "+0",
+          mutantOutput: "-1",
+          divergence: "Output mismatch: legacy=0 vs modern=-1",
+        },
+      },
+      {
+        id: "M2",
+        runs: 30,
+        autopsy: { id: "M2", operator: "< → <=", status: "survived", originalLine: "a < b", mutatedLine: "a <= b", killerInput: null, legacyOutput: null, mutantOutput: null, divergence: null },
+      },
+    ],
+  };
+  function setup(): { doc: FakeDocument; score: FakeElement; box: FakeElement } {
+    const doc = new FakeDocument();
+    const score = doc.element("div", "mutScore");
+    score.textContent = "1/2 MUTANTS KILLED";
+    const box = doc.element("div", "mutAutopsy");
+    box.hidden = true;
+    runInlineScript(v12Script("Mutant Autopsy Inspector: the mutation score toggles"), { document: doc, window: {} });
+    return { doc, score, box };
+  }
+  const key = (el: FakeElement, k: string): boolean => el.dispatchEvent({ type: "keydown", key: k });
+
+  it("is inert until an audit arrives, then arms the score as a collapsed toggle", () => {
+    const { doc, score, box } = setup();
+    score.click();
+    expect(box.hidden).toBe(true);
+    expect(score.getAttribute("role")).toBeNull();
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: AUDIT });
+    expect(score.getAttribute("role")).toBe("button");
+    expect(score.getAttribute("tabindex")).toBe("0");
+    expect(score.getAttribute("aria-controls")).toBe("mutAutopsy");
+    expect(score.getAttribute("aria-expanded")).toBe("false");
+    expect(box.hidden).toBe(true);
+    expect(box.children).toHaveLength(2);
+    expect(score.textContent).toContain("Open Mutant Autopsy");
+  });
+
+  it("toggles with a click, Enter and Space (and ignores other keys)", () => {
+    const { doc, score, box } = setup();
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: AUDIT });
+    score.click();
+    expect(box.hidden).toBe(false);
+    expect(score.getAttribute("aria-expanded")).toBe("true");
+    expect(score.textContent).toContain("Hide Mutant Autopsy");
+    expect(key(score, "Enter")).toBe(false);
+    expect(box.hidden).toBe(true);
+    key(score, "a");
+    expect(box.hidden).toBe(true);
+    key(score, " ");
+    expect(box.hidden).toBe(false);
+  });
+
+  it("shows each mutant's injected diff, killer input and exact Object.is divergence", () => {
+    const { doc, box } = setup();
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: AUDIT });
+    const [killed, survived] = box.children;
+    expect(killed?.className).toBe("autopsy-row killed");
+    const text = killed?.textContent ?? "";
+    for (const s of ["M1", "Math.trunc → Math.floor", "KILLED", "- const half = Math.trunc(n / 2) || 0;", "+ const half = Math.floor(n / 2) || 0;", "n = -1  (boundary corpus)", "legacy+0", "mutant-1", "Object.isOutput mismatch: legacy=0 vs modern=-1"]) {
+      expect(text, s).toContain(s);
+    }
+    expect(survived?.className).toBe("autopsy-row survived");
+    expect(survived?.textContent).toContain("survived: no input among 30 exact probes told it apart");
+  });
+
+  it("collapses and disarms on a new run, and re-collapses after every new audit", () => {
+    const { doc, score, box } = setup();
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: AUDIT });
+    score.click();
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: AUDIT });
+    expect(box.hidden).toBe(true);
+    doc.dispatchEvent({ type: "lazarus:run-start", detail: { source: "x" } });
+    expect(box.hidden).toBe(true);
+    expect(box.children).toHaveLength(0);
+    expect(score.getAttribute("role")).toBeNull();
+    expect(score.getAttribute("tabindex")).toBeNull();
+    // An audit without autopsy data (an old server) leaves the score as plain text.
+    doc.dispatchEvent({ type: "lazarus:mutation", detail: { mutants: [{ id: "M1" }] } });
+    expect(score.getAttribute("role")).toBeNull();
+  });
+
+  it("is wired into the deck: collapsed container right after the mutation table", () => {
+    const card = pageHtml.slice(pageHtml.indexOf('<div class="mut-card" id="mutCard"'), pageHtml.indexOf('<div class="deck-col">', pageHtml.indexOf('<div class="mut-card" id="mutCard"')));
+    expect(card).toMatch(/<\/table>\r?\n\s+<div class="mut-autopsy" id="mutAutopsy" aria-label="Mutant Autopsy Inspector" hidden><\/div>/);
+    expect(card).toContain('<div class="mut-score" id="mutScore" role="status"></div>');
+  });
+});
+
+describe("V12 Compare vs. Naive AI trap card (shipped script, minimal DOM, scripted fetch)", () => {
+  const RESULT = { success: true, name: "legacy-int-halve", modernCode: "const half = Math.trunc(n / 2) || 0;\nhalf;", fuzzReport: { totalRuns: 100 }, attempts: 2, typecheck: { errorCount: 0 } };
+  const TRAP = {
+    naiveCode: "let half = Math.floor(n / 2);\nhalf;",
+    rewrites: [{ rule: "bitor0-floor", before: "n / 2 | 0", after: "Math.floor(n / 2)", why: "looks like integer division" }],
+    passed: false,
+    totalRuns: 2,
+    counterexample: { input: "n = -0", legacyOutput: "+0", naiveOutput: "-0", reason: "Output mismatch: legacy=0 vs modern=-0 (sign of zero differs)" },
+  };
+  function setup(reply: () => Response | Promise<Response> = () => new Response(JSON.stringify(TRAP), { status: 200 })) {
+    const doc = new FakeDocument();
+    const btn = doc.element("button", "naiveBtn");
+    btn.hidden = true;
+    const card = doc.element("div", "trapCard");
+    card.hidden = true;
+    const code = doc.element("textarea", "legacyCode");
+    code.value = "var half = (n / 2) | 0; half;";
+    const schema = doc.element("textarea", "schemaJson");
+    schema.value = '{"n": "integer"}';
+    const win: Record<string, unknown> = {};
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const fetchImpl = async (url: string, init?: { body?: string }): Promise<Response> => {
+      calls.push({ url, body: init?.body !== undefined ? JSON.parse(init.body) : undefined });
+      return reply();
+    };
+    runInlineScript(v12Script("Naive AI vs. Lazarus: a deterministic naive rewrite"), { document: doc, window: win, fetch: fetchImpl });
+    const resurrect = (r: Record<string, unknown> = RESULT, source = code.value): void => {
+      doc.dispatchEvent({ type: "lazarus:run-start", detail: { source } });
+      doc.dispatchEvent({ type: "lazarus:result", detail: r });
+    };
+    return { doc, btn, card, code, schema, win, calls, resurrect };
+  }
+
+  it("shows the button only after a successful single-function resurrection", () => {
+    const t = setup();
+    expect(t.btn.hidden).toBe(true);
+    t.resurrect({ ...RESULT, success: false });
+    expect(t.btn.hidden).toBe(true);
+    t.resurrect({ ...RESULT, module: { functions: [] } });
+    expect(t.btn.hidden).toBe(true);
+    t.resurrect();
+    expect(t.btn.hidden).toBe(false);
+    t.doc.dispatchEvent({ type: "lazarus:run-start", detail: { source: "x" } });
+    expect(t.btn.hidden).toBe(true);
+  });
+
+  it("posts the proven source and schema, then renders the red naive side and the green Lazarus side", async () => {
+    const t = setup();
+    t.resurrect();
+    t.code.value = "edited after the run";
+    t.btn.click();
+    await settle();
+    expect(t.calls).toEqual([{ url: "/api/compare-naive", body: { legacyCode: "var half = (n / 2) | 0; half;", schema: { n: "integer" }, seed: 1337 } }]);
+    expect(t.card.hidden).toBe(false);
+    expect(t.btn.getAttribute("aria-pressed")).toBe("true");
+    const [naive, lazarus] = t.card.children;
+    expect(naive?.className).toBe("trap-side naive");
+    expect(naive?.textContent).toContain("Naive AI Refactor");
+    expect(naive?.textContent).toContain("n = -0 → Legacy: +0 vs Naive: -0");
+    expect(naive?.textContent).toContain("let half = Math.floor(n / 2);");
+    expect(naive?.textContent).toContain("n / 2 | 0  →  Math.floor(n / 2)");
+    expect(lazarus?.className).toBe("trap-side lazarus");
+    for (const s of ["Lazarus Proven", "100% Exact Object.is Parity · 100 fuzz runs · 2 attempts", "const half = Math.trunc(n / 2) || 0;", "Mutation audit: not run yet", "tsc --strict: 0 errors"]) expect(lazarus?.textContent, s).toContain(s);
+  });
+
+  it("updates the kill score live, toggles closed, and reopens from cache without refetching", async () => {
+    const t = setup();
+    t.resurrect();
+    t.btn.click();
+    await settle();
+    // The audit fires lazarus:mutation before it sets window.lastMutationScore: the card must read the event.
+    t.doc.dispatchEvent({ type: "lazarus:mutation", detail: { killed: 4, totalMutants: 4, baselineVerified: true } });
+    expect(t.card.children[1]?.textContent).toContain("Mutation audit: 4/4 mutants killed (100% proof strength)");
+    t.btn.click();
+    expect(t.card.hidden).toBe(true);
+    expect(t.btn.getAttribute("aria-pressed")).toBe("false");
+    t.btn.click();
+    await settle();
+    expect(t.card.hidden).toBe(false);
+    expect(t.calls).toHaveLength(1);
+  });
+
+  it("reports an honest pass instead of faking a failure", async () => {
+    const t = setup(() => new Response(JSON.stringify({ naiveCode: "let s = 0;", rewrites: [], passed: true, totalRuns: 100, note: "The naive rewrite matched the legacy code on all 100 exact Object.is runs" }), { status: 200 }));
+    t.resurrect();
+    t.btn.click();
+    await settle();
+    expect(t.card.children[0]?.className).toBe("trap-side naive honest");
+    expect(t.card.children[0]?.textContent).toContain("No trap: The naive rewrite matched the legacy code on all 100 exact Object.is runs");
+  });
+
+  it("shows server and network errors as they are", async () => {
+    const busy = setup(() => new Response(JSON.stringify({ error: "A naive comparison is already running", code: "BUSY" }), { status: 429 }));
+    busy.resurrect();
+    busy.btn.click();
+    await settle();
+    expect(busy.card.textContent).toBe("Naive comparison failed (HTTP 429): A naive comparison is already running");
+    const down = setup(() => Promise.reject(new TypeError("Failed to fetch")));
+    down.resurrect();
+    down.btn.click();
+    await settle();
+    expect(down.card.textContent).toBe("Naive comparison failed: Failed to fetch");
+    expect(down.btn.disabled).toBe(false);
+  });
+
+  it("sits next to the diff toggle, with the trap card in the deck", () => {
+    expect(pageHtml).toMatch(/id="legacyDiffToggle"[^\n]*<\/button>\r?\n\s+<button type="button" class="diff-toggle naive-toggle" id="naiveBtn" aria-pressed="false" aria-controls="trapCard"[^>]* hidden>Compare vs\. Naive AI<\/button>/);
+    const deck = pageHtml.slice(pageHtml.indexOf('<section class="verify-deck"'), pageHtml.indexOf('<div class="deck-grid">'));
+    expect(deck).toContain('<div class="trap-card" id="trapCard" aria-live="polite" hidden></div>');
+    expect(v12Script("Naive AI vs. Lazarus")).toContain('fetch("/api/compare-naive"');
+    expect(v12Script("Naive AI vs. Lazarus")).not.toMatch(/innerHTML/);
+  });
+});
+
+describe("V12 Render cold-start guard (shipped lz-health core)", () => {
+  const core = (): string => {
+    const start = pageHtml.indexOf("/* lz-health:start */");
+    const end = pageHtml.indexOf("/* lz-health:end */");
+    expect(start, "lz-health markers").toBeGreaterThan(0);
+    return pageHtml.slice(start, end);
+  };
+  type Step = { status: number } | { error: string } | { status: number; delayMs: number };
+  async function run(steps: Step[]): Promise<{ outcome: string; shown: string[]; hidden: number; failed: string[]; fetches: number }> {
+    const shown: string[] = [];
+    const failed: string[] = [];
+    let hidden = 0;
+    let fetches = 0;
+    const make = runInlineScript(`${core()}; lzHealthGuard`, {}) as (deps: Record<string, unknown>) => { run: () => Promise<string> };
+    const guard = make({
+      fetch: async (url: string) => {
+        expect(url).toBe("/api/health");
+        const step = steps[Math.min(fetches++, steps.length - 1)] ?? { status: 200 };
+        if ("error" in step) throw new TypeError(step.error);
+        if ("delayMs" in step) await new Promise((r) => setTimeout(r, step.delayMs));
+        return new Response("{}", { status: step.status });
+      },
+      setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+      clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
+      show: (t: string) => shown.push(t),
+      hide: () => hidden++,
+      fail: (t: string) => failed.push(t),
+      slowMs: 40,
+      retryMs: 5,
+      timeoutMs: 2000,
+    });
+    const outcome = await guard.run();
+    return { outcome, shown, hidden, failed, fetches };
+  }
+
+  it("stays silent when the server answers quickly", async () => {
+    expect(await run([{ status: 200 }])).toEqual({ outcome: "ok", shown: [], hidden: 1, failed: [], fetches: 1 });
+  });
+
+  it("shows the waking pill only after the slow threshold, and clears it on 200", async () => {
+    const r = await run([{ status: 200, delayMs: 120 }]);
+    expect(r).toMatchObject({ outcome: "ok", hidden: 1, failed: [], fetches: 1 });
+    expect(r.shown).toEqual(["Waking Lazarus sandbox on Render…"]);
+  });
+
+  it.each([502, 503, 504])("retries a %i cold-boot answer once and recovers", async (status) => {
+    const r = await run([{ status }, { status: 200 }]);
+    expect(r).toMatchObject({ outcome: "ok", hidden: 1, failed: [], fetches: 2 });
+    expect(r.shown).toEqual([`Lazarus is still booting (HTTP ${status}); retrying once…`]);
+  });
+
+  it("gives a clear message after one failed retry instead of a raw browser error", async () => {
+    const r = await run([{ status: 503 }, { status: 503 }]);
+    expect(r).toMatchObject({ outcome: "failed", fetches: 2, hidden: 0 });
+    expect(r.failed).toEqual(["Lazarus sandbox is not ready (HTTP 503). Render may still be starting the service."]);
+    const offline = await run([{ error: "Failed to fetch" }, { error: "Failed to fetch" }]);
+    expect(offline).toMatchObject({ outcome: "failed", fetches: 2 });
+    expect(offline.failed).toEqual(["Cannot reach the Lazarus server (Failed to fetch)."]);
+    expect(offline.shown).toEqual(["Lazarus did not answer yet; retrying once…"]);
+  });
+
+  it("does not retry a non-cold-boot error", async () => {
+    const r = await run([{ status: 500 }, { status: 200 }]);
+    expect(r).toMatchObject({ outcome: "failed", fetches: 1 });
+  });
+
+  it("is wired into the page with a fixed, non-blocking pill and a Retry button", () => {
+    expect(pageHtml).toContain('<div class="wake-pill" id="wakePill" role="status" aria-live="polite" hidden></div>');
+    expect(pageHtml).toMatch(/\.wake-pill \{ position: fixed;/);
+    const boot = v12Script("/* lz-health:start */");
+    expect(boot).toContain('fetch: (u, o) => fetch(u, o)');
+    expect(boot).toContain('b.textContent = "Retry";');
+    expect(boot).toContain("guard.run();");
+  });
+});
+
+describe("V12 GET /api/health", () => {
+  const server = createWebServer();
+  let baseUrl = "";
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => {
+        baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        resolve();
+      });
+    });
+  });
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+
+  it("returns { ok, uptimeSec, tests, specs } without caching", async () => {
+    const res = await fetch(`${baseUrl}/api/health`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual(["ok", "specs", "tests", "uptimeSec"]);
+    expect(body["ok"]).toBe(true);
+    expect(Number.isInteger(body["uptimeSec"])).toBe(true);
+    const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
+    expect(body["tests"]).toBe(badge);
+    expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
+    expect(body["specs"]).toBe(21);
+  });
+
+  it("leaves the existing /health route unchanged", async () => {
+    expect(await (await fetch(`${baseUrl}/health`)).json()).toEqual({ status: "ok", service: "lazarus-operating-table" });
+  });
+});
+
+describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const between = (a: string, b: string): string => {
+    const s = html.indexOf(a);
+    const e = html.indexOf(b, s + a.length);
+    expect(s).toBeGreaterThan(0);
+    expect(e).toBeGreaterThan(s);
+    return html.slice(s, e);
+  };
+  const sha = async (text: string): Promise<string> => (await import("node:crypto")).createHash("sha256").update(text).digest("hex");
+
+  it("the Red-Team CSS, pane markup and script are byte-identical to V11", async () => {
+    // SHA-256 of the three Tab 3 regions on main (V11), with LF line endings.
+    expect(await sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+    expect(await sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+    expect(await sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+  });
+
+  it("the V12 scripts never touch the Red-Team controls", () => {
+    for (const marker of ["Mutant Autopsy Inspector: the mutation score", "Naive AI vs. Lazarus: a deterministic", "/* lz-health:start */"]) {
+      expect(v12Script(marker)).not.toMatch(/redteam|rtLog|rtButtons|rt-btn/);
+    }
+  });
+
+  it("shows 21 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>');
   });
 });

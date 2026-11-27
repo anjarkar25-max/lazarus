@@ -1,11 +1,14 @@
 // Minimal DOM stand-in for running the page's own inline scripts in node:vm (no DOM library dependency).
 // Implements only what those scripts use: elements with children, textContent, className, dataset, disabled,
-// append/prepend/remove, value/hidden/title, event listeners; document events, createElement, getElementById and
-// registered selectors.
+// append/prepend/remove, value/hidden/title, attributes, querySelector(".class"), event listeners (with key and
+// preventDefault); document events, createElement, createTextNode, getElementById and registered selectors.
 import * as vm from "node:vm";
 export interface FakeEvent {
   type: string;
   detail?: unknown;
+  key?: string;
+  defaultPrevented?: boolean;
+  preventDefault?: () => void;
 }
 type Listener = (event: FakeEvent) => void;
 
@@ -21,8 +24,37 @@ export class FakeElement {
   id = "";
   private text = "";
   private readonly listeners = new Map<string, Listener[]>();
+  private readonly attrs = new Map<string, string>();
+  readonly style: Record<string, string> = {};
 
   constructor(readonly tagName: string) {}
+
+  setAttribute(name: string, value: string): void {
+    this.attrs.set(name, String(value));
+  }
+  getAttribute(name: string): string | null {
+    return this.attrs.get(name) ?? null;
+  }
+  removeAttribute(name: string): void {
+    this.attrs.delete(name);
+  }
+  hasAttribute(name: string): boolean {
+    return this.attrs.has(name);
+  }
+  /** First descendant matching a single `.class` selector. */
+  querySelector(selector: string): FakeElement | null {
+    const cls = selector.startsWith(".") ? selector.slice(1) : undefined;
+    if (cls === undefined) return null;
+    for (const c of this.children) {
+      if (c.className.split(/\s+/).includes(cls)) return c;
+      const deep = c.querySelector(selector);
+      if (deep !== null) return deep;
+    }
+    return null;
+  }
+  scrollIntoView(): void {
+    /* no layout in the fake DOM */
+  }
 
   get textContent(): string {
     return this.children.length > 0 ? this.text + this.children.map((c) => c.textContent).join("") : this.text;
@@ -59,8 +91,12 @@ export class FakeElement {
   }
   /** DOM-style dispatch, for scripts that call `el.dispatchEvent(new Event("input"))`. */
   dispatchEvent(event: FakeEvent): boolean {
-    this.dispatch(event.type, event.detail);
-    return true;
+    const e: FakeEvent = { ...event, defaultPrevented: false };
+    e.preventDefault = () => {
+      e.defaultPrevented = true;
+    };
+    for (const fn of this.listeners.get(event.type) ?? []) fn(e);
+    return !e.defaultPrevented;
   }
   /** Like a user click: ignored while disabled, as in a real browser. */
   click(): void {
@@ -84,6 +120,11 @@ export class FakeDocument {
 
   createElement(tag: string): FakeElement {
     return new FakeElement(tag);
+  }
+  createTextNode(text: string): FakeElement {
+    const node = new FakeElement("#text");
+    node.textContent = text;
+    return node;
   }
   /** Creates an element registered under `id`. */
   element(tag: string, id: string): FakeElement {

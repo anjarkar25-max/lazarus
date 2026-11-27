@@ -83,6 +83,14 @@ describe("readKiroDna (live repository)", () => {
     expect(["/repo/.kiro/specs/sandbox/tasks.md", ".kiro\\specs\\x\\design.md"].every((f) => specs.test(f))).toBe(true);
     expect(specs.test(".kiro/steering/architecture.md")).toBe(false);
   });
+  it("counts 21 specs, including the V12 autopsy-and-audit spec with all three documents", () => {
+    expect(dna.specCount).toBe(21);
+    const v12 = dna.specs.find((s) => s.name === "v12-grandmaster-autopsy-and-audit");
+    expect(v12).toMatchObject({ title: "V12 Grandmaster Autopsy and Audit", documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
+    expect(v12?.taskCount).toBe(8);
+    const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">21 Kiro Specs</span>');
+  });
   it("keeps the static header badge in sync with .kiro/specs (what kiro-dna-sync-check runs)", () => {
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
     expect(html).toContain(`<span class="proof-badge" id="badgeSpecs">${specDirs.length} Kiro Specs</span>`);
