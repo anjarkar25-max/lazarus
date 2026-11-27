@@ -55,6 +55,8 @@ export interface ModuleGraph {
   readonly edges: GraphEdge[];
   /** Strongly connected components with more than one file (or a file requiring itself). */
   readonly cycles: string[][];
+  /** Edges that lie inside a cycle (both ends in the same strongly connected component). */
+  readonly cycleEdges: GraphEdge[];
   /** Dependencies before dependents; the entry module is last. */
   readonly order: string[];
   readonly entry: string | undefined;
@@ -157,9 +159,14 @@ export function analyzeGraph(files: Readonly<Record<string, string>>, entryHint?
   };
   for (const file of names) if (!index.has(file)) strong(file);
   cycles.sort((x, y) => (x[0] ?? "").localeCompare(y[0] ?? ""));
+  // A cycle between modules is resolved (ES modules link cyclic imports with live bindings). A module that requires
+  // itself has nothing to resolve and stays a problem.
   for (const cycle of cycles) {
-    problems.push({ file: cycle[0] ?? "", kind: "cycle", message: `circular require chain: ${[...cycle, cycle[0]].join(" -> ")}` });
+    if (cycle.length === 1) problems.push({ file: cycle[0] ?? "", kind: "cycle", message: `circular require chain: ${[...cycle, cycle[0]].join(" -> ")}` });
   }
+  const componentOf = new Map<string, number>();
+  cycles.forEach((cycle, i) => cycle.forEach((f) => componentOf.set(f, i)));
+  const cycleEdges = edges.filter((e) => componentOf.has(e.from) && componentOf.get(e.from) === componentOf.get(e.to));
 
   // Entry: the requested one, otherwise a root (required by nobody) that itself requires project files, preferring
   // index/main, then the widest reach, then by name. Without such a root: index.cjs, index.js, then the first root.
@@ -212,7 +219,7 @@ export function analyzeGraph(files: Readonly<Record<string, string>>, entryHint?
   const depth: Record<string, number> = {};
   for (const f of order) depth[f] = Math.max(-1, ...(deps.get(f) ?? []).filter((d) => d !== f).map((d) => depth[d] ?? 0)) + 1;
 
-  return { files: names, edges, cycles, order, entry, depth, esmPaths, problems };
+  return { files: names, edges, cycles, cycleEdges, order, entry, depth, esmPaths, problems };
 }
 
 // ---------------------------------------------------------------------------
@@ -225,15 +232,23 @@ const exportAssign = (name: string, value: ESTree.Expression): ESTree.Expression
   type: "ExpressionStatement",
   expression: { type: "AssignmentExpression", operator: "=", left: { type: "MemberExpression", object: id("exports"), property: id(name), computed: false, optional: false }, right: value },
 });
+/** `Object.defineProperty(exports, name, { enumerable: true, get() { return <local>; } })`: an ES live binding. */
+const exportGetter = (name: string, local: string): ESTree.Statement => {
+  const parsed = parseProgram(`Object.defineProperty(exports, ${JSON.stringify(name)}, { enumerable: true, get: function () { return ${local}; } });`);
+  if ("error" in parsed) throw new Error(parsed.error);
+  return parsed.ast.body[0] as ESTree.Statement;
+};
 
 const NAMESPACE_HELPER = "__lzNamespace";
 /**
  * Module namespace objects are null-prototype, non-extensible and read-only, tagged "Module". Strict-mode writes to
  * them throw, so the linked graph must not hand out the mutable CommonJS exports object instead.
  */
-function namespaceHelper(): Body[] {
+function namespaceHelper(live = false): Body[] {
   const parsed = parseProgram(
-    `function ${NAMESPACE_HELPER}(e) { var ns = Object.create(null); Object.keys(e).sort().forEach(function (k) { ns[k] = e[k]; }); Object.defineProperty(ns, Symbol.toStringTag, { value: "Module" }); return Object.freeze(ns); }`
+    live
+      ? `function ${NAMESPACE_HELPER}(e) { var ns = Object.create(null); Object.keys(e).sort().forEach(function (k) { Object.defineProperty(ns, k, { enumerable: true, get: function () { return e[k]; } }); }); Object.defineProperty(ns, Symbol.toStringTag, { value: "Module" }); return Object.freeze(ns); }`
+      : `function ${NAMESPACE_HELPER}(e) { var ns = Object.create(null); Object.keys(e).sort().forEach(function (k) { ns[k] = e[k]; }); Object.defineProperty(ns, Symbol.toStringTag, { value: "Module" }); return Object.freeze(ns); }`
   );
   if ("error" in parsed) throw new Error(parsed.error);
   return parsed.ast.body;
@@ -243,11 +258,14 @@ function namespaceHelper(): Body[] {
  * Turns an ES module into code the sandbox's virtual CommonJS loader can evaluate: imports become requires of the
  * linked module, exports become assignments made once the module body has run, and the module is strict like ESM.
  */
-export function linkEsmForSandbox(code: string): string {
+/** `live` is for modules in an import cycle: export getters up front, getter-based namespaces (ESM live bindings). */
+export function linkEsmForSandbox(code: string, options: { readonly live?: boolean } = {}): string {
+  const live = options.live === true;
   const parsed = parseProgram(code);
   if ("error" in parsed) throw new Error(`stitched module does not parse: ${parsed.error}`);
   const body: Body[] = [];
   const tail: ESTree.Statement[] = [];
+  const bind = (name: string, local: string): ESTree.Statement => (live ? exportGetter(name, local) : exportAssign(name, id(local)));
   for (const statement of parsed.ast.body) {
     if (statement.type === "ImportDeclaration") {
       const source = String(statement.source.value);
@@ -269,15 +287,15 @@ export function linkEsmForSandbox(code: string): string {
       if (decl !== null && decl !== undefined) {
         body.push(decl);
         if (decl.type === "VariableDeclaration") {
-          for (const d of decl.declarations) if (d.id.type === "Identifier") tail.push(exportAssign(d.id.name, id(d.id.name)));
+          for (const d of decl.declarations) if (d.id.type === "Identifier") tail.push(bind(d.id.name, d.id.name));
         } else if (decl.id !== null && decl.id !== undefined) {
-          tail.push(exportAssign(decl.id.name, id(decl.id.name)));
+          tail.push(bind(decl.id.name, decl.id.name));
         }
       }
       for (const spec of statement.specifiers) {
         const local = spec.local.type === "Identifier" ? spec.local.name : String(spec.local.value);
         const exported = spec.exported.type === "Identifier" ? spec.exported.name : String(spec.exported.value);
-        tail.push(exportAssign(exported, id(local)));
+        tail.push(bind(exported, local));
       }
       continue;
     }
@@ -285,7 +303,7 @@ export function linkEsmForSandbox(code: string): string {
       const decl = statement.declaration;
       if ((decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration") && decl.id !== null && decl.id !== undefined) {
         body.push(decl as ESTree.FunctionDeclaration | ESTree.ClassDeclaration);
-        tail.push(exportAssign("default", id(decl.id.name)));
+        tail.push(bind("default", decl.id.name));
       } else {
         const value: ESTree.Expression =
           decl.type === "FunctionDeclaration"
@@ -294,7 +312,7 @@ export function linkEsmForSandbox(code: string): string {
               ? { ...decl, type: "ClassExpression" }
               : (decl as ESTree.Expression);
         body.push({ type: "VariableDeclaration", kind: "const", declarations: [{ type: "VariableDeclarator", id: id("__lz_default"), init: value }] });
-        tail.push(exportAssign("default", id("__lz_default")));
+        tail.push(bind("default", "__lz_default"));
       }
       continue;
     }
@@ -302,8 +320,8 @@ export function linkEsmForSandbox(code: string): string {
   }
   const strict: ESTree.Directive = { type: "ExpressionStatement", expression: { type: "Literal", value: "use strict", raw: '"use strict"' }, directive: "use strict" };
   const usesNamespace = parsed.ast.body.some((s) => s.type === "ImportDeclaration" && s.specifiers.some((x) => x.type === "ImportNamespaceSpecifier"));
-  const helper = usesNamespace ? namespaceHelper() : [];
-  return printProgram({ type: "Program", sourceType: "script", body: [strict, ...helper, ...body, ...tail] }, []);
+  const helper = usesNamespace ? namespaceHelper(live) : [];
+  return printProgram({ type: "Program", sourceType: "script", body: [strict, ...helper, ...(live ? tail : []), ...body, ...(live ? [] : tail)] }, []);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +489,16 @@ async function resurrectWith(
   const esmByFile = new Map<string, { code: string; exports: string[] }>();
   /** Per file, per export: inputs and legacy outputs of the passing per-file fuzz run. */
   const perFileObs = new Map<string, Map<string, Observation[]>>();
+  // Modules in an import cycle: a dependency may not be converted yet when its partner is, so its export names are
+  // predicted from its own source (they do not depend on how its imports are shaped). A different final export set is
+  // an error below, never silently accepted.
+  const cyclic = new Set(graph.cycles.filter((c) => c.length > 1).flat());
+  const predictedExports = new Map<string, string[]>();
+  for (const f of cyclic) {
+    const guess = toEsmModule(legacyFiles[f] ?? "", { resolveRequire: () => ({ source: "./_.js", exports: ["default"] }) });
+    if (guess.complete) predictedExports.set(f, guess.exports);
+  }
+  const sameNames = (x: readonly string[], y: readonly string[]): boolean => [...x].sort().join("\0") === [...y].sort().join("\0");
   /** CommonJS -> ESM for one file, with its relative requires stitched to the dependencies' ES modules. */
   const esmFor = (file: string, levels: RuleLevels): ReturnType<typeof toEsmModule> =>
     toEsmModule(legacyFiles[file] ?? "", {
@@ -479,9 +507,10 @@ async function resurrectWith(
         const resolved = resolveRelative(new Set(graph.files), file, spec);
         if (!resolved.ok) return undefined;
         const target = esmByFile.get(resolved.path);
-        if (target === undefined) return undefined;
+        const exportNames = target?.exports ?? predictedExports.get(resolved.path);
+        if (exportNames === undefined) return undefined;
         const fromDir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
-        return { source: relativeSpecifier(fromDir, graph.esmPaths[resolved.path] ?? resolved.path), exports: target.exports };
+        return { source: relativeSpecifier(fromDir, graph.esmPaths[resolved.path] ?? resolved.path), exports: exportNames };
       },
     });
 
@@ -566,7 +595,10 @@ async function resurrectWith(
     // ESM conversion with stitched imports of already-resurrected dependencies.
     const esm = esmFor(file, levels);
     if (!esm.complete) notes.push(...esm.notes);
-    const success = passed && candidate.parsed && esm.complete;
+    const guess = predictedExports.get(file);
+    const stable = !esm.complete || guess === undefined || sameNames(guess, esm.exports);
+    if (!stable) notes.push(`${file} is part of an import cycle and its export names changed after a rule rollback (${guess?.join(", ")} -> ${esm.exports.join(", ")}), so its partners cannot be stitched exactly`);
+    const success = passed && candidate.parsed && esm.complete && stable;
     const result: FileResult = {
       path: file,
       esmPath: graph.esmPaths[file] ?? esmPathFor(file),
@@ -608,7 +640,7 @@ async function resurrectWith(
     const out: Record<string, string> = {};
     for (const r of results) {
       const code = override !== undefined && override.file === r.path ? override.code : (esmByFile.get(r.path)?.code ?? "");
-      out[r.esmPath] = linkEsmForSandbox(code);
+      out[r.esmPath] = linkEsmForSandbox(code, { live: cyclic.has(r.path) });
     }
     return out;
   };

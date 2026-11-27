@@ -43,6 +43,8 @@ export interface AuditReport {
   readonly skipped: Array<{ readonly file: string; readonly reason: string }>;
   readonly totals: Record<Severity, number> & { readonly files: number };
   readonly graph: { readonly entry: string | null; readonly edges: Array<{ readonly from: string; readonly to: string }>; readonly cycles: string[][] };
+  /** Line of the `require()` behind each resolved edge, keyed `from->to` (used to place SARIF results). */
+  readonly requireLines: Record<string, number>;
   readonly readiness: number;
   readonly grade: "A" | "B" | "C" | "D";
   readonly recommendedCommand: string;
@@ -176,6 +178,7 @@ export function auditDirectory(dir: string): AuditReport {
   const known = new Set(sources.keys());
   const scans = new Map<string, Scan>();
   const edges: Array<{ from: string; to: string }> = [];
+  const requireLines: Record<string, number> = {};
   for (const [rel, source] of sources) {
     const ast = parseFile(source);
     if ("error" in ast) {
@@ -199,7 +202,10 @@ export function auditDirectory(dir: string): AuditReport {
     for (const r of scan.requires) {
       if (r.specifier.startsWith("./") || r.specifier.startsWith("../")) {
         const resolved = resolveRelative(known, rel, r.specifier);
-        if (resolved.ok && !edges.some((e) => e.from === rel && e.to === resolved.path)) edges.push({ from: rel, to: resolved.path });
+        if (resolved.ok && !edges.some((e) => e.from === rel && e.to === resolved.path)) {
+          edges.push({ from: rel, to: resolved.path });
+          requireLines[`${rel}->${resolved.path}`] = r.line;
+        }
         else if (!resolved.ok) scan.findings.push({ kind: "external-require", severity: "high", line: r.line, message: `require('${r.specifier}') does not resolve inside the audited folder` });
       } else {
         scan.findings.push({ kind: "external-require", severity: "high", line: r.line, message: `require('${r.specifier}') is a package or Node built-in: it cannot run inside the Lazarus sandbox` });
@@ -294,7 +300,7 @@ export function auditDirectory(dir: string): AuditReport {
   if (external.length > 0) notes.push(`${external.length} file(s) require packages, built-ins or files outside the folder (${external.map((f) => f.file).join(", ")}); they cannot run in the sandbox until those requires are removed or vendored.`);
   if (cycles.length > 0) notes.push(`${cycles.length} require cycle(s): ${cycles.map((c) => [...c, c[0]].join(" -> ")).join("; ")}.`);
   if (totals.high > 0) notes.push("High-risk truncation sites are exactly where a naive Math.floor / Math.trunc rewrite breaks exact Object.is parity; let the Exorcist prove each one.");
-  return { directory: shownDir, files, skipped, totals, graph: { entry, edges, cycles }, readiness, grade: gradeFor(readiness), recommendedCommand, notes };
+  return { directory: shownDir, files, skipped, totals, graph: { entry, edges, cycles }, requireLines, readiness, grade: gradeFor(readiness), recommendedCommand, notes };
 }
 
 /** Markdown report (tables render in terminals and in GitHub). */
@@ -323,11 +329,132 @@ export function renderAuditMarkdown(r: AuditReport): string {
   return lines.join("\n");
 }
 
-export const AUDIT_USAGE = `lazarus audit <dir> [--json]
+// ---------------------------------------------------------------------------
+// SARIF 2.1.0 (GitHub Code Scanning)
+// ---------------------------------------------------------------------------
+export const SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json";
+export const SARIF_TOOL_VERSION = "14.0.0";
+const INFORMATION_URI = "https://github.com/anjarkar25-max/lazarus";
+
+export type SarifLevel = "error" | "warning" | "note";
+export interface SarifRule {
+  readonly id: string;
+  readonly name: string;
+  readonly shortDescription: { readonly text: string };
+  readonly fullDescription: { readonly text: string };
+  readonly help: { readonly text: string };
+  readonly helpUri: string;
+  readonly defaultConfiguration: { readonly level: SarifLevel };
+}
+export interface SarifResult {
+  readonly ruleId: string;
+  readonly ruleIndex: number;
+  readonly level: SarifLevel;
+  readonly message: { readonly text: string };
+  readonly locations: ReadonlyArray<{ readonly physicalLocation: { readonly artifactLocation: { readonly uri: string; readonly uriBaseId: "%SRCROOT%" }; readonly region: { readonly startLine: number } } }>;
+}
+export interface SarifLog {
+  readonly $schema: string;
+  readonly version: "2.1.0";
+  readonly runs: ReadonlyArray<{
+    readonly tool: { readonly driver: { readonly name: string; readonly fullName: string; readonly informationUri: string; readonly semanticVersion: string; readonly rules: readonly SarifRule[] } };
+    readonly columnKind: "utf16CodeUnits";
+    readonly results: readonly SarifResult[];
+  }>;
+}
+
+const rule = (id: string, name: string, short: string, full: string, fix: string, level: SarifLevel): SarifRule => ({
+  id,
+  name,
+  shortDescription: { text: short },
+  fullDescription: { text: full },
+  help: { text: fix },
+  helpUri: INFORMATION_URI,
+  defaultConfiguration: { level },
+});
+/** Stable rule table: ids never change meaning. Order is the `ruleIndex`. */
+export const SARIF_RULES: readonly SarifRule[] = [
+  rule("LAZ001", "BitwiseTruncation", "Bitwise int32 truncation (x | 0, ~~x, x >> 0)", "Bitwise truncation converts to int32: -0, NaN and Infinity become 0 and values wrap modulo 2^32, so a Math.floor or Math.trunc rewrite changes results.", "Resurrect the file with Lazarus: the Exorcist proves exact Object.is parity and rolls back any rewrite that breaks -0, NaN or 32-bit wrap-around. Do not replace the truncation by hand.", "error"),
+  rule("LAZ002", "ErrorFirstCallback", "Node.js error-first callback", "A function that reports its result through cb(err) / cb(null, value) can be converted to async/await only if both the success and the failure settlements are preserved.", "Resurrect it with Lazarus: it lifts the callback to async/await and proves both settlements, or falls back to a promise wrapper.", "warning"),
+  rule("LAZ003", "PrototypeChain", "Constructor with prototype members", "A class rewrite of a prototype chain changes enumerability, strict mode and calls without new.", "Let Lazarus convert the prototype chain to a class only after the Exorcist proves parity; roll the rule back when it finds a counterexample.", "warning"),
+  rule("LAZ004", "VarOrArgumentsHoisting", "var hoisting or arguments object", "var is function scoped and hoisted, and arguments is not available in arrow functions, so let/const and rest rewrites can change behavior.", "Rewrite to const/let and rest parameters only after proving parity; Lazarus does this with a fuzzed proof and rolls back on a counterexample.", "warning"),
+  rule("LAZ005", "CircularOrUnresolvableRequire", "Circular or unresolvable CommonJS require", "Modules that require each other, or that require packages, built-ins or files outside the audited folder, need whole-graph handling: partial exports in a cycle and host modules inside the sandbox.", "Resurrect the whole require graph (npm run resurrect -- <dir> --entry <file>): Lazarus resolves cycles as ES module live bindings and proves whole-graph Object.is parity. Vendor or remove host and package requires first.", "warning"),
+  rule("LAZ006", "UnparseableFile", "File does not parse", "The file is not valid JavaScript for the parser, so no other rule could be evaluated for it.", "Fix the syntax error, then audit again.", "error"),
+];
+const RULE_OF_KIND: Record<FindingKind, string> = {
+  "bitwise-truncation": "LAZ001",
+  "error-first-callback": "LAZ002",
+  "prototype-chain": "LAZ003",
+  "var-hoisting": "LAZ004",
+  "arguments-usage": "LAZ004",
+  "require-graph": "LAZ005",
+  "external-require": "LAZ005",
+  "parse-error": "LAZ006",
+};
+const LEVEL_OF_SEVERITY: Record<Severity, SarifLevel> = { high: "error", medium: "warning", info: "note" };
+
+/** The audited folder as a repository-relative prefix, or "" when it is "." or cannot be one (absolute, or climbs out). */
+function sarifPrefix(directory: string): string {
+  const d = directory.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (d === "" || d === "." || d.startsWith("/") || /^[A-Za-z]:/.test(d) || d.split("/").includes("..")) return "";
+  return `${d.replace(/^\.\//, "")}/`;
+}
+
+/** SARIF 2.1.0 log for a report. Pure and deterministic. Result lines are 1-based. */
+export function renderSarif(report: AuditReport): SarifLog {
+  const prefix = sarifPrefix(report.directory);
+  const cycleOf = new Map<string, number>();
+  report.graph.cycles.forEach((cycle, i) => cycle.forEach((f) => cycleOf.set(f, i)));
+  /** First require() line of a file that points into the same cycle, else the first require of the file, else 1. */
+  const requireLine = (file: string): number => {
+    const own = report.graph.edges.filter((e) => e.from === file);
+    const inCycle = own.filter((e) => cycleOf.has(file) && cycleOf.get(e.to) === cycleOf.get(file));
+    const lines = (inCycle.length > 0 ? inCycle : own).map((e) => report.requireLines[`${e.from}->${e.to}`] ?? 0).filter((n) => n > 0);
+    return lines.length > 0 ? Math.min(...lines) : 1;
+  };
+  const results: SarifResult[] = [];
+  for (const f of report.files) {
+    for (const finding of f.findings) {
+      const ruleId = RULE_OF_KIND[finding.kind];
+      const ruleIndex = SARIF_RULES.findIndex((r) => r.id === ruleId);
+      const fix = SARIF_RULES[ruleIndex]?.help.text ?? "";
+      results.push({
+        ruleId,
+        ruleIndex,
+        level: LEVEL_OF_SEVERITY[finding.severity],
+        message: { text: `${finding.message}. Fix: ${fix}` },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: { uri: `${prefix}${f.file}`, uriBaseId: "%SRCROOT%" },
+              region: { startLine: finding.line > 0 ? finding.line : finding.kind === "require-graph" ? requireLine(f.file) : 1 },
+            },
+          },
+        ],
+      });
+    }
+  }
+  results.sort((a, b) => (a.locations[0]?.physicalLocation.artifactLocation.uri ?? "").localeCompare(b.locations[0]?.physicalLocation.artifactLocation.uri ?? "") || (a.locations[0]?.physicalLocation.region.startLine ?? 0) - (b.locations[0]?.physicalLocation.region.startLine ?? 0) || a.ruleId.localeCompare(b.ruleId));
+  return {
+    $schema: SARIF_SCHEMA,
+    version: "2.1.0",
+    runs: [
+      {
+        tool: { driver: { name: "Lazarus", fullName: "Lazarus Legacy Risk Audit", informationUri: INFORMATION_URI, semanticVersion: SARIF_TOOL_VERSION, rules: SARIF_RULES } },
+        columnKind: "utf16CodeUnits",
+        results,
+      },
+    ],
+  };
+}
+
+export const AUDIT_USAGE = `lazarus audit <dir> [--json | --sarif] [--out <file>]
 Scan every .js / .cjs file under <dir> (node_modules, .git and dist are skipped) with acorn, without running
 anything, and print a Legacy Risk Report: bitwise truncation traps, prototype chains, var / arguments usage, the
 require() graph, a migration readiness score and the exact resurrection command to run next.
   --json      print the full report as JSON
+  --sarif     print a SARIF 2.1.0 log for GitHub Code Scanning (rules LAZ001-LAZ006)
+  --out <f>   write the report to <f> instead of stdout (relative to the current directory)
   --help, -h  show this help
 Exit codes: 0 report written, 2 bad usage or unreadable directory.`;
 
@@ -339,10 +466,22 @@ export interface AuditIo {
 
 export function runAuditCli(argv: readonly string[], io: AuditIo): number {
   let json = false;
+  let sarif = false;
+  let out: string | undefined;
   let dir: string | undefined;
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] ?? "";
     if (arg === "--json") json = true;
-    else if (arg === "--help" || arg === "-h") {
+    else if (arg === "--sarif") sarif = true;
+    else if (arg === "--out" || arg === "-o") {
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("-")) {
+        io.stderr(`error: ${arg} needs a file name\n\n${AUDIT_USAGE}\n`);
+        return 2;
+      }
+      out = value;
+      i++;
+    } else if (arg === "--help" || arg === "-h") {
       io.stdout(`${AUDIT_USAGE}\n`);
       return 0;
     } else if (arg.startsWith("-")) {
@@ -357,6 +496,10 @@ export function runAuditCli(argv: readonly string[], io: AuditIo): number {
     io.stderr(`error: no directory given\n\n${AUDIT_USAGE}\n`);
     return 2;
   }
+  if (json && sarif) {
+    io.stderr(`error: --json and --sarif cannot be combined\n\n${AUDIT_USAGE}\n`);
+    return 2;
+  }
   let report: AuditReport;
   try {
     const resolved = nodePath.resolve(io.cwd, dir);
@@ -368,6 +511,19 @@ export function runAuditCli(argv: readonly string[], io: AuditIo): number {
     io.stderr(`error: cannot audit ${dir}: ${err instanceof Error ? err.message : String(err)}\n`);
     return 2;
   }
-  io.stdout(json ? `${JSON.stringify(report, null, 2)}\n` : renderAuditMarkdown(report));
+  const text = sarif ? `${JSON.stringify(renderSarif(report), null, 2)}\n` : json ? `${JSON.stringify(report, null, 2)}\n` : renderAuditMarkdown(report);
+  if (out !== undefined) {
+    const target = nodePath.resolve(io.cwd, out);
+    try {
+      fs.mkdirSync(nodePath.dirname(target), { recursive: true });
+      fs.writeFileSync(target, text, "utf8");
+    } catch (err: unknown) {
+      io.stderr(`error: cannot write ${out}: ${err instanceof Error ? err.message : String(err)}\n`);
+      return 2;
+    }
+    io.stdout(`Wrote ${sarif ? "SARIF 2.1.0" : json ? "JSON" : "Markdown"} report for ${report.directory} to ${out} (${report.totals.high} high, ${report.totals.medium} medium, ${report.totals.info} info)\n`);
+    return 0;
+  }
+  io.stdout(text);
   return 0;
 }

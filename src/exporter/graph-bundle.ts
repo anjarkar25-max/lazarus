@@ -3,7 +3,7 @@
 // patch and the GitHub Actions workflow. Every value here is plain text; nothing is executed.
 import type { GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import type { ParamKind } from "../fuzzer/types.js";
-import { renderWorkflow, sanitizeIdentifier, WORKFLOW_PATH } from "./bundle.js";
+import { AUDIT_WORKFLOW_PATH, renderAuditWorkflow, renderWorkflow, sanitizeIdentifier, WORKFLOW_PATH } from "./bundle.js";
 import { createZip } from "./zip.js";
 import { plural } from "../text/plural.js";
 import { describeTypecheck, strictTsconfig } from "../crew/ts-verifier.js";
@@ -162,5 +162,5 @@ export function buildGraphBundle(result: GraphResurrectionResult, options: { rea
 }
 
 export function graphBundleZip(bundle: GraphBundle): Buffer {
-  return createZip(Object.entries(bundle.files).map(([name, data]) => ({ name, data })));
+  return createZip([...Object.entries(bundle.files).map(([name, data]) => ({ name, data })), { name: AUDIT_WORKFLOW_PATH, data: renderAuditWorkflow() }]);
 }

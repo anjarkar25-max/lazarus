@@ -979,10 +979,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 23-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 24-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1322,7 +1322,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(23);
+    expect(body["specs"]).toBe(24);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1355,8 +1355,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 23 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
+  it("shows 24 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
   });
 });
 
@@ -1593,8 +1593,204 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 23 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>');
+    it("shows 24 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
     });
+  });
+});
+
+describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
+  };
+
+  describe("Tab 2: cycle edges in the SVG dependency graph", () => {
+    const cycleEdges = (edges: Array<{ from: string; to: string }>): string[] => {
+      const fn = runInlineScript(`${regionOf("lz-cycle")}; lzCycleEdges`, {}) as (e: unknown) => Record<string, boolean>;
+      return Object.keys(fn(edges)).sort();
+    };
+    it("flags exactly the edges inside a strongly connected component", () => {
+      expect(cycleEdges([{ from: "tax.cjs", to: "discount.cjs" }, { from: "discount.cjs", to: "tax.cjs" }, { from: "index.cjs", to: "tax.cjs" }, { from: "index.cjs", to: "discount.cjs" }])).toEqual(["discount.cjs->tax.cjs", "tax.cjs->discount.cjs"]);
+      expect(cycleEdges([{ from: "a", to: "b" }, { from: "b", to: "c" }, { from: "c", to: "a" }, { from: "c", to: "d" }])).toEqual(["a->b", "b->c", "c->a"]);
+    });
+    it("leaves acyclic graphs (and self-requires, which stay a blocking error) unflagged", () => {
+      expect(cycleEdges([{ from: "invoice.cjs", to: "money.cjs" }, { from: "invoice.cjs", to: "tax.cjs" }, { from: "tax.cjs", to: "money.cjs" }])).toEqual([]);
+      expect(cycleEdges([{ from: "trim.cjs", to: "pad.cjs" }])).toEqual([]);
+      expect(cycleEdges([{ from: "self.cjs", to: "self.cjs" }])).toEqual([]);
+      expect(cycleEdges([])).toEqual([]);
+    });
+    it("agrees with the server's analyzeGraph on the shipped presets and on random graphs (property)", () => {
+      const clientEdges = (files: Record<string, string>): Array<{ from: string; to: string }> => analyzeGraph(files).edges.map((e) => ({ from: e.from, to: e.to }));
+      for (const dir of ["legacy-circular-ledger", "legacy-invoice-engine", "legacy-text-pipeline"]) {
+        const files: Record<string, string> = {};
+        for (const f of fs.readdirSync(nodePath.join(root, "examples", dir))) files[f] = fs.readFileSync(nodePath.join(root, "examples", dir, f), "utf8");
+        const g = analyzeGraph(files);
+        expect(cycleEdges(clientEdges(files)), dir).toEqual(g.cycleEdges.map((e) => `${e.from}->${e.to}`).sort());
+      }
+      fc.assert(
+        fc.property(fc.integer({ min: 2, max: 6 }), fc.array(fc.tuple(fc.nat(5), fc.nat(5)), { maxLength: 12 }), (n, pairs) => {
+          const files: Record<string, string> = {};
+          for (let i = 0; i < n; i++) files[`m${i}.cjs`] = `${[...new Set(pairs.filter(([a, b]) => a % n === i && b % n !== i).map(([, b]) => b % n))].map((d) => `var d${d} = require('./m${d}.cjs');`).join("\n")}\nexports.v = function (x) { return x; };`;
+          expect(cycleEdges(clientEdges(files))).toEqual(analyzeGraph(files).cycleEdges.map((e) => `${e.from}->${e.to}`).sort());
+        }),
+        { numRuns: 60 }
+      );
+    });
+    it("adds legacy-circular-ledger to Tab 2's preset list with the exact example files, amber edges and the pill", () => {
+      const graphPane = html.slice(html.indexOf('<div class="studio-pane" id="pane-graph"'), html.indexOf('<div class="studio-pane" id="pane-redteam"'));
+      expect(graphPane).toContain('<option value="circular">legacy-circular-ledger (tax &harr; discount, cycle)</option>');
+      expect(graphPane).toContain('<option value="invoice">legacy-invoice-engine');
+      expect(graphPane).toContain('<option value="text">legacy-text-pipeline');
+      for (const f of ["tax.cjs", "discount.cjs", "index.cjs"]) {
+        const source = fs.readFileSync(nodePath.join(root, "examples", "legacy-circular-ledger", f), "utf8").replace(/\r\n/g, "\n");
+        expect(html, f).toContain(`${JSON.stringify(f)}: ${JSON.stringify(source)}`);
+      }
+      expect(html).toContain('<span class="cycle-pill" id="graphCyclePill" role="status" hidden></span>');
+      expect(html).toContain("#graphSvg .edge.cycle, #graphSvg .edge.cycle.stitched { stroke: #f59e0b;");
+      expect(html).toContain('"Cycle Resolved (ESM Live Bindings)"');
+      expect(html).toContain('"Cycle detected (resolves as ESM live bindings)"');
+      expect(html).toContain('id: "lzArrowCycle"');
+      // The acyclic presets keep their geometry and styling: importers sit to the right of their dependencies.
+      expect(html).toContain("const backward = a.x <= b.x;");
+      expect(html).toContain('x.path.setAttribute("class", "edge" + (x.cycle ? " cycle" : "") + (stitched ? " stitched" : ""));');
+      expect(html).toContain("#graphSvg .edge.stitched { stroke: #10b981; stroke-width: 2; }");
+    });
+  });
+
+  describe("Tab 1: Perf Parity chip", () => {
+    const perfApi = (): { label: (p: unknown) => string; cls: (v: string) => string; micros: (n: number) => string } => {
+      const out = runInlineScript(`${regionOf("lz-perf")}; ({ label: lzPerfLabel, cls: lzPerfClass, micros: lzPerfMicros })`, {}) as { label: (p: unknown) => string; cls: (v: string) => string; micros: (n: number) => string };
+      return out;
+    };
+    it("labels the chip like `Perf: 1.12x \u00b7 3.4\u00b5s vs 3.8\u00b5s` and classifies the verdict", () => {
+      const { label, cls, micros } = perfApi();
+      expect(label({ ratio: 1.118, resurrectedMedianUs: 3.4, legacyMedianUs: 3.8 })).toBe("Perf: 1.12x \u00b7 3.4\u00b5s vs 3.8\u00b5s");
+      expect(label({ ratio: 0.8, resurrectedMedianUs: 125, legacyMedianUs: 100 })).toBe("Perf: 0.80x \u00b7 125\u00b5s vs 100\u00b5s");
+      expect(label({ ratio: 1, resurrectedMedianUs: 0.0215, legacyMedianUs: 0.0215 })).toBe("Perf: 1.00x \u00b7 0.02\u00b5s vs 0.02\u00b5s");
+      expect(micros(12.34)).toBe("12.3\u00b5s");
+      expect([cls("faster"), cls("parity"), cls("slower")]).toEqual(["pass", "neutral", "warn"]);
+    });
+    it("sits beside the proof badges, and its script comes before the stale guard (which stays last)", () => {
+      expect(html).toContain('<span class="tsc-badge" id="tscBadge" hidden></span>\n              <span class="tsc-badge perf-chip" id="perfBadge" role="status" hidden></span>');
+      const perfAt = html.indexOf("Perf Parity chip: POST /api/perf-parity");
+      expect(perfAt).toBeGreaterThan(0);
+      expect(perfAt).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+      const run = html.slice(html.indexOf("async function startRun") > 0 ? html.indexOf("async function startRun") : 0, html.indexOf("let lastStarted = null;"));
+      expect(run).not.toContain("perf-parity");
+    });
+
+    interface Rig { doc: FakeDocument; chip: FakeElement; calls: Array<{ url: string; body: Record<string, unknown> }>; fire: (type: string, detail: unknown) => void; release: Array<() => void> }
+    function rig(respond: (n: number) => Response | Promise<Response>, schema = '{"n":"integer"}'): Rig {
+      const doc = new FakeDocument();
+      const chip = doc.element("span", "perfBadge");
+      chip.hidden = true;
+      doc.element("textarea", "schemaJson").value = schema;
+      doc.element("textarea", "legacyCode").value = HALVE_SOURCE;
+      const calls: Rig["calls"] = [];
+      const script = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((s) => s.includes("Perf Parity chip: POST /api/perf-parity")) ?? "";
+      expect(script.length).toBeGreaterThan(500);
+      runInlineScript(script, {
+        document: doc,
+        CustomEvent: class { constructor(readonly type: string, readonly init?: { detail?: unknown }) {} get detail(): unknown { return this.init?.detail; } },
+        fetch: async (url: string, init: RequestInit) => {
+          calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+          return respond(calls.length);
+        },
+      });
+      return { doc, chip, calls, release: [], fire: (type, detail) => void doc.dispatchEvent({ type, detail }) };
+    }
+    const HALVE_SOURCE = "function half(n) { return (n / 2) | 0; }";
+    const PAYLOAD = { iterations: 5000, legacyMedianUs: 3.8, resurrectedMedianUs: 3.4, legacyOpsPerSec: 263158, resurrectedOpsPerSec: 294118, ratio: 1.118, verdict: "faster", inputs: 16, elapsedMs: 140, budgetMs: 136 };
+    const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+    it("calls POST /api/perf-parity after a proven synchronous resurrection and shows the chip (non-blocking)", async () => {
+      const r = rig(() => json(PAYLOAD));
+      r.fire("lazarus:run-start", { source: HALVE_SOURCE });
+      expect(r.chip.hidden).toBe(true);
+      r.fire("lazarus:result", { success: true, modernCode: "Math.trunc(n / 2) || 0" });
+      expect(r.chip.hidden).toBe(false);
+      expect(r.chip.textContent).toBe("Perf: measuring...");
+      expect(r.calls).toHaveLength(1);
+      expect(r.calls[0]).toEqual({ url: "/api/perf-parity", body: { legacyCode: HALVE_SOURCE, modernCode: "Math.trunc(n / 2) || 0", schema: { n: "integer" } } });
+      await settle();
+      expect(r.chip.textContent).toBe("Perf: 1.12x \u00b7 3.4\u00b5s vs 3.8\u00b5s");
+      expect(r.chip.className).toBe("tsc-badge perf-chip pass");
+      expect(r.chip.title).toContain("Verdict: faster");
+      expect(r.chip.title).toContain("294118 ops/s");
+    });
+    it("shows slower and parity verdicts honestly", async () => {
+      const slower = rig(() => json({ ...PAYLOAD, ratio: 0.8, verdict: "slower", resurrectedMedianUs: 4.75, legacyMedianUs: 3.8 }));
+      slower.fire("lazarus:run-start", { source: HALVE_SOURCE });
+      slower.fire("lazarus:result", { success: true, modernCode: "x" });
+      await settle();
+      expect(slower.chip.textContent).toBe("Perf: 0.80x \u00b7 4.8\u00b5s vs 3.8\u00b5s");
+      expect(slower.chip.className).toContain("warn");
+      const parity = rig(() => json({ ...PAYLOAD, ratio: 1.01, verdict: "parity" }));
+      parity.fire("lazarus:run-start", { source: HALVE_SOURCE });
+      parity.fire("lazarus:result", { success: true, modernCode: "x" });
+      await settle();
+      expect(parity.chip.className).toContain("neutral");
+    });
+    it("skips with a note for async callback presets and multi-export modules, and for failed runs shows nothing", async () => {
+      const r = rig(() => json(PAYLOAD));
+      r.fire("lazarus:result", { success: true, asyncCallback: { entry: "legacyReadConfigCb" }, modernCode: "x" });
+      expect(r.chip.hidden).toBe(false);
+      expect(r.chip.textContent).toBe("Perf: skipped (async callback)");
+      r.fire("lazarus:result", { success: true, module: { functions: [] }, modernCode: "x" });
+      expect(r.chip.textContent).toBe("Perf: skipped (multi-export module)");
+      r.fire("lazarus:result", { success: false, modernCode: "x" });
+      expect(r.chip.hidden).toBe(true);
+      await settle();
+      expect(r.calls).toEqual([]);
+    });
+    it("discards a stale answer when a newer run started, and reports an unavailable or skipped benchmark", async () => {
+      let first: (r: Response) => void = () => undefined;
+      const r = rig((n) => (n === 1 ? new Promise<Response>((resolve) => (first = resolve)) : json({ ...PAYLOAD, ratio: 2, verdict: "faster" })));
+      r.fire("lazarus:run-start", { source: HALVE_SOURCE });
+      r.fire("lazarus:result", { success: true, modernCode: "old" });
+      r.fire("lazarus:run-start", { source: HALVE_SOURCE });
+      expect(r.chip.hidden).toBe(true);
+      r.fire("lazarus:result", { success: true, modernCode: "new" });
+      await settle();
+      expect(r.chip.textContent).toContain("2.00x");
+      first(json({ ...PAYLOAD, ratio: 9, verdict: "faster" }));
+      await settle();
+      expect(r.chip.textContent).toContain("2.00x");
+      const down = rig(() => json({ error: "A performance benchmark is already running" }, 429));
+      down.fire("lazarus:result", { success: true, modernCode: "x" });
+      await settle();
+      expect(down.chip.textContent).toBe("Perf: unavailable");
+      expect(down.chip.title).toContain("already running");
+      const skip = rig(() => json({ skipped: true, reason: "nothing to time" }));
+      skip.fire("lazarus:result", { success: true, modernCode: "x" });
+      await settle();
+      expect(skip.chip.textContent).toBe("Perf: skipped");
+      expect(skip.chip.title).toBe("nothing to time");
+    });
+    it("omits the schema when the field is not a flat kind map (the server falls back to the scanner)", async () => {
+      const r = rig(() => json(PAYLOAD), '{"a":{"n":"integer"}}');
+      r.fire("lazarus:result", { success: true, modernCode: "x" });
+      expect(r.calls[0]?.body).not.toHaveProperty("schema");
+    });
+  });
+
+  it("adds no tab, keeps Tab 3 byte-identical, shows 24 Kiro Specs and needs no new dependency", () => {
+    expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+    const start = html.indexOf('/* ---- Red-Team Lab');
+    expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+    expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+    const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
 });

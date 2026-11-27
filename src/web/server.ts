@@ -12,6 +12,7 @@ import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
+import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
 import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
 import { generateAsyncVerifiedBundle } from "../exporter/async-bundle.js";
 import { renderType, type TypeSignature } from "../crew/type-alchemist.js";
@@ -430,6 +431,8 @@ function summarizeGraph(result: GraphResurrectionResult, bundleId: string | unde
     order: result.graph.order,
     entry: result.graph.entry,
     edges: result.graph.edges,
+    cycles: result.graph.cycles,
+    cycleEdges: result.graph.cycleEdges,
     files: result.files.map((f) => ({
       path: f.path,
       esmPath: f.esmPath,
@@ -471,6 +474,10 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   let naiveLegacy: PooledProbeRunner | undefined;
   let naiveModern: PooledProbeRunner | undefined;
   let naiveBusy = false;
+  // Dedicated workers for the performance micro-benchmark (no other work shares them while it times), one run at a time.
+  let perfLegacy: PooledProbeRunner | undefined;
+  let perfModern: PooledProbeRunner | undefined;
+  let perfBusy = false;
   const serverStarted = Date.now();
   let healthTests: number | null | undefined;
   const probePools = (): { legacy: PooledProbeRunner; modern: PooledProbeRunner } => {
@@ -898,7 +905,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           onProgress: (event: GraphProgress) => {
             if (event.kind === "graph") {
               const g = event.graph;
-              send({ kind: "graph", graph: { files: g.files, edges: g.edges, order: g.order, entry: g.entry, depth: g.depth, esmPaths: g.esmPaths, cycles: g.cycles, problems: g.problems } });
+              send({ kind: "graph", graph: { files: g.files, edges: g.edges, order: g.order, entry: g.entry, depth: g.depth, esmPaths: g.esmPaths, cycles: g.cycles, cycleEdges: g.cycleEdges, problems: g.problems } });
             } else {
               send(event);
             }
@@ -1171,6 +1178,44 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(verdict));
       return;
+    }    if (req.method === "POST" && routePath === "/api/perf-parity") {
+      const reply = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        reply(err instanceof PayloadTooLarge ? 413 : 400, { error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" });
+        return;
+      }
+      const checkedPerf = PerfParityBodySchema.safeParse(rawBody);
+      if (!checkedPerf.success) {
+        reply(400, { error: `Invalid perf-parity request: ${checkedPerf.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` });
+        return;
+      }
+      if (perfBusy) {
+        reply(429, { error: "A performance benchmark is already running", code: "BUSY" });
+        return;
+      }
+      perfBusy = true;
+      try {
+        perfLegacy ??= new PooledProbeRunner({ probeTimeoutMs: PERF_PROBE_TIMEOUT_MS });
+        perfModern ??= new PooledProbeRunner({ probeTimeoutMs: PERF_PROBE_TIMEOUT_MS });
+        const { legacyCode, modernCode, schema, functionName } = checkedPerf.data;
+        reply(
+          200,
+          { ...(await runPerfParity({ legacy: perfLegacy, modern: perfModern, legacyCode, modernCode, ...(schema !== undefined ? { schema } : {}), ...(functionName !== undefined ? { functionName } : {}) })) }
+        );
+      } catch (err: unknown) {
+        if (err instanceof PerfParityError) reply(err.status, { error: err.message });
+        else if (err instanceof SandboxError) reply(err.code === "TIMEOUT" ? 422 : 500, { error: err.code === "TIMEOUT" ? "The benchmark exceeded its time limit, so no timing was reported" : `Sandbox error: ${err.message}`, code: err.code });
+        else reply(500, { error: err instanceof Error ? err.message : "Performance benchmark failed", code: "INTERNAL_ERROR" });
+      } finally {
+        perfBusy = false;
+      }
+      return;
     }    if (req.method === "POST" && routePath === "/api/probe") {
       let raw: unknown;
       try {
@@ -1232,7 +1277,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), naiveLegacy?.close(), naiveModern?.close(), closeSharedTsVerifier()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), naiveLegacy?.close(), naiveModern?.close(), perfLegacy?.close(), perfModern?.close(), closeSharedTsVerifier()]);
   });
   return server;
 }

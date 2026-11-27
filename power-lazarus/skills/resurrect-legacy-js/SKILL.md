@@ -17,6 +17,12 @@ comparison. Follow these steps in order and report the real outputs; never claim
 - For a whole folder, start with `npm run audit -- <dir>` (`lazarus audit <dir>`, add `--json` for machine-readable
   output). It parses every `.js`/`.cjs` file without running it, flags `| 0` truncation traps, prototype chains, `var`
   / `arguments` usage and the `require()` graph, and prints a readiness score and the exact resurrect command.
+  For GitHub Code Scanning use `npm run audit -- <dir> --sarif` (SARIF 2.1.0 on stdout) or
+  `npm run audit -- <dir> --sarif --out report.sarif`. Rule ids: `LAZ001` bitwise truncation, `LAZ002` error-first
+  callback, `LAZ003` prototype chain, `LAZ004` `var` / `arguments` hoisting, `LAZ005` circular or unresolvable
+  `require`, `LAZ006` file that does not parse. The exported `.zip` PR bundles include
+  `.github/workflows/lazarus-audit.yml`, which uploads the SARIF with `github/codeql-action/upload-sarif`.
+  Mutually requiring modules (`a.cjs` <-> `b.cjs`) are resolved as ES module live bindings when you resurrect the folder.
 - Read the code first. Note `var` scoping, `x | 0` truncation, `arguments`, `fn.apply`, loose `==`, constructor +
   `prototype` pairs, and `require()` / `module.exports` usage.
 - Lazarus extracts the specimen with acorn and infers a fuzz schema from how parameters are used (`number` for

@@ -7,6 +7,7 @@ import { parse } from "acorn";
 import * as fc from "fast-check";
 import { afterAll, describe, expect, it } from "vitest";
 import { main } from "../../cli.js";
+import { renderAuditWorkflow } from "../../exporter/bundle.js";
 import { buildGraphBundle, graphBundleZip } from "../../exporter/graph-bundle.js";
 import { readZip } from "../../exporter/zip.js";
 import { PooledProbeRunner } from "../../sandbox/pool.js";
@@ -74,7 +75,7 @@ describe("analyzeGraph", () => {
     );
   });
 
-  it("detects cycles (including self-requires) and refuses to resurrect them", async () => {
+  it("detects cycles (including self-requires); only a self-require still refuses to resurrect (V14 resolves module cycles)", async () => {
     const g = analyzeGraph({
       "a.cjs": "var b = require('./b.cjs'); exports.a = function () { return 1; };",
       "b.cjs": "var c = require('./c.cjs'); exports.b = function () { return 2; };",
@@ -82,11 +83,9 @@ describe("analyzeGraph", () => {
       "self.cjs": "var me = require('./self.cjs'); exports.s = function () { return 4; };",
     });
     expect(g.cycles).toEqual([["a.cjs", "b.cjs", "c.cjs"], ["self.cjs"]]);
-    expect(g.problems.filter((p) => p.kind === "cycle").map((p) => p.message)).toEqual([
-      "circular require chain: a.cjs -> b.cjs -> c.cjs -> a.cjs",
-      "circular require chain: self.cjs -> self.cjs",
-    ]);
-    const result = await resurrectGraph({ "a.cjs": "require('./b.cjs'); exports.a = function (n) { return n; };", "b.cjs": "require('./a.cjs'); exports.b = function (n) { return n; };" }, { name: "cyclic", executors });
+    expect(g.problems.filter((p) => p.kind === "cycle").map((p) => p.message)).toEqual(["circular require chain: self.cjs -> self.cjs"]);
+    expect(g.cycleEdges.map((e) => `${e.from}->${e.to}`).sort()).toEqual(["a.cjs->b.cjs", "b.cjs->c.cjs", "c.cjs->a.cjs", "self.cjs->self.cjs"]);
+    const result = await resurrectGraph({ "self.cjs": "var me = require('./self.cjs'); exports.s = function (n) { return n; };" }, { name: "cyclic", executors });
     expect(result.success).toBe(false);
     expect(result.error).toContain("circular require chain");
   });
@@ -229,6 +228,7 @@ describe("resurrectGraph", () => {
     const names = entries.map((e) => e.name).sort();
     expect(names).toEqual(
       [
+        ".github/workflows/lazarus-audit.yml",
         ".github/workflows/lazarus-parity.yml",
         "SPEC.md",
         "legacy/invoice.cjs",
@@ -245,7 +245,7 @@ describe("resurrectGraph", () => {
         "tsconfig.json",
       ].sort()
     );
-    for (const e of entries) expect(e.data.toString("utf8")).toBe(bundle.files[e.name]);
+    for (const e of entries) expect(e.data.toString("utf8")).toBe(e.name === ".github/workflows/lazarus-audit.yml" ? renderAuditWorkflow() : bundle.files[e.name]);
     const patch = bundle.files["resurrection.patch"] ?? "";
     for (const f of ["money", "tax", "invoice"]) expect(patch).toContain(`diff --git a/${f}.cjs b/src/${f}.ts`);
     expect(bundle.files["SPEC.md"]).toContain("`money.cjs` -> `tax.cjs` -> `invoice.cjs`");

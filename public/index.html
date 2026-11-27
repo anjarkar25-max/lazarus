@@ -328,6 +328,9 @@
 #graphSvg .node.resurrected .state { fill: #6ee7b7; }
 #graphSvg .edge { stroke: #475569; stroke-width: 1.5; fill: none; transition: stroke .3s; }
 #graphSvg .edge.stitched { stroke: #10b981; stroke-width: 2; }
+#graphSvg .edge.cycle, #graphSvg .edge.cycle.stitched { stroke: #f59e0b; stroke-width: 2.25; stroke-dasharray: 6 4; }
+.cycle-pill { display: inline-block; margin: 6px 0 0; padding: 3px 10px; border-radius: 999px; border: 1px solid #f59e0b; color: #fde68a; background: rgba(245, 158, 11, 0.12); font-size: 11px; font-weight: 800; letter-spacing: .4px; }
+.cycle-pill[hidden] { display: none; }
 .graph-log { margin-top: 8px; max-height: 150px; overflow: auto; font-size: 11px; font-family: ui-monospace, Consolas, monospace; color: #94a3b8; background: #090d16; border: 1px solid #1e293b; border-radius: 6px; padding: 6px 8px; }
 .graph-log div { padding: 1px 0; }
 .graph-log .heal { color: #fca5a5; }
@@ -406,6 +409,10 @@ pre { max-width: 100%; }
 .tsc-badge { font-size: 11px; font-weight: 800; letter-spacing: .5px; padding: 4px 9px; border-radius: 999px; border: 1px solid; }
 .tsc-badge.pass { color: var(--emerald); border-color: var(--emerald); background: rgba(16, 185, 129, 0.10); }
 .tsc-badge.fail { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.12); }
+.tsc-badge.neutral { color: #cbd5e1; border-color: #475569; background: rgba(148, 163, 184, 0.08); }
+.tsc-badge.warn { color: #fde68a; border-color: #f59e0b; background: rgba(245, 158, 11, 0.10); }
+.tsc-badge.pending { color: var(--muted); border-color: #334155; background: transparent; }
+.perf-chip[hidden] { display: none; }
 .diff-toggle { font-size: 11px; font-weight: 700; padding: 5px 10px; border-color: var(--violet); color: #ddd6fe; background: #1e1b4b; }
 .diff-toggle[aria-pressed="true"] { background: var(--violet); color: #fff; }
 .diff-toggle:disabled { opacity: .45; cursor: not-allowed; }
@@ -649,8 +656,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">995 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">23 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1066 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -770,6 +777,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
             <pre id="modernOut">// Modernized code will appear here after parity verification</pre>
             <div class="out-actions">
               <span class="tsc-badge" id="tscBadge" hidden></span>
+              <span class="tsc-badge perf-chip" id="perfBadge" role="status" hidden></span>
               <button type="button" class="diff-toggle" id="legacyDiffToggle" aria-pressed="false" aria-controls="legacyDiff" disabled>Legacy vs. Resurrected Diff</button>
               <button type="button" class="diff-toggle naive-toggle" id="naiveBtn" aria-pressed="false" aria-controls="trapCard" title="Run a deterministic naive LLM-style rewrite through the same exact Object.is Exorcist (no API key)" hidden>Compare vs. Naive AI</button>
             </div>
@@ -911,6 +919,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <select id="graphPreset" aria-label="Multi-file project">
             <option value="invoice">legacy-invoice-engine (money &rarr; tax &rarr; invoice)</option>
             <option value="text">legacy-text-pipeline (trim &rarr; pad &rarr; slug)</option>
+<option value="circular">legacy-circular-ledger (tax &harr; discount, cycle)</option>
           </select>
           <button type="button" class="graph-btn go" id="graphRunBtn">Resurrect Project Graph</button>
           <button type="button" class="graph-btn" id="graphZipBtn" disabled>Download Whole-Project .zip</button>
@@ -934,6 +943,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
           <div class="gf-note" id="graphNote">Edit any legacy file, then resurrect. Relative require() calls are resolved inside the sandbox's in-memory module map only.</div>
         </div>
         <div>
+          <span class="cycle-pill" id="graphCyclePill" role="status" hidden></span>
           <div class="graph-svg-wrap"><svg id="graphSvg" role="img" aria-label="Dependency graph"></svg></div>
           <div class="graph-verdict" id="graphVerdict" role="status"></div>
           <div class="graph-log" id="graphLog" aria-live="polite"></div>
@@ -2317,6 +2327,15 @@ function lzDecodeSpecimen(hash) {
         "invoice.cjs": "// Invoice totals: quantity x unit price, plus tax, formatted for the PDF renderer.\nvar money = require('./money.cjs');\nvar tax = require('./tax.cjs');\n\nvar MAX_LINES = 50;\n\nfunction invoiceTotal(unitCents, qty) {\n  var subtotal = 0;\n  for (var i = 0; i < qty && i < MAX_LINES; i++) {\n    subtotal = money.addCents(subtotal, unitCents);\n  }\n  var total = tax.withTax(subtotal);\n  return money.formatCents(total);\n}\n\nmodule.exports = { invoiceTotal: invoiceTotal };\n"
       }
     },
+    circular: {
+      name: "legacy-circular-ledger",
+      schemas: undefined,
+      files: {
+        "tax.cjs": "// Tax side of the ledger. Settling a bill alternates with discount.cjs: add tax, then hand the total to the discount\n// side for the next round. The two modules require each other (a CommonJS cycle).\nvar discount = require('./discount.cjs');\n\nvar RATE_PERCENT = 8;\nvar MAX_ROUNDS = 12;\n\nfunction taxOf(cents) {\n  return ((cents * RATE_PERCENT) / 100) | 0;\n}\n\nexports.taxOf = taxOf;\n\nexports.settle = function (cents, rounds) {\n  var left = rounds | 0;\n  if (left > MAX_ROUNDS) left = MAX_ROUNDS;\n  var total = cents | 0;\n  if (left <= 0) return total;\n  return discount.settle((total + taxOf(total)) | 0, left - 1);\n};\n",
+        "discount.cjs": "// Discount side of the ledger: take the loyalty discount, then hand the total back to tax.cjs for the next round.\nvar tax = require('./tax.cjs');\n\nvar DISCOUNT_PERCENT = 15;\nvar MAX_ROUNDS = 12;\n\nfunction discountOf(cents) {\n  return ((cents * DISCOUNT_PERCENT) / 100) | 0;\n}\n\nexports.discountOf = discountOf;\n\nexports.settle = function (cents, rounds) {\n  var left = rounds | 0;\n  if (left > MAX_ROUNDS) left = MAX_ROUNDS;\n  var total = cents | 0;\n  if (left <= 0) return total;\n  return tax.settle((total - discountOf(total)) | 0, left - 1);\n};\n",
+        "index.cjs": "// Ledger entry points: run a bill through alternating tax and discount rounds.\nvar tax = require('./tax.cjs');\nvar discount = require('./discount.cjs');\n\nexports.ledgerTotal = function (cents, rounds) {\n  return tax.settle(cents, rounds);\n};\n\nexports.ledgerNet = function (cents, rounds) {\n  return discount.settle(cents, rounds);\n};\n"
+      }
+    },
     text: {
       name: "legacy-text-pipeline",
       schemas: { "default": { title: "string", width: "integer" } },
@@ -2335,6 +2354,39 @@ function lzDecodeSpecimen(hash) {
 
   function logLine(text, cls) { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text; log.append(d); log.scrollTop = log.scrollHeight; }
   function el(name, attrs, text) { const n = document.createElementNS(SVG_NS, name); Object.keys(attrs || {}).forEach((k) => n.setAttribute(k, attrs[k])); if (text !== undefined) n.textContent = text; return n; }
+
+  // ---- import cycles (Tarjan SCC over the edges; pure, so studio-ui.test.ts can run it) ----
+  /* lz-cycle:start */
+  function lzCycleEdges(edges) {
+    var adj = {}, index = {}, low = {}, onStack = {}, stack = [], comp = {}, counter = 0, comps = 0;
+    edges.forEach(function (e) { (adj[e.from] = adj[e.from] || []).push(e.to); if (!adj[e.to]) adj[e.to] = adj[e.to] || []; });
+    function strong(v) {
+      index[v] = low[v] = counter++;
+      stack.push(v); onStack[v] = true;
+      (adj[v] || []).forEach(function (w) {
+        if (index[w] === undefined) { strong(w); low[v] = Math.min(low[v], low[w]); }
+        else if (onStack[w]) low[v] = Math.min(low[v], index[w]);
+      });
+      if (low[v] === index[v]) {
+        var members = [], w;
+        do { w = stack.pop(); onStack[w] = false; members.push(w); } while (w !== v);
+        var selfLoop = members.length === 1 && (adj[v] || []).indexOf(v) >= 0;
+        if (members.length > 1 || selfLoop) { members.forEach(function (m) { comp[m] = comps; }); comps++; }
+      }
+    }
+    Object.keys(adj).sort().forEach(function (v) { if (index[v] === undefined) strong(v); });
+    var keys = {};
+    edges.forEach(function (e) { if (comp[e.from] !== undefined && comp[e.from] === comp[e.to] && e.from !== e.to) keys[e.from + "->" + e.to] = true; });
+    return keys;
+  }
+  /* lz-cycle:end */
+  let cycleResolved = false;
+  function updateCyclePill(hasCycle) {
+    const pill = $("graphCyclePill");
+    if (!pill) return;
+    pill.hidden = !hasCycle;
+    pill.textContent = cycleResolved ? "Cycle Resolved (ESM Live Bindings)" : "Cycle detected (resolves as ESM live bindings)";
+  }
 
   // ---- static analysis on the client (only to draw the graph before the run; the server re-analyzes) ----
   function clientEdges() { return lzRequireEdges(files); }
@@ -2376,20 +2428,27 @@ function lzDecodeSpecimen(hash) {
     marker.append(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#94a3b8" }));
     const markerOk = el("marker", { id: "lzArrowOk", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
     markerOk.append(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#10b981" }));
-    defs.append(marker, markerOk);
+    const markerCycle = el("marker", { id: "lzArrowCycle", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
+    markerCycle.append(el("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#f59e0b" }));
+    defs.append(marker, markerOk, markerCycle);
+    const cycleKeys = lzCycleEdges(edges);
     svg.append(defs);
     const edgeEls = [];
     edges.forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       // Importer (right) -> dependency (left): arrows show which module each import pulls in.
-      const x1 = a.x, y1 = a.y + H / 2, x2 = b.x + W, y2 = b.y + H / 2;
+      const cycle = cycleKeys[e.from + "->" + e.to] === true;
+      // A back edge of a cycle points at a module in the same or a later column: leave the importer on its right side.
+      const backward = a.x <= b.x;
+      const x1 = backward ? a.x + W : a.x, y1 = a.y + H / 2, x2 = backward ? b.x : b.x + W, y2 = b.y + H / 2;
       const mid = (x1 + x2) / 2;
-      const path = el("path", { d: "M " + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + (x2 + 2) + " " + y2, class: "edge", "marker-end": "url(#lzArrow)" });
-      const title = el("title", {}, e.from + " imports " + e.to);
+      const tip = backward ? x2 - 2 : x2 + 2;
+      const path = el("path", { d: "M " + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + tip + " " + y2, class: "edge" + (cycle ? " cycle" : ""), "marker-end": cycle ? "url(#lzArrowCycle)" : "url(#lzArrow)" });
+      const title = el("title", {}, e.from + " imports " + e.to + (cycle ? " (import cycle: ES module live bindings)" : ""));
       path.append(title);
       svg.append(path);
-      edgeEls.push({ edge: e, path: path });
+      edgeEls.push({ edge: e, path: path, cycle: cycle });
     });
     const nodeEls = {};
     Object.keys(pos).forEach((f) => {
@@ -2406,6 +2465,7 @@ function lzDecodeSpecimen(hash) {
       nodeEls[f] = { g: g, state: state, title: title };
     });
     layout = { nodeEls: nodeEls, edgeEls: edgeEls };
+    updateCyclePill(edgeEls.some((x) => x.cycle));
     Object.keys(states).forEach((f) => setState(f, states[f], ""));
   }
 
@@ -2418,8 +2478,8 @@ function lzDecodeSpecimen(hash) {
     if (detail) n.title.textContent = file + ": " + detail;
     layout.edgeEls.forEach((x) => {
       const stitched = states[x.edge.from] === "resurrected" && states[x.edge.to] === "resurrected";
-      x.path.setAttribute("class", "edge" + (stitched ? " stitched" : ""));
-      x.path.setAttribute("marker-end", stitched ? "url(#lzArrowOk)" : "url(#lzArrow)");
+      x.path.setAttribute("class", "edge" + (x.cycle ? " cycle" : "") + (stitched ? " stitched" : ""));
+      x.path.setAttribute("marker-end", x.cycle ? "url(#lzArrowCycle)" : stitched ? "url(#lzArrowOk)" : "url(#lzArrow)");
     });
   }
 
@@ -2454,7 +2514,7 @@ function lzDecodeSpecimen(hash) {
   function loadProject(key) {
     project = PROJECTS[key];
     files = Object.assign({}, project.files);
-    states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true;
+    states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true; cycleResolved = false;
     log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmOut.style.display = "none";
     redraw();
     showFile(Object.keys(files)[0]);
@@ -2527,7 +2587,7 @@ function lzDecodeSpecimen(hash) {
     files[active] = editor.value;
     bundleId = null; zipBtn.disabled = true;
     delete esmByFile[active];
-    states = {};
+    states = {}; cycleResolved = false;
     redraw();
   });
   presetSel.addEventListener("change", () => loadProject(presetSel.value));
@@ -2536,7 +2596,7 @@ function lzDecodeSpecimen(hash) {
     if (busy) return;
     busy = true; runBtn.disabled = true; zipBtn.disabled = true; bundleId = null;
     log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmByFile = {}; esmOut.style.display = "none";
-    states = {};
+    states = {}; cycleResolved = false;
     Object.keys(files).forEach((f) => { states[f] = "dead"; });
     redraw();
     logLine("Streaming /api/resurrect-graph ...");
@@ -2578,6 +2638,8 @@ function lzDecodeSpecimen(hash) {
             (r.files || []).forEach((f) => { esmByFile[f.path] = f; });
             if (r.success) {
               bundleId = r.bundleId; zipBtn.disabled = !bundleId;
+              cycleResolved = !(r.typecheck && !r.typecheck.passed);
+              updateCyclePill(!!(layout && layout.edgeEls.some((x) => x.cycle)));
               verdict.className = "graph-verdict pass";
               const tc = r.typecheck;
               const tsLine = tc ? " \u00b7 tsc --strict: " + tc.errorCount + " error" + (tc.errorCount === 1 ? "" : "s") + " across " + tc.filesChecked + " typed .ts file" + (tc.filesChecked === 1 ? "" : "s") : "";
@@ -3688,6 +3750,72 @@ function lzHealthGuard(deps) {
     );
     note.hidden = false;
     if (probe) probe.hidden = true;
+  });
+})();
+</script>
+<script>
+/* Perf Parity chip: POST /api/perf-parity right after a synchronous resurrection proves parity. Asynchronous and
+   non-blocking (the resurrection result is already on screen), stale answers are discarded, textContent only. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const chip = $("perfBadge");
+  if (!chip) return;
+  /* lz-perf:start */
+  function lzPerfMicros(us) { return (us >= 100 ? us.toFixed(0) : us >= 1 ? us.toFixed(1) : us.toFixed(2)) + "\u00b5s"; }
+  /** `Perf: 1.12x \u00b7 3.4\u00b5s vs 3.8\u00b5s` = ratio, resurrected time vs legacy time per call (ratio above 1: resurrected is faster). */
+  function lzPerfLabel(p) { return "Perf: " + p.ratio.toFixed(2) + "x \u00b7 " + lzPerfMicros(p.resurrectedMedianUs) + " vs " + lzPerfMicros(p.legacyMedianUs); }
+  function lzPerfClass(verdict) { return verdict === "faster" ? "pass" : verdict === "slower" ? "warn" : "neutral"; }
+  /* lz-perf:end */
+  let token = 0, ctl = null, source = "";
+  function show(kind, text, title) {
+    chip.className = "tsc-badge perf-chip " + kind;
+    chip.textContent = text;
+    chip.title = title || "";
+    chip.hidden = false;
+  }
+  function hide() {
+    token++;
+    if (ctl) ctl.abort();
+    ctl = null;
+    chip.hidden = true;
+    chip.textContent = "";
+    chip.title = "";
+  }
+  document.addEventListener("lazarus:run-start", (e) => { hide(); source = e.detail && typeof e.detail.source === "string" ? e.detail.source : ""; });
+  document.addEventListener("lazarus:result", async (e) => {
+    const r = e.detail;
+    hide();
+    if (!r || !r.success) return;
+    if (r.asyncCallback) { show("neutral", "Perf: skipped (async callback)", "The micro-benchmark covers synchronous specimens; an error-first callback specimen settles asynchronously."); return; }
+    if (r.module) { show("neutral", "Perf: skipped (multi-export module)", "Benchmark one function at a time: pick a single-function specimen."); return; }
+    let schema;
+    try {
+      const parsed = JSON.parse($("schemaJson").value || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0 && Object.values(parsed).every((v) => typeof v === "string")) schema = parsed;
+    } catch (err) { /* the server falls back to the scanner's schema */ }
+    const mine = ++token;
+    const controller = new AbortController();
+    ctl = controller;
+    const timer = setTimeout(() => controller.abort(), 10000);
+    show("pending", "Perf: measuring...", "POST /api/perf-parity: a bounded micro-benchmark (under ~150 ms) inside the sandbox.");
+    try {
+      const body = { legacyCode: source || $("legacyCode").value, modernCode: r.modernCode };
+      if (schema) body.schema = schema;
+      const res = await fetch("/api/perf-parity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal });
+      const data = await res.json();
+      if (mine !== token) return;
+      if (!res.ok) { show("neutral", "Perf: unavailable", String(data && data.error ? data.error : "HTTP " + res.status)); return; }
+      if (data.skipped) { show("neutral", "Perf: skipped", String(data.reason || "")); return; }
+      show(lzPerfClass(data.verdict), lzPerfLabel(data),
+        "Resurrected " + lzPerfMicros(data.resurrectedMedianUs) + " per call (" + data.resurrectedOpsPerSec + " ops/s) vs legacy " + lzPerfMicros(data.legacyMedianUs) + " (" + data.legacyOpsPerSec + " ops/s). Verdict: " + data.verdict + ". Median of timed batches over " + data.inputs + " representative inputs, " + data.iterations + " timed calls, measured in the sandbox in " + data.elapsedMs + " ms.");
+      document.dispatchEvent(new CustomEvent("lazarus:perf", { detail: data }));
+    } catch (err) {
+      if (mine === token) show("neutral", "Perf: unavailable", err && err.name === "AbortError" ? "The benchmark did not answer in time." : String(err && err.message ? err.message : err));
+    } finally {
+      clearTimeout(timer);
+      if (ctl === controller) ctl = null;
+    }
   });
 })();
 </script>

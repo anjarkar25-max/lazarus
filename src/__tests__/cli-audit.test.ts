@@ -3,7 +3,8 @@ import * as os from "node:os";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { AUDIT_USAGE, auditDirectory, renderAuditMarkdown, runAuditCli, type AuditReport } from "../cli-audit.js";
+import { AUDIT_USAGE, auditDirectory, renderAuditMarkdown, renderSarif, runAuditCli, type AuditReport, type SarifLog } from "../cli-audit.js";
+import { AUDIT_WORKFLOW_PATH, renderAuditWorkflow } from "../exporter/bundle.js";
 import { main } from "../cli.js";
 
 const root = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -92,11 +93,12 @@ describe("lazarus audit: examples/legacy-text-pipeline", () => {
   it("recommends one command per independent require graph for a folder that holds several", () => {
     const r = json(["examples"]);
     expect(r.recommendedCommand.split("\n")).toEqual([
+      "npm run resurrect -- examples/legacy-circular-ledger --entry index.cjs --out ./resurrected-out/legacy-circular-ledger",
       "npm run resurrect -- examples/legacy-invoice-engine --entry invoice.cjs --out ./resurrected-out/legacy-invoice-engine",
       "npm run resurrect -- examples/legacy-text-pipeline --entry slug.cjs --out ./resurrected-out/legacy-text-pipeline",
       "npm run resurrect -- examples/legacy-quantize.cjs --out ./resurrected-out",
     ]);
-    expect(r.notes.some((n) => n.startsWith("3 independent require graphs"))).toBe(true);
+    expect(r.notes.some((n) => n.startsWith("4 independent require graphs"))).toBe(true);
   });
 });
 
@@ -186,5 +188,168 @@ describe("lazarus audit: patterns, safety and usage", () => {
     const skill = fs.readFileSync(nodePath.join(root, "power-lazarus", "skills", "resurrect-legacy-js", "SKILL.md"), "utf8");
     expect(skill).toContain("npm run audit -- <dir>");
     expect(skill).toContain("lazarus audit <dir>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SARIF 2.1.0 (GitHub Code Scanning)
+// ---------------------------------------------------------------------------
+describe("lazarus audit --sarif: SARIF 2.1.0 for GitHub Code Scanning", () => {
+  const tmp = fs.mkdtempSync(nodePath.join(os.tmpdir(), "lazarus-sarif-"));
+  afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const write = (rel: string, text: string): void => {
+    fs.mkdirSync(nodePath.dirname(nodePath.join(tmp, rel)), { recursive: true });
+    fs.writeFileSync(nodePath.join(tmp, rel), text);
+  };
+  const sarifOf = (args: string[], cwd = root): SarifLog => {
+    const h = io();
+    expect(runAuditCli([...args, "--sarif"], { ...h.io, cwd }), args.join(" ")).toBe(0);
+    return JSON.parse(h.out()) as SarifLog;
+  };
+  /** Structural validation of the SARIF 2.1.0 properties GitHub reads (no JSON-schema dependency needed). */
+  function expectValidSarif(log: SarifLog): void {
+    expect(log.$schema).toBe("https://json.schemastore.org/sarif-2.1.0.json");
+    expect(log.version).toBe("2.1.0");
+    expect(log.runs).toHaveLength(1);
+    const run = log.runs[0];
+    const driver = run?.tool.driver;
+    expect(driver?.name).toBe("Lazarus");
+    expect(driver?.informationUri).toMatch(/^https:\/\//);
+    const ids = (driver?.rules ?? []).map((r) => r.id);
+    expect(ids).toEqual(["LAZ001", "LAZ002", "LAZ003", "LAZ004", "LAZ005", "LAZ006"]);
+    for (const r of driver?.rules ?? []) {
+      expect(r.shortDescription.text.length).toBeGreaterThan(5);
+      expect(r.help.text.length).toBeGreaterThan(20);
+      expect(["error", "warning", "note"]).toContain(r.defaultConfiguration.level);
+    }
+    for (const res of run?.results ?? []) {
+      expect(ids[res.ruleIndex]).toBe(res.ruleId);
+      expect(["error", "warning", "note"]).toContain(res.level);
+      expect(res.message.text).toMatch(/Fix: /);
+      expect(res.locations).toHaveLength(1);
+      const loc = res.locations[0]?.physicalLocation;
+      expect(loc?.artifactLocation.uri).toMatch(/^[^/\\].*\.c?js$/);
+      expect(loc?.artifactLocation.uri).not.toContain("\\");
+      expect(loc?.artifactLocation.uriBaseId).toBe("%SRCROOT%");
+      expect(Number.isInteger(loc?.region.startLine)).toBe(true);
+      expect(loc?.region.startLine).toBeGreaterThanOrEqual(1);
+    }
+  }
+
+  it("emits a valid SARIF log for examples/legacy-invoice-engine with exact uris and source lines", () => {
+    const log = sarifOf(["examples/legacy-invoice-engine"]);
+    expectValidSarif(log);
+    const results = log.runs[0]?.results ?? [];
+    expect(results.length).toBeGreaterThan(5);
+    const truncations = results.filter((r) => r.ruleId === "LAZ001");
+    expect(truncations.length).toBeGreaterThan(0);
+    for (const r of truncations) {
+      const loc = r.locations[0]?.physicalLocation;
+      expect(loc?.artifactLocation.uri).toMatch(/^examples\/legacy-invoice-engine\/(money|tax|invoice)\.cjs$/);
+      const lines = fs.readFileSync(nodePath.join(root, loc?.artifactLocation.uri ?? ""), "utf8").split(/\r?\n/);
+      expect(lines[(loc?.region.startLine ?? 1) - 1], `${loc?.artifactLocation.uri}:${loc?.region.startLine}`).toMatch(/\| 0/);
+      expect(r.level).toBe("error");
+    }
+    expect(results.some((r) => r.ruleId === "LAZ004" && r.level === "warning")).toBe(true);
+  });
+  it("maps every finding of the report to one result (severity -> level, kind -> rule), deterministically", () => {
+    const report = json(["examples/legacy-invoice-engine"]);
+    const log = sarifOf(["examples/legacy-invoice-engine"]);
+    expect(log.runs[0]?.results).toHaveLength(report.files.reduce((n, f) => n + f.findings.length, 0));
+    const level = { high: "error", medium: "warning", info: "note" } as const;
+    const count = (l: string): number => (log.runs[0]?.results ?? []).filter((r) => r.level === l).length;
+    expect(count("error")).toBe(report.totals.high);
+    expect(count("warning")).toBe(report.totals.medium);
+    expect(count("note")).toBe(report.totals.info);
+    expect(Object.values(level)).toEqual(["error", "warning", "note"]);
+    expect(sarifOf(["examples/legacy-invoice-engine"])).toEqual(log);
+    expect(renderSarif(report)).toEqual(log);
+  });
+  it("covers LAZ002 error-first callback, LAZ003 prototype chain, LAZ004 arguments, LAZ005 external require and LAZ006 parse error", () => {
+    write("rules/cb.js", "function readPort(text, cb) {\n  if (typeof text !== 'string') return cb(new TypeError('text'));\n  cb(null, parseInt(text, 10));\n}\nmodule.exports = readPort;\n");
+    write("rules/proto.js", "function Shape(w) { this.w = w; }\nShape.prototype.area = function () { return this.w * this.w; };\nmodule.exports = Shape;\n");
+    write("rules/args.js", "function sum() {\n  return arguments.length;\n}\nmodule.exports = sum;\n");
+    write("rules/ext.js", "var fs = require('fs');\nmodule.exports = 1;\n");
+    write("rules/broken.js", "function ( {\n");
+    const log = sarifOf(["rules"], tmp);
+    expectValidSarif(log);
+    const results = log.runs[0]?.results ?? [];
+    const at = (file: string, rule: string): SarifLog["runs"][number]["results"][number] | undefined => results.find((r) => r.ruleId === rule && r.locations[0]?.physicalLocation.artifactLocation.uri === `rules/${file}`);
+    expect(at("cb.js", "LAZ002")).toMatchObject({ level: "warning", locations: [{ physicalLocation: { region: { startLine: 1 } } }] });
+    expect(at("proto.js", "LAZ003")?.level).toBe("warning");
+    expect(at("args.js", "LAZ004")?.locations[0]?.physicalLocation.region.startLine).toBe(2);
+    expect(at("ext.js", "LAZ005")).toMatchObject({ level: "error", locations: [{ physicalLocation: { region: { startLine: 1 } } }] });
+    expect(at("broken.js", "LAZ006")).toMatchObject({ level: "error", locations: [{ physicalLocation: { region: { startLine: 1 } } }] });
+  });
+  it("reports a require cycle as LAZ005 on the line of the require that closes it", () => {
+    const log = sarifOf(["examples/legacy-circular-ledger"]);
+    expectValidSarif(log);
+    const cyc = (log.runs[0]?.results ?? []).filter((r) => r.ruleId === "LAZ005" && r.level === "error");
+    expect(cyc.map((r) => r.locations[0]?.physicalLocation.artifactLocation.uri).sort()).toEqual(["examples/legacy-circular-ledger/discount.cjs", "examples/legacy-circular-ledger/tax.cjs"]);
+    for (const r of cyc) {
+      const loc = r.locations[0]?.physicalLocation;
+      const lines = fs.readFileSync(nodePath.join(root, loc?.artifactLocation.uri ?? ""), "utf8").split(/\r?\n/);
+      expect(lines[(loc?.region.startLine ?? 1) - 1]).toMatch(/require\('\.\/(tax|discount)\.cjs'\)/);
+      expect(r.message.text).toContain("require cycle");
+      expect(r.message.text).toContain("live bindings");
+    }
+  });
+  it("uses repository-relative uris, or bare ones for an absolute or parent folder", () => {
+    const rel = sarifOf(["examples/legacy-text-pipeline/"]).runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation.uri ?? "";
+    expect(rel.startsWith("examples/legacy-text-pipeline/")).toBe(true);
+    const abs = sarifOf([nodePath.join(root, "examples", "legacy-text-pipeline")]).runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation.uri ?? "";
+    expect(abs).toMatch(/^(trim|pad|slug)\.cjs$/);
+    const parent = sarifOf([".."], nodePath.join(root, "examples", "legacy-text-pipeline")).runs[0]?.results ?? [];
+    expect(parent.length).toBeGreaterThan(0);
+    for (const r of parent) expect(r.locations[0]?.physicalLocation.artifactLocation.uri).toMatch(/^(legacy-[a-z-]+\/|legacy-quantize\.cjs)/);
+  });
+  it("--out writes the file (relative to the working directory), prints a summary, and keeps stdout free of the log", () => {
+    const h = { out: "", err: "" };
+    const code = runAuditCli(["examples/legacy-invoice-engine", "--sarif", "--out", "reports/report.sarif"], { stdout: (t) => void (h.out += t), stderr: (t) => void (h.err += t), cwd: tmp });
+    expect(code).toBe(2); // the audited folder is resolved against the same cwd, and it does not exist inside tmp
+    expect(h.err).toMatch(/^error: cannot audit/);
+    write("src/a.js", "var x = (n / 2) | 0;\nmodule.exports = x;\n");
+    const ok = { out: "", err: "" };
+    expect(runAuditCli(["src", "--sarif", "--out", "reports/report.sarif"], { stdout: (t) => void (ok.out += t), stderr: (t) => void (ok.err += t), cwd: tmp })).toBe(0);
+    expect(ok.err).toBe("");
+    expect(ok.out).toMatch(/^Wrote SARIF 2\.1\.0 report for src to reports\/report\.sarif \(1 high/);
+    expect(ok.out).not.toContain("$schema");
+    const written = JSON.parse(fs.readFileSync(nodePath.join(tmp, "reports", "report.sarif"), "utf8")) as SarifLog;
+    expectValidSarif(written);
+    expect(written.runs[0]?.results[0]).toMatchObject({ ruleId: "LAZ001", level: "error", locations: [{ physicalLocation: { artifactLocation: { uri: "src/a.js" }, region: { startLine: 1 } } }] });
+    const md = { out: "" };
+    expect(runAuditCli(["src", "--out", "reports/report.md"], { stdout: (t) => void (md.out += t), stderr: () => undefined, cwd: tmp })).toBe(0);
+    expect(fs.readFileSync(nodePath.join(tmp, "reports", "report.md"), "utf8")).toContain("# Lazarus Legacy Risk Report: src");
+    expect(md.out).toContain("Wrote Markdown report");
+  });
+  it("rejects bad combinations with exit 2 and writes nothing", () => {
+    for (const args of [["src", "--sarif", "--json"], ["src", "--out"], ["src", "--out", "--sarif"]]) {
+      const h = io();
+      expect(runAuditCli(args, h.io), args.join(" ")).toBe(2);
+      expect(h.err()).toMatch(/^error: /);
+      expect(h.out()).toBe("");
+    }
+    write("src2/a.js", "var y = 1;\n");
+    write("blocker", "a file, not a folder");
+    const h = io();
+    expect(runAuditCli(["src2", "--sarif", "--out", "blocker/x.sarif"], { ...h.io, cwd: tmp })).toBe(2);
+    expect(h.err()).toMatch(/cannot write/);
+  });
+  it("is wired into the lazarus CLI, the usage text, package.json and the Power skill", async () => {
+    const h = io();
+    expect(await main(["audit", "examples/legacy-invoice-engine", "--sarif"], h.io)).toBe(0);
+    expectValidSarif(JSON.parse(h.out()) as SarifLog);
+    expect(AUDIT_USAGE).toContain("--sarif");
+    expect(AUDIT_USAGE).toContain("--out");
+    const skill = fs.readFileSync(nodePath.join(root, "power-lazarus", "skills", "resurrect-legacy-js", "SKILL.md"), "utf8");
+    expect(skill).toContain("npm run audit -- <dir> --sarif");
+    expect(skill).toContain("--sarif --out report.sarif");
+    for (const id of ["LAZ001", "LAZ002", "LAZ003", "LAZ004", "LAZ005"]) expect(skill).toContain(id);
+  });
+  it("the Code Scanning workflow template uploads the SARIF and needs only security-events: write", () => {
+    const yml = renderAuditWorkflow();
+    for (const s of ["name: Lazarus Audit", "security-events: write", "npm run audit --", "--sarif --out", "github/codeql-action/upload-sarif@v3", "sarif_file: lazarus.sarif", "pull_request:"]) expect(yml, s).toContain(s);
+    expect(yml).not.toMatch(/secrets\./);
+    expect(AUDIT_WORKFLOW_PATH).toBe(".github/workflows/lazarus-audit.yml");
   });
 });
