@@ -1,6 +1,7 @@
 // "Paste anything": what Lazarus understood from a pasted snippet, for the editor's signature pill and schema.
 // Parse-only (acorn via the AST scanner). Nothing here executes the code.
 import { detectErrorFirst } from "../crew/async-callback.js";
+import { detectPromiseChain } from "../crew/es5-idioms.js";
 import { listModuleFunctions } from "../crew/module-resurrection.js";
 import type { InputSchema, ParamKind } from "../fuzzer/types.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
@@ -37,6 +38,13 @@ export function describePaste(source: string): SmartPasteResult {
     const scanned = scanLegacyAst(source, { functionName: errorFirst.name }).suggestedSchema;
     const schema: InputSchema = Object.fromEntries(errorFirst.params.map((p) => [p, scanned[p] ?? "string"]));
     return { parsed: true, kind: "function", schema, signatures: [`${errorFirst.name}(${renderParams(schema)}) \u2192 Promise (error-first ${errorFirst.callback})`], functionName: errorFirst.name, idioms: scan.detectedIdioms };
+  }
+  // A legacy `.then().catch()` Promise chain: it resolves or rejects, so it is fuzzed as an async function.
+  const chain = detectPromiseChain(source).entry;
+  if (chain !== undefined) {
+    const scanned = scanLegacyAst(source, { functionName: chain.name }).suggestedSchema;
+    const schema: InputSchema = Object.fromEntries(chain.params.map((p) => [p, scanned[p] ?? "string"]));
+    return { parsed: true, kind: "function", schema, signatures: [`${chain.name}(${renderParams(schema)}) \u2192 Promise (legacy .then/.catch chain)`], functionName: chain.name, idioms: scan.detectedIdioms };
   }
   const exported = listModuleFunctions(source).functions;
   if (exported.length >= 2) {

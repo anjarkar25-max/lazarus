@@ -23,6 +23,9 @@ comparison. Follow these steps in order and report the real outputs; never claim
   `require`, `LAZ006` file that does not parse. The exported `.zip` PR bundles include
   `.github/workflows/lazarus-audit.yml`, which uploads the SARIF with `github/codeql-action/upload-sarif`.
   Mutually requiring modules (`a.cjs` <-> `b.cjs`) are resolved as ES module live bindings when you resurrect the folder.
+  The audit also names the ES5 idioms Lazarus lifts: `Object.create(Parent.prototype)` inheritance (reported under `LAZ003`),
+  `fn.apply(this, args)` forwarding (`LAZ004`) and `.then().catch()` Promise chains (`LAZ007`). A resurrection shows which AST
+  rule did what in `ruleBlame` (applied or rolled back, with the legacy and resurrected lines and the counterexample).
 - Read the code first. Note `var` scoping, `x | 0` truncation, `arguments`, `fn.apply`, loose `==`, constructor +
   `prototype` pairs, and `require()` / `module.exports` usage.
 - Lazarus extracts the specimen with acorn and infers a fuzz schema from how parameters are used (`number` for

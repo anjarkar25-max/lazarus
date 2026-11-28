@@ -216,7 +216,7 @@ describe("lazarus audit --sarif: SARIF 2.1.0 for GitHub Code Scanning", () => {
     expect(driver?.name).toBe("Lazarus");
     expect(driver?.informationUri).toMatch(/^https:\/\//);
     const ids = (driver?.rules ?? []).map((r) => r.id);
-    expect(ids).toEqual(["LAZ001", "LAZ002", "LAZ003", "LAZ004", "LAZ005", "LAZ006"]);
+    expect(ids).toEqual(["LAZ001", "LAZ002", "LAZ003", "LAZ004", "LAZ005", "LAZ006", "LAZ007"]);
     for (const r of driver?.rules ?? []) {
       expect(r.shortDescription.text.length).toBeGreaterThan(5);
       expect(r.help.text.length).toBeGreaterThan(20);
@@ -293,6 +293,22 @@ describe("lazarus audit --sarif: SARIF 2.1.0 for GitHub Code Scanning", () => {
       expect(r.message.text).toContain("require cycle");
       expect(r.message.text).toContain("live bindings");
     }
+  });
+  it("V15 idioms land on the existing rules (LAZ003, LAZ004) and the new LAZ007, leaving LAZ001-LAZ006 untouched", () => {
+    write("idioms/inherit.js", "function B() {}\nfunction C() { B.call(this); }\nC.prototype = Object.create(B.prototype);\nC.prototype.f = function () { return 1; };\nmodule.exports = C;\n");
+    write("idioms/fwd.js", "function wrap(fn) {\n  return function () { return fn.apply(this, arguments); };\n}\nmodule.exports = wrap;\n");
+    write("idioms/chain.js", "function load(x) {\n  return get(x).then(function (v) { return v; }).catch(function () { return 0; });\n}\nmodule.exports = load;\n");
+    const log = sarifOf(["idioms"], tmp);
+    expectValidSarif(log);
+    const at = (file: string): Array<{ ruleId: string; level: string; line: number }> =>
+      (log.runs[0]?.results ?? []).filter((r) => r.locations[0]?.physicalLocation.artifactLocation.uri === `idioms/${file}`).map((r) => ({ ruleId: r.ruleId, level: r.level, line: r.locations[0]?.physicalLocation.region.startLine ?? 0 }));
+    expect(at("inherit.js")).toEqual(expect.arrayContaining([{ ruleId: "LAZ003", level: "warning", line: 3 }]));
+    expect(at("fwd.js")).toEqual(expect.arrayContaining([{ ruleId: "LAZ004", level: "warning", line: 2 }]));
+    expect(at("chain.js")).toEqual(expect.arrayContaining([{ ruleId: "LAZ007", level: "warning", line: 1 }]));
+    const rule7 = log.runs[0]?.tool.driver.rules.find((r) => r.id === "LAZ007");
+    expect(rule7).toMatchObject({ name: "PromiseChain", defaultConfiguration: { level: "warning" } });
+    // The six existing rules keep their ids, names and order.
+    expect(log.runs[0]?.tool.driver.rules.slice(0, 6).map((r) => `${r.id}:${r.name}`)).toEqual(["LAZ001:BitwiseTruncation", "LAZ002:ErrorFirstCallback", "LAZ003:PrototypeChain", "LAZ004:VarOrArgumentsHoisting", "LAZ005:CircularOrUnresolvableRequire", "LAZ006:UnparseableFile"]);
   });
   it("uses repository-relative uris, or bare ones for an absolute or parent folder", () => {
     const rel = sarifOf(["examples/legacy-text-pipeline/"]).runs[0]?.results[0]?.locations[0]?.physicalLocation.artifactLocation.uri ?? "";

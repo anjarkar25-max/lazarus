@@ -9,6 +9,7 @@ import type * as ESTree from "estree";
 import { walk } from "./crew/ast-scope.js";
 import { analyzeGraph } from "./crew/graph-resurrector.js";
 import { detectErrorFirst, liftErrorFirst } from "./crew/async-callback.js";
+import { detectPromiseChain, inheritanceParentOf } from "./crew/es5-idioms.js";
 import { resolveRelative } from "./sandbox/virtual-fs.js";
 
 export const MAX_AUDIT_FILES = 500;
@@ -16,7 +17,7 @@ export const MAX_AUDIT_FILE_BYTES = 256 * 1024;
 export const IGNORED_DIRS: ReadonlySet<string> = new Set(["node_modules", ".git", "dist"]);
 
 export type Severity = "high" | "medium" | "info";
-export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error";
+export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error" | "inheritance-chain" | "apply-forwarding" | "promise-chain";
 
 export interface Finding {
   readonly kind: FindingKind;
@@ -116,6 +117,8 @@ function scanProgram(ast: ESTree.Program): Scan {
     return undefined;
   });
   const protoOwners = new Map<string, { line: number; members: number }>();
+  const inheritance: Array<{ child: string; parent: string; line: number }> = [];
+  const forwarding: number[] = [];
   let varCount = 0;
   let firstVarLine = 0;
   walk(ast, (n) => {
@@ -131,6 +134,9 @@ function scanProgram(ast: ESTree.Program): Scan {
     } else if (n.type === "AssignmentExpression" && n.left.type === "MemberExpression") {
       // C.prototype.m = ... or C.prototype = { ... }
       const left = n.left;
+      // C.prototype = Object.create(P.prototype)
+      const parent = inheritanceParentOf(n.right);
+      if (parent !== undefined && !left.computed && left.property.type === "Identifier" && left.property.name === "prototype" && left.object.type === "Identifier") inheritance.push({ child: left.object.name, parent, line: lineOf(n) });
       const protoOf = (m: ESTree.Node): string | undefined =>
         m.type === "MemberExpression" && !m.computed && m.property.type === "Identifier" && m.property.name === "prototype" && m.object.type === "Identifier" ? m.object.name : undefined;
       const owner = protoOf(left.object) ?? protoOf(left);
@@ -144,12 +150,20 @@ function scanProgram(ast: ESTree.Program): Scan {
       if (firstVarLine === 0) firstVarLine = lineOf(n);
     } else if (n.type === "Identifier" && n.name === "arguments") {
       findings.push({ kind: "arguments-usage", severity: "medium", line: lineOf(n), message: "`arguments` does not exist in arrow functions and is aliased to parameters in sloppy mode; rewrite to rest parameters only after proving parity" });
+    } else if (n.type === "CallExpression" && n.callee.type === "MemberExpression" && !n.callee.computed && n.callee.property.type === "Identifier" && n.callee.property.name === "apply" && n.arguments.length === 2) {
+      forwarding.push(lineOf(n));
     } else if (n.type === "CallExpression" && n.callee.type === "Identifier" && n.callee.name === "require") {
       const arg = n.arguments[0];
       if (arg !== undefined && arg.type === "Literal" && typeof arg.value === "string") requires.push({ specifier: arg.value, line: lineOf(n) });
     }
     return undefined;
   });
+  for (const i of inheritance) {
+    findings.push({ kind: "inheritance-chain", severity: "medium", line: i.line, message: `${i.child} inherits from ${i.parent} with Object.create(${i.parent}.prototype): Lazarus lifts it to \`class ${i.child} extends ${i.parent}\` with \`super(...)\` when ${i.parent}.call(this, ...) leads the constructor, and proves parity` });
+  }
+  if (forwarding.length > 0) {
+    findings.push({ kind: "apply-forwarding", severity: "medium", line: forwarding[0] ?? 0, message: `${forwarding.length} \`fn.apply(thisArg, args)\` call(s): spread only matches when args is a real array (apply accepts array-likes and null); Lazarus rewrites provable arrays and lets the Exorcist check the rest` });
+  }
   for (const [owner, p] of protoOwners) {
     findings.push({ kind: "prototype-chain", severity: "medium", line: p.line, message: `constructor ${owner} with ${p.members} prototype member(s): a class rewrite changes enumerability, strict mode and calls without \`new\`` });
   }
@@ -198,6 +212,14 @@ export function auditDirectory(dir: string): AuditReport {
           message: `${f.name}(${[...f.params, f.callback].join(", ")}) is a Node.js error-first callback (\`${f.callback}(err)\` / \`${f.callback}(null, value)\`): ${liftable ? "Lazarus lifts it to async/await and proves both settlements" : `not liftable as is (${lift.ok ? "not reached by the lift" : lift.reason}); Lazarus falls back to a promise wrapper`}`,
         });
       }
+    }
+    for (const c of detectPromiseChain(source).functions) {
+      scan.findings.push({
+        kind: "promise-chain",
+        severity: "medium",
+        line: c.line,
+        message: `${c.name}(${c.params.join(", ")}) returns a \`.then().catch()\` Promise chain: Lazarus lifts it to async/await with try/catch and proves both the resolved value and the rejection`,
+      });
     }
     for (const r of scan.requires) {
       if (r.specifier.startsWith("./") || r.specifier.startsWith("../")) {
@@ -380,6 +402,7 @@ export const SARIF_RULES: readonly SarifRule[] = [
   rule("LAZ004", "VarOrArgumentsHoisting", "var hoisting or arguments object", "var is function scoped and hoisted, and arguments is not available in arrow functions, so let/const and rest rewrites can change behavior.", "Rewrite to const/let and rest parameters only after proving parity; Lazarus does this with a fuzzed proof and rolls back on a counterexample.", "warning"),
   rule("LAZ005", "CircularOrUnresolvableRequire", "Circular or unresolvable CommonJS require", "Modules that require each other, or that require packages, built-ins or files outside the audited folder, need whole-graph handling: partial exports in a cycle and host modules inside the sandbox.", "Resurrect the whole require graph (npm run resurrect -- <dir> --entry <file>): Lazarus resolves cycles as ES module live bindings and proves whole-graph Object.is parity. Vendor or remove host and package requires first.", "warning"),
   rule("LAZ006", "UnparseableFile", "File does not parse", "The file is not valid JavaScript for the parser, so no other rule could be evaluated for it.", "Fix the syntax error, then audit again.", "error"),
+  rule("LAZ007", "PromiseChain", "Legacy .then().catch() Promise chain", "A function that returns X.then(h).catch(c) can be written as async/await with try/catch only if the resolved value, the rejection path and a synchronous throw of X are all preserved.", "Resurrect it with Lazarus: it lifts the chain to async/await and proves both settlements with the async differential fuzzer; it keeps the legacy body behind an async wrapper when the chain cannot be lifted exactly.", "warning"),
 ];
 const RULE_OF_KIND: Record<FindingKind, string> = {
   "bitwise-truncation": "LAZ001",
@@ -390,6 +413,9 @@ const RULE_OF_KIND: Record<FindingKind, string> = {
   "require-graph": "LAZ005",
   "external-require": "LAZ005",
   "parse-error": "LAZ006",
+  "inheritance-chain": "LAZ003",
+  "apply-forwarding": "LAZ004",
+  "promise-chain": "LAZ007",
 };
 const LEVEL_OF_SEVERITY: Record<Severity, SarifLevel> = { high: "error", medium: "warning", info: "note" };
 
@@ -453,7 +479,7 @@ Scan every .js / .cjs file under <dir> (node_modules, .git and dist are skipped)
 anything, and print a Legacy Risk Report: bitwise truncation traps, prototype chains, var / arguments usage, the
 require() graph, a migration readiness score and the exact resurrection command to run next.
   --json      print the full report as JSON
-  --sarif     print a SARIF 2.1.0 log for GitHub Code Scanning (rules LAZ001-LAZ006)
+  --sarif     print a SARIF 2.1.0 log for GitHub Code Scanning (rules LAZ001-LAZ007)
   --out <f>   write the report to <f> instead of stdout (relative to the current directory)
   --help, -h  show this help
 Exit codes: 0 report written, 2 bad usage or unreadable directory.`;

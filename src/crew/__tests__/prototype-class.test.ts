@@ -71,7 +71,8 @@ describe("prototype-class rule", () => {
 
   it.each([
     ["called without new", "function C(){ this.a = 1; }\nC.prototype.f = function () { return 1; };\nvar x = C.call({});\nx;"],
-    ["this instanceof guard", "function C(){ if (!(this instanceof C)) return new C(); this.a = 1; }\nC.prototype.f = function () { return 1; };\nnew C().f();"],
+    // V15 lifts a guard that is provably dead (every use is `new`); a bare call makes it live, so the legacy function stays.
+    ["this instanceof guard that a bare call keeps live", "function C(){ if (!(this instanceof C)) return new C(); this.a = 1; }\nC.prototype.f = function () { return 1; };\nC().f();"],
     ["inheritance via prototype", "function B(){}\nB.prototype.g = function () { return 1; };\nfunction C(){}\nC.prototype = Object.create(B.prototype);\nC.prototype.f = function () { return 2; };\nnew C().f();"],
     ["undeclared assignment (strict-mode hazard)", "function C(){ leaked = 1; }\nC.prototype.f = function () { return 1; };\nnew C().f();"],
     ["duplicate method", "function C(){}\nC.prototype.f = function () { return 1; };\nC.prototype.f = function () { return 2; };\nnew C().f();"],

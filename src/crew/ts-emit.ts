@@ -122,11 +122,15 @@ function offsetOf(text: string, line: number, column: number): number {
 
 const IMPLICIT_PARAM = /^Parameter '([A-Za-z_$][\w$]*)' implicitly has an 'any' type/;
 const IMPLICIT_VARIABLE = /^Variable '([A-Za-z_$][\w$]*)' implicitly has type 'any' in some locations/;
+const UNKNOWN_VALUE = /^'([A-Za-z_$][\w$]*)' is of type 'unknown'/;
+const IMPLICIT_REST = /^Rest parameter '([A-Za-z_$][\w$]*)' implicitly has an 'any\[\]' type/;
 const MISSING_PROPERTY = /^Property '([A-Za-z_$][\w$]*)' does not exist on type '([A-Za-z_$][\w$]*)'/;
 
 /**
  * Declares, as explicit `any`, exactly the members strict mode reports as untypeable in legacy code:
- * TS7006 (inner parameter), TS7034 (variable) and TS2339 on a class's own `this.x` (undeclared field).
+ * TS7006 (inner parameter), TS7019 (rest parameter, e.g. the `...args` that replaced `arguments`), TS7034 (variable) and TS2339
+ * on a class's own `this.x` (undeclared field), and TS18046 for a `const x = await ...` of a legacy Promise that strict mode cannot
+ * type (a `new Promise(...)` without a type argument resolves to `unknown`).
  * Anything else (a real type conflict) is left alone and stays a reported error.
  */
 export function applyBoundaryFixes(code: string, diagnostics: readonly TsDiagnostic[], file: string): BoundaryFixes {
@@ -144,6 +148,23 @@ export function applyBoundaryFixes(code: string, diagnostics: readonly TsDiagnos
       if (insertions.some((i) => i.at === at + name.length)) continue;
       insertions.push({ at: at + name.length, text: ": any" });
       adjustments.push(`${d.code === 7006 ? "parameter" : "variable"} ${name} (line ${d.line}): untyped in the legacy code`);
+    } else if (d.code === 18046) {
+      const name = UNKNOWN_VALUE.exec(d.message)?.[1];
+      if (name === undefined) continue;
+      // A statement of its own (never the `// promise-lift:` comment that quotes it).
+      const declaration = new RegExp(`^[ \\t]*(?:const|let) (${name})(?= = await\\b)`, "m").exec(code);
+      if (declaration === null) continue;
+      const end = declaration.index + declaration[0].length;
+      if (insertions.some((i) => i.at === end)) continue;
+      insertions.push({ at: end, text: ": any" });
+      adjustments.push(`variable ${name} (line ${d.line}): awaited value of an untyped legacy Promise`);
+    } else if (d.code === 7019) {
+      const name = IMPLICIT_REST.exec(d.message)?.[1];
+      // The diagnostic starts at the `...`; the element type goes after the name.
+      if (name === undefined || code.slice(at, at + 3 + name.length) !== `...${name}`) continue;
+      if (insertions.some((i) => i.at === at + 3 + name.length)) continue;
+      insertions.push({ at: at + 3 + name.length, text: ": any[]" });
+      adjustments.push(`rest parameter ...${name} (line ${d.line}): untyped in the legacy code`);
     } else if (d.code === 2339) {
       const m = MISSING_PROPERTY.exec(d.message);
       const [, prop, cls] = m ?? [];

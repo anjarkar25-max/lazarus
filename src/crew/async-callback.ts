@@ -11,6 +11,7 @@ import { decodeTagged } from "../sandbox/tagged.js";
 import { modernize, parseProgram, printProgram } from "./ast-modernizer.js";
 import { walk } from "./ast-scope.js";
 import { inferSignature, renderType, type Observation, type TypeSignature } from "./type-alchemist.js";
+import { asyncBlame, describeCounterexample, type RuleBlameEntry } from "./rule-blame.js";
 import type { AgentRole, CrewEvent, CrewEventType, ResurrectionResult } from "./types.js";
 
 type Node = ESTree.Node;
@@ -28,6 +29,8 @@ export interface ErrorFirstFunction {
   readonly ref: string;
   readonly exported: boolean;
   readonly line: number;
+  /** Set by the Promise-chain pass (es5-idioms.ts); error-first functions leave it unset. */
+  readonly style?: "promise-chain";
 }
 
 export interface ErrorFirstDetection {
@@ -617,6 +620,8 @@ export interface ErrorFirstRequest {
 }
 
 export interface AsyncCallbackSummary {
+  /** Set by the Promise-chain pass; the error-first pass leaves it unset. */
+  readonly kind?: "promise-chain";
   readonly entry: string;
   readonly callback: string;
   readonly params: string[];
@@ -632,7 +637,7 @@ export interface AsyncCallbackSummary {
   readonly modernJs: string;
 }
 
-export type ErrorFirstResult = ResurrectionResult & { readonly asyncCallback?: AsyncCallbackSummary; readonly typeSignature?: TypeSignature };
+export type ErrorFirstResult = ResurrectionResult & { readonly asyncCallback?: AsyncCallbackSummary; readonly typeSignature?: TypeSignature; readonly ruleBlame?: RuleBlameEntry[] };
 
 export async function resurrectErrorFirstWith(fuzzer: DifferentialFuzzer, request: ErrorFirstRequest): Promise<ErrorFirstResult> {
   const events: CrewEvent[] = [];
@@ -689,6 +694,7 @@ export async function resurrectErrorFirstWith(fuzzer: DifferentialFuzzer, reques
   let lastReport: FuzzReport | undefined;
   let lastCode = "";
   let attempt = 0;
+  let firstCounterexample: { attempt: number; cx: CounterexampleReport } | undefined;
   for (const candidate of candidates) {
     attempt++;
     emit("necromancer", "agent_started", `Attempt ${attempt}: ${candidate.strategy}`);
@@ -719,6 +725,7 @@ export async function resurrectErrorFirstWith(fuzzer: DifferentialFuzzer, reques
     if (!report.passed) {
       const cx: CounterexampleReport | undefined = report.counterexample;
       emit("exorcist", "counterexample_found", `Divergence detected: ${cx?.reason ?? "settlements differ"}`, { counterexample: cx, attempt });
+      if (cx !== undefined) firstCounterexample ??= { attempt, cx };
       continue;
     }
     if (attempt > 1) emit("exorcist", "self_healed", `Async parity verified after ${attempt} attempts`);
@@ -734,6 +741,17 @@ export async function resurrectErrorFirstWith(fuzzer: DifferentialFuzzer, reques
       fuzzReport: report,
       events,
       ...(typeSignature !== undefined ? { typeSignature } : {}),
+      ruleBlame: [
+        asyncBlame("callback-async", {
+          applied: candidate.strategy !== "promise-wrapper",
+          line: entry.line,
+          reason:
+            candidate.strategy !== "promise-wrapper"
+              ? `\`${entry.name}(${[...entry.params, entry.callback].join(", ")})\` became \`async ${entry.name}(${entry.params.join(", ")})\` (${candidate.strategy}); both settlements matched on ${report.totalRuns} inputs.`
+              : `The callback was not lifted${lift.ok ? " (an earlier attempt diverged)" : ` (${lift.reason})`}, so the legacy body stays behind a Promise wrapper.`,
+          ...(candidate.strategy === "promise-wrapper" && firstCounterexample !== undefined ? { counterexample: describeCounterexample(firstCounterexample.attempt, firstCounterexample.cx) } : {}),
+        }),
+      ],
       asyncCallback: {
         entry: entry.name,
         callback: entry.callback,

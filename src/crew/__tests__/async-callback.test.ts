@@ -348,11 +348,27 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
   });
 
+  it("ships the legacyPromiseChain preset (Preset 13) and describes a Promise chain, not a callback, in the async note", () => {
+    expect(pageHtml).toContain('label: "Preset 13: Promise Chain (.then().catch() -> async/await try/catch)"');
+    const source = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((s) => s.includes("Async Callback Necromancer: error-first callback results")) ?? "";
+    const doc = new FakeDocument();
+    const note = doc.element("div", "asyncNote");
+    note.hidden = true;
+    const probe = doc.element("div", "probeCard");
+    runInlineScript(source, { document: doc });
+    doc.dispatchEvent({ type: "lazarus:result", detail: { success: true, asyncCallback: { kind: "promise-chain", entry: "legacyPromiseChain", params: ["text"], callback: "", strategy: "lift+modernize", outcomes: { resolved: 20, rejected: 80 } } } });
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toContain("Promise chain \u2192 async/await.");
+    expect(note.textContent).toContain("legacyPromiseChain(text) returned a .then()/.catch() chain");
+    expect(note.textContent).toContain("20 resolved and 80 rejected");
+    expect(note.textContent).not.toContain("Error-first");
+    expect(probe.hidden).toBe(true);
+  });
   it("the async note script reports both settlements and hides the synchronous Probe card", () => {
     const source = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((s) => s.includes("Async Callback Necromancer: error-first callback results")) ?? "";
     expect(source).not.toBe("");

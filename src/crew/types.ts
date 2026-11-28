@@ -1,4 +1,5 @@
 import type { CounterexampleReport, FuzzReport, FuzzTrace, InputSchema } from "../fuzzer/types.js";
+import type { RuleBlameEntry } from "./rule-blame.js";
 
 export type AgentRole = "archaeologist" | "architect" | "necromancer" | "exorcist";
 
@@ -62,4 +63,6 @@ export interface ResurrectionResult {
   events: CrewEvent[];
   /** Inputs and legacy outcomes of the passing fuzz run (only with collectObservations). */
   observations?: Array<{ inputs: Record<string, unknown>; ok: boolean; output?: unknown }>;
+  /** Which AST rules rewrote (or were rolled back in) this resurrection, where, and why (Rule Blame X-Ray). */
+  ruleBlame?: RuleBlameEntry[];
 }

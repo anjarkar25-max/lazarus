@@ -979,10 +979,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 24-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 25-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1322,7 +1322,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(24);
+    expect(body["specs"]).toBe(25);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1355,8 +1355,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 24 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+  it("shows 25 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
   });
 });
 
@@ -1593,8 +1593,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 24 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+    it("shows 25 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
     });
   });
 });
@@ -1782,15 +1782,340 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 24 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 25 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
+  });
+});
+
+describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipped scripts, minimal DOM)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+  describe("Shrink Trace", () => {
+    const TRACE = {
+      initialFailure: { step: 0, input: `text = "${"x".repeat(40)}"`, legacyOutput: "-1424315703", modernOutput: "5.1e+19" },
+      steps: [
+        { step: 0, input: `text = "${"x".repeat(40)}"`, legacyOutput: "-1424315703", modernOutput: "5.1e+19" },
+        { step: 3, input: `text = "${"x".repeat(21)}"`, legacyOutput: "1", modernOutput: "2" },
+        { step: 9, input: `text = "${"x".repeat(9)}"`, legacyOutput: "3", modernOutput: "4" },
+        { step: 14, input: `text = "${"x".repeat(7)}"`, legacyOutput: "-2147483648", modernOutput: "2147483648" },
+      ],
+      finalMinimal: { step: 14, input: `text = "${"x".repeat(7)}"`, legacyOutput: "-2147483648", modernOutput: "2147483648" },
+      totalShrinks: 14,
+    };
+    const lib = (): { size: (s: unknown) => number; summary: (t: unknown) => string; widths: (t: unknown) => number[]; nodes: (r: unknown, fmt: (v: unknown) => string) => Array<{ label: string; kind: string; shrink: unknown }> } =>
+      runInlineScript(`${regionOf("lz-causal")}; ${regionOf("lz-shrink")}; ({ size: lzShrinkSize, summary: lzShrinkSummary, widths: lzShrinkWidths, nodes: lzCausalNodes })`, {}) as ReturnType<typeof lib>;
+
+    it("summarizes the journey as `40-char input -> ... -> minimal killer` and sizes the bars to the largest input", () => {
+      const { size, summary, widths } = lib();
+      expect(size(TRACE.initialFailure)).toBe(40);
+      expect(size(TRACE.finalMinimal)).toBe(7);
+      expect(size({ input: "n = -0" })).toBe(2);
+      expect(summary(TRACE)).toBe("40-char input \u2192 \u2026 \u2192 minimal killer (7 chars) \u00b7 14 shrinks");
+      expect(summary({ ...TRACE, steps: TRACE.steps.slice(0, 2), totalShrinks: 1, finalMinimal: { ...TRACE.finalMinimal, input: 'text = "x"' } })).toBe("40-char input \u2192 minimal killer (1 char) \u00b7 1 shrink");
+      const w = widths(TRACE);
+      expect(w[0]).toBe(100);
+      expect(w.every((n) => n >= 6 && n <= 100)).toBe(true);
+      expect([...w].sort((a, b) => b - a)).toEqual(w);
+    });
+
+    it("hangs the trace on the Counterexample Caught node only when the run recorded one", () => {
+      const { nodes } = lib();
+      const cx = { inputs: { text: "abc" }, shrinkTrace: TRACE };
+      const withTrace = nodes({ success: true, attempts: 2, modernCode: "// ast-refine: attempt 2 blamed bitor0-trunc; rolled back bitor0-trunc (trunc-or0 -> off); x", events: [{ type: "counterexample_found", payload: { counterexample: cx } }], certificate: { rolledBack: [] } }, (v) => JSON.stringify(v));
+      expect(withTrace[1]?.label).toBe('Counterexample Caught (text = "abc")');
+      expect(withTrace[1]?.shrink).toEqual(TRACE);
+      expect(withTrace.filter((n) => n.shrink)).toHaveLength(1);
+      const without = nodes({ success: true, attempts: 2, modernCode: "x", events: [{ type: "counterexample_found", payload: { counterexample: { inputs: { text: "abc" } } } }], certificate: { rolledBack: ["r"] } }, (v) => JSON.stringify(v));
+      expect(without[1]?.shrink).toBeNull();
+      const noRollback = nodes({ success: true, attempts: 1, modernCode: "x", events: [], certificate: { rolledBack: [] } }, (v) => JSON.stringify(v));
+      expect(noRollback.map((n) => n.label)).toEqual(["AST Lifted", "Exorcist Fuzzed", "Zero Divergences", "100% Exact Parity"]);
+      expect(noRollback.every((n) => n.shrink === undefined)).toBe(true);
+    });
+
+    it("renders a collapsed `Shrink Trace (N steps)` toggle that opens and closes the waterfall", () => {
+      const script = [...pageHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((s) => s.includes("Judge Playground: Self-Healing Matrix")) ?? "";
+      expect(script.length).toBeGreaterThan(1000);
+      const doc = new FakeDocument();
+      for (const id of ["causalStrip", "cxDraft", "cxInput", "cxLegacy", "cxReason", "healingMatrix", "legacyCode", "matrixDiff", "matrixDiffStats", "matrixDraft", "matrixFinal", "matrixFinalTitle", "matrixRules", "matrixSummary", "modernOut", "presetSelect", "probeBtn", "probeCard", "probeChips", "probeInputs", "probeModernSide", "probeNaiveMeta", "probeNaiveSide", "probeResults", "probeStatus", "probeVerdict", "schemaJson", "shrinkWaterfall"]) {
+        const el = doc.element("div", id);
+        Object.assign(el, { querySelectorAll: () => [] });
+      }
+      const strip = doc.getElementById("causalStrip") as FakeElement;
+      const wf = doc.getElementById("shrinkWaterfall") as FakeElement;
+      strip.hidden = true;
+      wf.hidden = true;
+      const win: Record<string, unknown> = {};
+      runInlineScript(script, { document: doc, window: win, fetch: () => Promise.reject(new Error("no network in this test")), CustomEvent: class {} });
+      const ui = win["LazarusUI"] as { onResult(r: unknown): void; onRunStart(): void };
+      ui.onResult({
+        success: true,
+        attempts: 2,
+        modernCode: "// ast-refine: attempt 2 blamed bitor0-trunc; rolled back bitor0-trunc (trunc-or0 -> off); counterexample {}\nx",
+        events: [{ type: "counterexample_found", payload: { counterexample: { inputs: { text: "xxxxxxx" }, shrinkTrace: TRACE } } }],
+        certificate: { rolledBack: ["| 0 \u2192 Math.trunc(x) || 0"] },
+      });
+      expect(strip.hidden).toBe(false);
+      const find = (el: FakeElement, pick: (e: FakeElement) => boolean): FakeElement | undefined => (pick(el) ? el : el.children.map((c) => find(c, pick)).find((x) => x !== undefined));
+      const toggle = find(strip, (e) => e.id === "shrinkToggle");
+      expect(toggle?.textContent).toBe("Shrink Trace (4 steps)");
+      expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle?.getAttribute("aria-controls")).toBe("shrinkWaterfall");
+      // The toggle lives on the counterexample node, which is the second node.
+      const nodes = strip.children.filter((c) => c.className.startsWith("causal-node"));
+      expect(nodes[1]?.textContent).toContain("Counterexample Caught");
+      expect(find(nodes[1] as FakeElement, (e) => e === toggle)).toBe(toggle);
+      expect(nodes.filter((n) => find(n, (e) => e === toggle) !== undefined)).toHaveLength(1);
+      // Collapsed by default: nothing rendered, not visible.
+      expect(wf.hidden).toBe(true);
+      expect(wf.children).toHaveLength(0);
+      toggle?.click();
+      expect(wf.hidden).toBe(false);
+      expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+      expect(wf.children[0]?.textContent).toBe("Shrink Trace \u00b7 40-char input \u2192 \u2026 \u2192 minimal killer (7 chars) \u00b7 14 shrinks");
+      const rows = wf.children.filter((c) => c.className.startsWith("sw-row"));
+      expect(rows).toHaveLength(4);
+      expect(rows.map((r) => r.children[0]?.textContent)).toEqual(["#0", "#3", "#9", "#14"]);
+      expect(rows[0]?.children[2]?.textContent).toBe(`text = "${"x".repeat(40)}"`);
+      expect(rows[3]?.className).toContain("minimal");
+      expect(rows[3]?.children[3]?.textContent).toBe("legacy -2147483648 \u00b7 draft 2147483648");
+      expect(rows[0]?.children[1]?.children[0]?.style["width"]).toBe("100%");
+      toggle?.click();
+      expect(wf.hidden).toBe(true);
+      expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+      // A new result starts collapsed again, and a run without a trace has no toggle.
+      toggle?.click();
+      ui.onResult({ success: true, attempts: 2, modernCode: "x", events: [{ type: "counterexample_found", payload: { counterexample: { inputs: { n: 1 } } } }], certificate: { rolledBack: ["r"] } });
+      expect(wf.hidden).toBe(true);
+      expect(find(strip, (e) => e.id === "shrinkToggle")).toBeUndefined();
+      ui.onResult({ success: true, attempts: 1, modernCode: "x", events: [], certificate: { rolledBack: [] } });
+      expect(find(strip, (e) => e.id === "shrinkToggle")).toBeUndefined();
+    });
+
+    it("ships the waterfall element after the strip, hidden, and the styles", () => {
+      expect(html).toContain('<div id="shrinkWaterfall" class="shrink-waterfall" role="region" aria-label="Shrink Trace waterfall" hidden></div>');
+      expect(html.indexOf('id="causalStrip"')).toBeLessThan(html.indexOf('id="shrinkWaterfall"'));
+      expect(html.indexOf('id="shrinkWaterfall"')).toBeLessThan(html.indexOf('id="healingMatrix"'));
+      expect(html).toContain(".shrink-waterfall[hidden] { display: none; }");
+      expect(html).toContain('toggle.textContent = "Shrink Trace (" + n.shrink.steps.length + " step"');
+    });
+  });
+
+  describe("Rule Blame X-Ray", () => {
+    const LEGACY = "\n\nvar h = 0;\nfor (var i = 0; i < text.length; i++) {\n  h = (h * 31 + text.charCodeAt(i)) | 0;\n}\nh;\n";
+    const MODERN = "// Resurrected by Lazarus Necromancer (attempt 2)\n// ast-rules: var-scoping=let-const bitor0-trunc=off\nlet h = 0;\nfor (let i = 0; i < text.length; i++) {\n  h = h * 31 + text.charCodeAt(i) | 0;\n}\nh;";
+    // Blame as the server sends it, with legacy lines counted on the untrimmed text (2 blank lines first).
+    const BLAME = [
+      { rule: "var-scoping", status: "applied", legacyLines: [3, 4], resurrectedLines: [3, 4], sites: 2, reason: "`var` became block-scoped `let`/`const` at 2 sites; the Exorcist found no divergence." },
+      { rule: "bitor0-trunc", status: "rolled-back", legacyLines: [5], resurrectedLines: [5], sites: 1, reason: "Rolled back: `x | 0` became `Math.trunc(x) || 0` was blamed for the counterexample text = \"abcdefg\".", counterexample: { attempt: 1, input: 'text = "abcdefg"', legacyOutput: "-1", modernOutput: "2" } },
+    ];
+    // The page's own renderDiff and diff algorithm, so the rows are exactly what the Studio draws.
+    const renderDiff = (doc: FakeDocument): ((container: FakeElement, a: string, b: string, stats: FakeElement | null, expand?: boolean) => void) => {
+      const start = html.indexOf("/** Renders a diff with line numbers");
+      const end = html.indexOf("window.LazarusDiff = {");
+      expect(start).toBeGreaterThan(0);
+      return runInlineScript(`${regionOf("lz-diff")}\n${html.slice(start, end)}; renderDiff`, { document: doc }) as ReturnType<typeof renderDiff>;
+    };
+    interface Rig {
+      doc: FakeDocument;
+      xray: { setBlame(l: unknown): void; toggle(r: string): void; clear(): void; register(el: FakeElement, rule: string): void; has(r: string): boolean; active(): string | null };
+      bar: FakeElement;
+      chips: FakeElement;
+      callout: FakeElement;
+      diffBlock: FakeElement;
+      diff: FakeElement;
+      toggleBtn: FakeElement;
+    }
+    function rig(legacy = LEGACY, modern = MODERN): Rig {
+      const doc = new FakeDocument();
+      const bar = doc.element("div", "xrayBar");
+      const chips = doc.element("span", "xrayChips");
+      const callout = doc.element("div", "xrayCallout");
+      const block = doc.element("div", "legacyDiffBlock");
+      const diff = doc.element("div", "legacyDiff");
+      const stats = doc.element("span", "legacyDiffStats");
+      const toggleBtn = doc.element("button", "legacyDiffToggle");
+      block.hidden = true;
+      const make = runInlineScript(`${regionOf("lz-xray")}; lzMakeXray`, {}) as (env: unknown) => Rig["xray"];
+      const xray = make({ bar, chips, callout, diffBlock: block, diffEl: diff, statsEl: stats, toggle: toggleBtn, legacyText: () => legacy, modernText: () => modern, renderDiff: renderDiff(doc), createEl: (t: string) => doc.createElement(t) });
+      return { doc, xray, bar, chips, callout, diffBlock: block, diff, toggleBtn } as unknown as Rig;
+    }
+    const marked = (r: Rig, cls: string): string[] => r.diff.children.filter((row) => row.className.split(/\s+/).includes(cls)).map((row) => `${row.children[0]?.textContent ?? ""}|${row.children[1]?.textContent ?? ""}`);
+
+    it("computes the lines to mark and the one-line callout, shifting legacy lines by the trimmed blank lines", () => {
+      const { marks, leading } = runInlineScript(`${regionOf("lz-xray")}; ({ marks: lzXrayMarks, leading: lzXrayLeading })`, {}) as { marks: (e: unknown, l: number) => { kind: string; legacy: number[]; modern: number[]; callout: string }; leading: (t: string) => number };
+      expect(leading(LEGACY)).toBe(2);
+      expect(leading("var a;")).toBe(0);
+      expect(leading("  \n\t\nvar a;")).toBe(2);
+      const m = marks(BLAME[1], 2);
+      expect(m).toMatchObject({ kind: "rolled-back", legacy: [3], modern: [5] });
+      expect(m.callout).toBe('bitor0-trunc (rolled back): Rolled back: `x | 0` became `Math.trunc(x) || 0` was blamed for the counterexample text = "abcdefg". [legacy line 3 \u2192 resurrected line 5]');
+      expect(marks(BLAME[0], 2)).toMatchObject({ kind: "applied", legacy: [1, 2], modern: [3, 4] });
+      expect(marks({ rule: "r", status: "applied", legacyLines: [1], resurrectedLines: [], reason: "why" }, 0).callout).toBe("r (applied): why [legacy line 1]");
+      expect(marks({ rule: "r", status: "applied", legacyLines: [], resurrectedLines: [], reason: "why" }, 0).callout).toBe("r (applied): why");
+    });
+
+    it("renders keyboard-accessible button chips, one per rule, hidden when there is no blame", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      expect(r.bar.hidden).toBe(false);
+      expect(r.chips.children.map((c) => c.tagName)).toEqual(["button", "button"]);
+      expect(r.chips.children.map((c) => c.textContent)).toEqual(["var-scoping", "bitor0-trunc \u00b7 rolled back"]);
+      expect(r.chips.children.map((c) => c.className)).toEqual(["chip-rule xray-chip xray-applied", "chip-rule xray-chip xray-rolled-back"]);
+      expect(r.chips.children.map((c) => c.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
+      expect(r.chips.children.every((c) => (c as unknown as { type: string }).type === "button")).toBe(true);
+      expect(r.chips.children[1]?.title).toContain("blamed for the counterexample");
+      expect(r.xray.has("bitor0-trunc")).toBe(true);
+      expect(r.xray.has("function-arrow")).toBe(false);
+      r.xray.setBlame([]);
+      expect(r.bar.hidden).toBe(true);
+      expect(r.chips.children).toHaveLength(0);
+      r.xray.setBlame(undefined);
+      expect(r.bar.hidden).toBe(true);
+    });
+
+    it("highlights the exact lines of an applied rule in green, opens the diff, and shows the callout", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      expect(r.diffBlock.hidden).toBe(true);
+      r.chips.children[0]?.click();
+      expect(r.diffBlock.hidden).toBe(false);
+      expect(r.toggleBtn.getAttribute("aria-pressed")).toBe("true");
+      expect(r.xray.active()).toBe("var-scoping");
+      // Legacy lines 1-2 of the trimmed text are `var h = 0;` and `for (var i ...`; their replacements are lines 3-4 of the candidate.
+      expect(marked(r, "xray-applied")).toEqual(["1|", "2|", "|3", "|4"]);
+      expect(marked(r, "xray-rolled-back")).toEqual([]);
+      expect(r.callout.hidden).toBe(false);
+      expect(r.callout.className).toBe("xray-callout applied");
+      expect(r.callout.textContent).toContain("var-scoping (applied): `var` became block-scoped");
+      expect(r.callout.textContent).toContain("[legacy lines 1, 2 \u2192 resurrected lines 3, 4]");
+      expect(r.chips.children.map((c) => c.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+    });
+
+    it("highlights a rolled-back rule in amber on the lines that kept the legacy `| 0`, with its counterexample reason", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      r.chips.children[1]?.click();
+      // The kept `| 0` line is printed without its redundant parentheses, so it is a removed row (old 3) and an added row (new 5).
+      expect(marked(r, "xray-rolled-back")).toEqual(["3|", "|5"]);
+      expect(marked(r, "xray-applied")).toEqual([]);
+      expect(r.callout.className).toBe("xray-callout rolled-back");
+      expect(r.callout.textContent).toContain("bitor0-trunc (rolled back): Rolled back: `x | 0` became");
+      expect(r.callout.textContent).toContain("[legacy line 3 \u2192 resurrected line 5]");
+    });
+
+    it("selecting another chip moves the highlight; selecting the active chip again clears it and the callout", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      r.chips.children[0]?.click();
+      r.chips.children[1]?.click();
+      expect(marked(r, "xray-applied")).toEqual([]);
+      expect(marked(r, "xray-rolled-back")).toEqual(["3|", "|5"]);
+      expect(r.chips.children.map((c) => c.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+      r.chips.children[1]?.click();
+      expect(r.xray.active()).toBeNull();
+      expect(marked(r, "xray-applied")).toEqual([]);
+      expect(marked(r, "xray-rolled-back")).toEqual([]);
+      expect(r.callout.hidden).toBe(true);
+      expect(r.callout.textContent).toBe("");
+      expect(r.chips.children.map((c) => c.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
+      // The diff was closed before the first click, so it is closed again.
+      expect(r.diffBlock.hidden).toBe(true);
+      expect(r.toggleBtn.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("keeps an already-open diff open, and goes back to its collapsed view when cleared", () => {
+      const r = rig();
+      r.diffBlock.hidden = false;
+      r.xray.setBlame(BLAME);
+      r.xray.toggle("var-scoping");
+      expect(r.diff.children.some((row) => row.className.includes("d-gap"))).toBe(false);
+      r.xray.clear();
+      expect(r.diffBlock.hidden).toBe(false);
+      expect(marked(r, "xray-applied")).toEqual([]);
+    });
+
+    it("registers external chips (the Self-Healing Matrix) so they share the pressed state", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      const matrixChip = r.doc.createElement("button");
+      r.xray.register(matrixChip, "bitor0-trunc");
+      expect(matrixChip.getAttribute("aria-pressed")).toBe("false");
+      r.xray.toggle("bitor0-trunc");
+      expect(matrixChip.getAttribute("aria-pressed")).toBe("true");
+      r.xray.toggle("var-scoping");
+      expect(matrixChip.getAttribute("aria-pressed")).toBe("false");
+      r.xray.toggle("not-a-rule");
+      expect(r.xray.active()).toBe("var-scoping");
+    });
+
+    it("a new run or result resets the bar, the highlight and the diff it opened", () => {
+      const r = rig();
+      r.xray.setBlame(BLAME);
+      r.xray.toggle("var-scoping");
+      expect(r.diffBlock.hidden).toBe(false);
+      r.xray.setBlame([]);
+      expect(r.diffBlock.hidden).toBe(true);
+      expect(r.bar.hidden).toBe(true);
+      expect(r.callout.hidden).toBe(true);
+      expect(r.xray.active()).toBeNull();
+    });
+
+    it("ships the bar markup, the row styles, and wires the chips of the Self-Healing Matrix", () => {
+      expect(html).toContain('<div id="xrayBar" class="xray-bar" hidden>');
+      expect(html).toContain('<div id="xrayCallout" class="xray-callout" role="status" aria-live="polite" hidden></div>');
+      expect(html).toContain(".d-row.xray-applied { box-shadow: inset 3px 0 0 var(--emerald);");
+      expect(html).toContain(".d-row.xray-rolled-back { box-shadow: inset 3px 0 0 var(--amber);");
+      expect(html).toContain("button.xray-chip:focus-visible { outline: 2px solid var(--violet);");
+      expect(html).toContain('chip("blamed", "AST rule blamed: " + refine.blamed, refine.blamed)');
+      expect(html).toContain('chips.append(chip("active", p[0] + " \\u00b7 " + p[1], p[0]))');
+      expect(html).toContain('document.addEventListener("lazarus:result", (e) => { const r = e.detail || {}; xray.setBlame(r.success ? r.ruleBlame : []); });');
+      expect(html.indexOf('id="xrayBar"')).toBeLessThan(html.indexOf('id="healingMatrix"'));
+      expect(html.indexOf('id="causalStrip"')).toBeLessThan(html.indexOf('id="xrayBar"'));
+    });
+  });
+
+  it("ships Preset 12 and Preset 13 in the Tab 1 dropdown and a Promise-chain note, without a new tab", () => {
+    expect(html).toContain('label: "Preset 12: ES5 Inheritance (Object.create + arguments.apply -> class extends + rest/spread)"');
+    expect(html).toContain('label: "Preset 13: Promise Chain (.then().catch() -> async/await try/catch)"');
+    expect(html).toContain('value: "legacySubclassMeter"');
+    expect(html).toContain('value: "legacyPromiseChain"');
+    expect(html).toContain('a.kind === "promise-chain" ? "Promise chain \\u2192 async/await. " : "Error-first callback \\u2192 async/await. "');
+    expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    const pane = html.slice(html.indexOf('<div class="studio-pane" id="pane-single"'), html.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(pane).toContain('id="xrayBar"');
+    expect(pane).toContain('id="shrinkWaterfall"');
+  });
+
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 25 Kiro Specs", () => {
+    const between = (a: string, b: string): string => {
+      const s = html.indexOf(a);
+      const e = html.indexOf(b, s + a.length);
+      expect(s).toBeGreaterThan(0);
+      expect(e).toBeGreaterThan(s);
+      return html.slice(s, e);
+    };
+    expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+    expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+    expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
+    expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
 });

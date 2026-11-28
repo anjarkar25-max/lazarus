@@ -3,6 +3,7 @@ import { SandboxError } from "../sandbox/errors.js";
 import { PooledProbeRunner } from "../sandbox/pool.js";
 import { decodeTagged, describeValue, encodeTagged } from "../sandbox/tagged.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
+import { formatExactValue } from "../crew/exact-format.js";
 import type {
   CounterexampleReport,
   FuzzOptions,
@@ -11,6 +12,8 @@ import type {
   InputSchema,
   ParamKind,
   ProbeOutcome,
+  ShrinkStep,
+  ShrinkTrace,
 } from "./types.js";
 
 function arbitraryForKind(kind: ParamKind): fc.Arbitrary<unknown> {
@@ -162,6 +165,45 @@ function compareOutcomes(
   };
 }
 
+/** The most steps a shrink trace carries, so payloads stay small. */
+export const MAX_SHRINK_STEPS = 6;
+const MAX_STEP_TEXT = 160;
+const clip = (text: string): string => (text.length > MAX_STEP_TEXT ? `${text.slice(0, MAX_STEP_TEXT - 3)}...` : text);
+
+interface FailureRecord {
+  readonly inputs: Record<string, unknown>;
+  readonly legacy: ProbeOutcome;
+  readonly modern: ProbeOutcome;
+}
+
+/** Text of one outcome: the value (exact mode keeps -0 / NaN / +0 apart), or `throws CODE (message)`. */
+function outcomeText(outcome: ProbeOutcome, exact: boolean): string {
+  if (!outcome.ok) return clip(`throws ${outcome.errorCode ?? "ERROR"}${outcome.errorMessage ? ` (${outcome.errorMessage.slice(0, 80)})` : ""}`);
+  return clip(exact ? formatExactValue(outcome.output) : describeValue(outcome.output));
+}
+
+function stepOf(step: number, record: FailureRecord, exact: boolean): ShrinkStep {
+  const input = Object.entries(record.inputs)
+    .map(([k, v]) => `${k} = ${exact ? formatExactValue(v, 80) : describeValue(decodeTagged(v), 80)}`)
+    .join(", ");
+  return { step, input: clip(input), legacyOutput: outcomeText(record.legacy, exact), modernOutput: outcomeText(record.modern, exact) };
+}
+
+/**
+ * The shrinking journey from the failing evaluations in the order fast-check ran them: it adopts each failing shrink
+ * candidate as the new current input, so the first entry is the original failure and the last one is the minimal input.
+ * At most MAX_SHRINK_STEPS entries are kept, evenly spaced, the first and the last always included.
+ */
+export function buildShrinkTrace(log: readonly FailureRecord[], exact: boolean, totalShrinks: number): ShrinkTrace | undefined {
+  if (log.length === 0) return undefined;
+  const last = log.length - 1;
+  const picks = new Set<number>();
+  const count = Math.min(log.length, MAX_SHRINK_STEPS);
+  for (let i = 0; i < count; i++) picks.add(count === 1 ? 0 : Math.round((i * last) / (count - 1)));
+  const steps = [...picks].sort((a, b) => a - b).map((index) => stepOf(index, log[index] as FailureRecord, exact));
+  return { initialFailure: stepOf(0, log[0] as FailureRecord, exact), steps, finalMinimal: stepOf(last, log[last] as FailureRecord, exact), totalShrinks };
+}
+
 /** Separate executors for each side of the comparison (e.g. two warm pools). */
 export interface DifferentialExecutors {
   readonly legacy: ProbeExecutor;
@@ -239,6 +281,8 @@ export class DifferentialFuzzer {
     const maxTraces = options.maxTraces ?? 15;
     const traces: FuzzTrace[] = [];
     const failuresByKey = new Map<string, CounterexampleReport>();
+    /** Every failing evaluation, in order: after the first failure this is the shrink path fast-check walked. */
+    const failureLog: FailureRecord[] = [];
 
     const supportsTagged =
       executors.legacy.supportsTaggedEncoding === true && executors.modern.supportsTaggedEncoding === true;
@@ -262,6 +306,7 @@ export class DifferentialFuzzer {
       }
       if (!matched) {
         failuresByKey.set(JSON.stringify(wire), { inputs: wire, legacy, modern, reason, ...(exact ? { exact } : {}) });
+        failureLog.push({ inputs: wire, legacy, modern });
       }
       return matched;
     };
@@ -274,13 +319,14 @@ export class DifferentialFuzzer {
       if (!(await evaluate(inputs))) {
         // Boundary inputs are already minimal, so there is nothing to shrink.
         const failure = failuresByKey.get(JSON.stringify(exact ? encodeTagged(inputs) : inputs));
+        const corpusTrace = failure !== undefined ? buildShrinkTrace(failureLog, exact, 0) : undefined;
         return {
           passed: false,
           totalRuns: corpusExecuted,
           durationMs: Date.now() - startedAt,
           seed: options.seed ?? 0,
           traces,
-          ...(failure !== undefined ? { counterexample: failure } : {}),
+          ...(failure !== undefined ? { counterexample: corpusTrace !== undefined ? { ...failure, shrinkTrace: corpusTrace } : failure } : {}),
           exact,
           boundaryRuns: corpusExecuted,
         };
@@ -324,13 +370,14 @@ export class DifferentialFuzzer {
         ...(exact ? { exact } : {}),
       };
 
+    const shrinkTrace = buildShrinkTrace(failureLog, exact, details.numShrinks);
     return {
       passed: false,
       totalRuns,
       durationMs,
       seed: details.seed,
       traces,
-      counterexample,
+      counterexample: shrinkTrace !== undefined ? { ...counterexample, shrinkTrace } : counterexample,
       exact,
       boundaryRuns: corpusExecuted,
     };

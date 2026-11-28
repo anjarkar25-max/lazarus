@@ -58,7 +58,9 @@ async function runPreset(preset: BenchmarkPreset, fuzzRuns: number, seed: number
   }
   if (preset.async === true) {
     // The same path as POST /api/resurrect for an error-first callback module.
-    const asyncResult = await new ResurrectionOrchestrator().resurrectErrorFirst({ name: preset.name, source: preset.code, schema: preset.schema as InputSchema, fuzzRuns, seed });
+    const asyncRequest = { name: preset.name, source: preset.code, schema: preset.schema as InputSchema, fuzzRuns, seed };
+    const orchestrator = new ResurrectionOrchestrator();
+    const asyncResult = preset.promiseChain === true ? await orchestrator.resurrectPromiseChain(asyncRequest) : await orchestrator.resurrectErrorFirst(asyncRequest);
     const asyncVerified = asyncResult.success
       ? await buildExportBundle({ specimenName: preset.name, legacyCode: preset.code, modernCode: asyncResult.modernCode, fuzzRuns: asyncResult.fuzzReport.totalRuns, attempts: asyncResult.attempts, schema: preset.schema as InputSchema })
       : undefined;

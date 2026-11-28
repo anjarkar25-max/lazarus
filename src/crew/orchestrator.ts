@@ -1,10 +1,12 @@
 import * as fc from "fast-check";
 import { DifferentialFuzzer, buildRecordArbitrary } from "../fuzzer/differential.js";
-import type { FuzzTrace } from "../fuzzer/types.js";
+import type { CounterexampleReport, FuzzTrace } from "../fuzzer/types.js";
 import { PooledProbeRunner } from "../sandbox/pool.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { modernize, summarizeForSpec } from "./ast-modernizer.js";
 import { DeterministicModernizer } from "./synthesizer.js";
+import { computeRuleBlame } from "./rule-blame.js";
+import { resurrectPromiseChainWith } from "./es5-idioms.js";
 import { plural } from "../text/plural.js";
 import { resurrectErrorFirstWith, type ErrorFirstRequest, type ErrorFirstResult } from "./async-callback.js";
 import type {
@@ -87,6 +89,13 @@ export class ResurrectionOrchestrator {
     await using modernPool = new PooledProbeRunner();
     // `return await` keeps both pools alive until the session has finished.
     return await resurrectErrorFirstWith(new DifferentialFuzzer({ legacy: legacyPool, modern: modernPool }), request);
+  }
+  /** Additive async pass for a legacy `.then().catch()` Promise chain (see es5-idioms.ts). */
+  async resurrectPromiseChain(request: ErrorFirstRequest): Promise<ErrorFirstResult> {
+    if (this.fuzzer !== undefined) return resurrectPromiseChainWith(this.fuzzer, request);
+    await using legacyPool = new PooledProbeRunner();
+    await using modernPool = new PooledProbeRunner();
+    return await resurrectPromiseChainWith(new DifferentialFuzzer({ legacy: legacyPool, modern: modernPool }), request);
   }
   private async resurrectWith(deps: SessionDeps, request: ResurrectionRequest): Promise<ResurrectionResult> {
     const events: CrewEvent[] = [];
@@ -204,6 +213,9 @@ export class ResurrectionOrchestrator {
     const maxAttempts = request.maxHealingAttempts ?? 3;
     const fuzzRuns = request.fuzzRuns ?? 20;
     let modernCode = "";
+    /** The Exorcist's counterexamples in order: the n-th one ended attempt n (Rule Blame links rollbacks to them). */
+    const counterexamples: CounterexampleReport[] = [];
+    const blame = (): { ruleBlame: ReturnType<typeof computeRuleBlame> } => ({ ruleBlame: computeRuleBlame(request.legacyCode, modernCode, counterexamples) });
     let lastReport = await traceSandbox(
       "exorcist",
       () =>
@@ -271,8 +283,10 @@ export class ResurrectionOrchestrator {
           fuzzReport: lastReport,
           events,
           ...(request.collectObservations === true ? { observations: observed } : {}),
+          ...blame(),
         };
       }
+      if (lastReport.counterexample !== undefined) counterexamples.push(lastReport.counterexample);
 
       emit(
         "exorcist",
@@ -292,6 +306,7 @@ export class ResurrectionOrchestrator {
       attempts: maxAttempts,
       fuzzReport: lastReport,
       events,
+      ...blame(),
     };
   }
 }

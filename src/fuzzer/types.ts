@@ -31,6 +31,26 @@ export interface CounterexampleReport {
   reason: string;
   /** The comparison that found this was exact (tagged Object.is). Replays must use the same mode. */
   exact?: boolean;
+  /** The real shrinking journey fast-check took to reach this input (additive; absent only for synthetic reports). */
+  shrinkTrace?: ShrinkTrace;
+}
+
+/** One failing input of the shrinking journey, formatted as text so `-0`, `NaN` and `undefined` stay distinguishable. */
+export interface ShrinkStep {
+  /** 0 is the first failing input; the last step is the minimal one. */
+  step: number;
+  input: string;
+  legacyOutput: string;
+  modernOutput: string;
+}
+
+export interface ShrinkTrace {
+  initialFailure: ShrinkStep;
+  /** At most MAX_SHRINK_STEPS representative entries of the failing sequence, first and last included. */
+  steps: ShrinkStep[];
+  finalMinimal: ShrinkStep;
+  /** fast-check's own count of accepted shrinks (0 when the failure came from the boundary corpus). */
+  totalShrinks: number;
 }
 
 export interface FuzzOptions {

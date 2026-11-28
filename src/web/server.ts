@@ -14,6 +14,7 @@ import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
 import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
 import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
+import { buildPromiseHarness, detectPromiseChain } from "../crew/es5-idioms.js";
 import { generateAsyncVerifiedBundle } from "../exporter/async-bundle.js";
 import { renderType, type TypeSignature } from "../crew/type-alchemist.js";
 import { formatInputs, formatOutcome } from "../crew/exact-format.js";
@@ -257,8 +258,12 @@ export type ExportRequest = {
  */
 /** The error-first entry when `legacyCode` is a callback module and `modernCode` its resurrected async TypeScript. */
 export function asyncEntryOf(legacyCode: string, modernCode: string, name?: string): ErrorFirstFunction | undefined {
-  const entry = detectErrorFirst(legacyCode, name !== undefined ? { entryName: name } : {}).entry;
-  return entry !== undefined && stripAsyncTypes(modernCode, entry) !== undefined ? entry : undefined;
+  const options = name !== undefined ? { entryName: name } : {};
+  const entry = detectErrorFirst(legacyCode, options).entry;
+  if (entry !== undefined) return stripAsyncTypes(modernCode, entry) !== undefined ? entry : undefined;
+  // A legacy Promise chain (`return X.then(h).catch(c)`), resurrected as an `export async function`.
+  const chain = detectPromiseChain(legacyCode, options).entry;
+  return chain !== undefined && stripAsyncTypes(modernCode, chain) !== undefined ? chain : undefined;
 }
 async function buildUnsignedExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string }> {
   const typeSignature = parsed.typeSignature === undefined ? undefined : parseSignature(parsed.typeSignature);
@@ -623,13 +628,15 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
             }
           : {};
       try {
-        const errorFirst = detectErrorFirst(body.legacyCode, { entryName: request.name }).entry;
+        const errorFirstEntry = detectErrorFirst(body.legacyCode, { entryName: request.name }).entry;
+        // Additive async passes: an error-first callback, or a legacy `.then().catch()` Promise chain, becomes async/await.
+        const errorFirst = errorFirstEntry ?? detectPromiseChain(body.legacyCode, { entryName: request.name }).entry;
         if (errorFirst !== undefined) {
-          // Additive async pass: Node.js error-first callback -> async/await, both settlements fuzzed in the sandbox.
+          // Both settlements are fuzzed in the sandbox.
           const flat = flatSchemaOf(body.schema, errorFirst.name);
           const scanned = scanLegacyAst(body.legacyCode, { functionName: errorFirst.name }).suggestedSchema;
           const schema: InputSchema = Object.fromEntries(errorFirst.params.map((p) => [p, flat[p] ?? scanned[p] ?? "string"]));
-          const resurrected = await orchestrator.resurrectErrorFirst({
+          const resurrected = await (errorFirstEntry !== undefined ? orchestrator.resurrectErrorFirst : orchestrator.resurrectPromiseChain).call(orchestrator, {
             name: request.name,
             source: body.legacyCode,
             schema,
@@ -1032,7 +1039,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           asyncEntry !== undefined && asyncJs !== undefined
             ? await runMutationAudit({
                 // Error-first module: the legacy settle harness against the async module (and its mutants), settled in the sandbox.
-                legacyCode: buildLegacyHarness(body.legacyCode, asyncEntry),
+                legacyCode: asyncEntry.style === "promise-chain" ? buildPromiseHarness(body.legacyCode, asyncEntry) : buildLegacyHarness(body.legacyCode, asyncEntry),
                 modernCode: asyncJs,
                 schema: Object.fromEntries(asyncEntry.params.map((p) => [p, body.schema[p] ?? "string"])),
                 executors: { legacy: auditLegacy, modern: auditModern },

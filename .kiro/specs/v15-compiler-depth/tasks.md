@@ -1,0 +1,11 @@
+# Tasks: V15 Compiler Depth
+- [x] 1. Fuzzer: `shrinkTrace` types, capture and bounding.
+- [x] 2. `es5-idioms.ts`: inheritance, scope-safe constructors, `apply` -> `call(...spread)`, integrated into `prototype-class` / `apply-spread`.
+- [x] 3. `es5-idioms.ts`: Promise-chain detection, lift, harness and resurrection; server routing and export bundle support.
+- [x] 4. Rule blame: `resultLines`, `computeRuleBlame`, orchestrator and async passes.
+- [x] 5. Presets `legacySubclassMeter` and `legacyPromiseChain` (Tab 1 dropdown), `tsc --strict` clean.
+- [x] 6. `lazarus audit` idioms (LAZ003, LAZ004, LAZ007).
+- [x] 7. Tab 1: Shrink Trace toggle and waterfall on the Causal Strip.
+- [x] 8. Tab 1: interactive Rule Blame X-Ray chips with diff highlighting and callout.
+- [x] 9. Tests: `es5-idioms`, `shrink-trace`, extended UI, DNA, Power, async-callback, audit; Tab 3 untouched.
+- [x] 10. Verify: `tsc --noEmit`, full `vitest run`, leak check, temp files removed, `#badgeSpecs` 25, `#badgeTests` final.

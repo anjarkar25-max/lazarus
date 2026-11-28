@@ -4,12 +4,13 @@
 // module. Counterexample refinement runs candidates through a sandbox ProbeExecutor.
 
 import { parse, type Comment } from "acorn";
-import { generate } from "astring";
+import { GENERATOR, generate, type State } from "astring";
 import type * as ESTree from "estree";
 import type { CounterexampleReport, ProbeOutcome } from "../fuzzer/types.js";
 import { areOutputsEquivalent } from "../fuzzer/differential.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { decodeTagged } from "../sandbox/tagged.js";
+import { inheritanceParentOf, scopeGuardOf, superCallOf, type SuperCall } from "./es5-idioms.js";
 import {
   analyze,
   inferType,
@@ -152,6 +153,15 @@ export interface ModernizeResult {
   readonly applied: AppliedRewrite[];
   readonly flagged: FlaggedSite[];
   readonly error?: string;
+  /** For each entry of `applied`: the 1-based line of `code` where the rewritten node starts (0 when unknown). */
+  readonly resultLines?: number[];
+}
+
+/** The node each rewrite changed, so the printer can report where it ended up (Rule Blame X-Ray). */
+const NODE_OF = new WeakMap<AppliedRewrite, Node>();
+function track<T extends AppliedRewrite>(entry: T, node: Node): T {
+  NODE_OF.set(entry, node);
+  return entry;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,12 +237,34 @@ function attachCommentsToStatements(ast: ESTree.Program, comments: Comment[]): v
   }
 }
 
-function print(ast: ESTree.Program, comments: Comment[]): string {
+/** astring's generator, wrapped so the output line of every node is recorded as it starts printing. */
+function trackingGenerator(lines: Map<Node, number>): typeof GENERATOR {
+  const wrapped: Record<string, (node: Node, state: State) => void> = {};
+  const base = GENERATOR as unknown as Record<string, (this: unknown, node: Node, state: State) => void>;
+  let counted = 0;
+  let line = 1;
+  for (const key of Object.keys(base)) {
+    const original = base[key];
+    if (original === undefined) continue;
+    wrapped[key] = function (this: unknown, node: Node, state: State): void {
+      if (!lines.has(node)) {
+        for (; counted < state.output.length; counted++) if (state.output.charCodeAt(counted) === 10) line++;
+        lines.set(node, line);
+      }
+      original.call(this, node, state);
+    };
+  }
+  return wrapped as unknown as typeof GENERATOR;
+}
+
+function print(ast: ESTree.Program, comments: Comment[], lines?: Map<Node, number>): string {
+  const generator = lines === undefined ? {} : { generator: trackingGenerator(lines) };
   try {
     attachCommentsToStatements(ast, comments);
-    return generate(ast, { indent: "  ", lineEnd: "\n", comments: true }).trimEnd();
+    return generate(ast, { indent: "  ", lineEnd: "\n", comments: true, ...generator }).trimEnd();
   } catch {
-    return generate(ast, { indent: "  ", lineEnd: "\n" }).trimEnd();
+    lines?.clear();
+    return generate(ast, { indent: "  ", lineEnd: "\n", ...(lines === undefined ? {} : { generator: trackingGenerator(lines) }) }).trimEnd();
   }
 }
 
@@ -392,7 +424,7 @@ function ruleVarScoping(a: Analysis, applied: AppliedRewrite[], flagged: Flagged
     const before = gen(decl);
     const kind = decision.constOk ? "const" : "let";
     decl.kind = kind;
-    applied.push({ rule: "var-scoping", variant: "let-const", line: lineOf(decl), before, after: gen(decl), speculative: false, note: `var -> ${kind}` });
+    applied.push(track({ rule: "var-scoping", variant: "let-const", line: lineOf(decl), before, after: gen(decl), speculative: false, note: `var -> ${kind}` }, decl));
   }
 }
 
@@ -496,15 +528,20 @@ function ruleArgumentsRest(a: Analysis, applied: AppliedRewrite[]): void {
       }
     });
     fn.params.push({ type: "RestElement", argument: ident(name) });
-    applied.push({
-      rule: "arguments-rest",
-      variant: "rest",
-      line: lineOf(fn),
-      before,
-      after: gen(fn).split("{")[0]?.trim() ?? "function",
-      speculative: false,
-      note: `arguments -> ...${name}`,
-    });
+    applied.push(
+      track(
+        {
+          rule: "arguments-rest",
+          variant: "rest",
+          line: lineOf(fn),
+          before,
+          after: gen(fn).split("{")[0]?.trim() ?? "function",
+          speculative: false,
+          note: `arguments -> ...${name}`,
+        },
+        fn
+      )
+    );
   }
 }
 
@@ -575,6 +612,17 @@ function isThisInsensitiveTarget(target: ESTree.Expression, a: Analysis): boolea
   return false;
 }
 
+/** An identifier bound once to a function declaration or function expression and never reassigned: `.call` on it is Function.prototype.call. */
+function isPlainFunctionRef(node: ESTree.Expression, a: Analysis): boolean {
+  if (node.type !== "Identifier") return false;
+  const binding = bindingOfIdentifier(node, a);
+  if (binding === null || binding.conflict || binding.declIds.length !== 1 || binding.refs.some((r) => r.write)) return false;
+  const decl = binding.declNodes[0];
+  if (decl?.type === "FunctionDeclaration") return true;
+  const init = decl?.type === "VariableDeclaration" ? decl.declarations.find((d) => d.id === binding.declIds[0])?.init : undefined;
+  return init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression";
+}
+
 function isSimpleReceiver(node: Node): boolean {
   if (node.type === "Identifier" || node.type === "ThisExpression") return true;
   return node.type === "MemberExpression" && !node.computed && isSimpleReceiver(node.object);
@@ -607,22 +655,31 @@ function ruleApplySpread(a: Analysis, level: number, applied: AppliedRewrite[]):
     const proven = isProvableArray(arrayArg, a);
     if (!proven && level > 0) continue;
 
-    const safe = isNullish(thisArg, a)
+    let safe = isNullish(thisArg, a)
       ? isThisInsensitiveTarget(target, a)
       : target.type === "MemberExpression" && isSimpleReceiver(target.object) && gen(target.object) === gen(thisArg);
+    // ES5 forwarding: `fn.apply(this, args)` -> `fn.call(this, ...args)` for a plain function and a provable array.
+    const asCall = !safe && proven && isPlainFunctionRef(target, a) && (thisArg.type === "ThisExpression" || thisArg.type === "Identifier" || thisArg.type === "Literal");
+    if (asCall) safe = true;
     if (!safe) continue;
 
     const before = gen(node);
-    replaceNode(node, call(target, [{ type: "SpreadElement", argument: arrayArg as ESTree.Expression }]));
-    applied.push({
-      rule: "apply-spread",
-      variant: proven ? "spread-proven" : "spread",
-      line: lineOf(node),
-      before,
-      after: gen(node),
-      speculative: !proven,
-      ...(proven ? {} : { note: SPREAD_NOTE }),
-    });
+    const spread: ESTree.SpreadElement = { type: "SpreadElement", argument: arrayArg as ESTree.Expression };
+    replaceNode(node, asCall ? call(member(target, "call"), [thisArg as ESTree.Expression, spread]) : call(target, [spread]));
+    applied.push(
+      track(
+        {
+          rule: "apply-spread",
+          variant: proven ? "spread-proven" : "spread",
+          line: lineOf(node),
+          before,
+          after: gen(node),
+          speculative: !proven,
+          ...(proven ? {} : { note: SPREAD_NOTE }),
+        },
+        node
+      )
+    );
   }
 }
 
@@ -688,14 +745,19 @@ function ruleFunctionArrow(a: Analysis, applied: AppliedRewrite[]): void {
       async: false,
     };
     replaceNode(fn, arrow);
-    applied.push({
-      rule: "function-arrow",
-      variant: "arrow",
-      line: lineOf(fn),
-      before,
-      after: gen(fn).split("=>")[0]?.trim() + " =>",
-      speculative: false,
-    });
+    applied.push(
+      track(
+        {
+          rule: "function-arrow",
+          variant: "arrow",
+          line: lineOf(fn),
+          before,
+          after: gen(fn).split("=>")[0]?.trim() + " =>",
+          speculative: false,
+        },
+        fn
+      )
+    );
   }
 }
 
@@ -730,15 +792,20 @@ function ruleBitOr0(a: Analysis, applied: AppliedRewrite[]): void {
     const before = gen(node);
     const truncated = call(member(ident("Math"), "trunc"), [operand]);
     replaceNode(node, { type: "LogicalExpression", operator: "||", left: truncated, right: { type: "Literal", value: 0, raw: "0" } });
-    applied.push({
-      rule: "bitor0-trunc",
-      variant: "trunc-or0",
-      line: lineOf(node),
-      before,
-      after: gen(node),
-      speculative: true,
-      note: TRUNC_NOTE,
-    });
+    applied.push(
+      track(
+        {
+          rule: "bitor0-trunc",
+          variant: "trunc-or0",
+          line: lineOf(node),
+          before,
+          after: gen(node),
+          speculative: true,
+          note: TRUNC_NOTE,
+        },
+        node
+      )
+    );
   }
 }
 
@@ -757,7 +824,7 @@ function ruleLooseEquality(a: Analysis, tighten: boolean, applied: AppliedRewrit
       if (!tighten) return;
       const op = n.operator === "==" ? "===" : "!==";
       n.operator = op;
-      applied.push({ rule: "loose-equality", variant: "strict-proven", line: lineOf(n), before: text, after: gen(n), speculative: false, note: `both operands are ${left}` });
+      applied.push(track({ rule: "loose-equality", variant: "strict-proven", line: lineOf(n), before: text, after: gen(n), speculative: false, note: `both operands are ${left}` }, n));
       return;
     }
     const nullish = (x: ESTree.Expression): boolean => (x.type === "Literal" && x.value === null) || isUnshadowedGlobal(x, a, "undefined");
@@ -787,6 +854,9 @@ interface ClassMember {
   readonly fn: ESTree.FunctionExpression;
 }
 interface ProtoPlan {
+  /** `Object.create(P.prototype)` inheritance: the parent's name, and the statement index that links it. */
+  readonly superName?: string;
+  readonly inheritanceIndex?: number;
   readonly members: ClassMember[];
   readonly removed: Set<Node>;
   readonly protoNodes: Set<Node>;
@@ -816,6 +886,8 @@ function planPrototypeClass(a: Analysis, decl: ESTree.FunctionDeclaration, index
   let literal: ESTree.ObjectExpression | undefined;
   let literalStatement: Node | undefined;
   let sawProtoMember = false;
+  let superName: string | undefined;
+  let inheritanceIndex: number | undefined;
   const add = (statement: ESTree.ExpressionStatement, isStatic: boolean, key: string, fn: ESTree.FunctionExpression): string | undefined => {
     const id = `${isStatic ? "s" : "p"}:${key}`;
     if (seen.has(id)) return `duplicate member ${key}`;
@@ -831,9 +903,19 @@ function planPrototypeClass(a: Analysis, decl: ESTree.FunctionDeclaration, index
     if (statement === undefined || statement.type !== "ExpressionStatement" || statement.expression.type !== "AssignmentExpression") continue;
     const { left, right, operator } = statement.expression;
     if (operator !== "=" || left.type !== "MemberExpression") continue;
+    // C.prototype = Object.create(P.prototype)
+    if (isProtoOf(left, name) && inheritanceParentOf(right) !== undefined) {
+      if (sawProtoMember || literal !== undefined || superName !== undefined) return "assigns C.prototype more than once";
+      superName = inheritanceParentOf(right);
+      inheritanceIndex = i;
+      protoNodes.add(left);
+      memberStatementIndexes.push(i);
+      removed.add(statement);
+      continue;
+    }
     // C.prototype = { ... }
     if (isProtoOf(left, name)) {
-      if (sawProtoMember || literal !== undefined) return "assigns C.prototype more than once";
+      if (sawProtoMember || literal !== undefined || superName !== undefined) return "assigns C.prototype more than once";
       if (right.type !== "ObjectExpression") return "assigns C.prototype to something other than an object literal";
       protoNodes.add(left);
       memberStatementIndexes.push(i);
@@ -875,7 +957,7 @@ function planPrototypeClass(a: Analysis, decl: ESTree.FunctionDeclaration, index
       }
     }
   }
-  if (!sawProtoMember && literal === undefined) return "no prototype members";
+  if (!sawProtoMember && literal === undefined && superName === undefined) return "no prototype members";
   if (literal !== undefined) {
     let hasConstructor = false;
     for (const property of literal.properties) {
@@ -896,7 +978,7 @@ function planPrototypeClass(a: Analysis, decl: ESTree.FunctionDeclaration, index
     removed.add(literalStatement as Node);
   }
   const lastIndex = memberStatementIndexes.length === 0 ? index : Math.max(...memberStatementIndexes);
-  return { members, removed, protoNodes, lastIndex, literal, literalStatement };
+  return { members, removed, protoNodes, lastIndex, literal, literalStatement, ...(superName !== undefined ? { superName } : {}), ...(inheritanceIndex !== undefined ? { inheritanceIndex } : {}) };
 }
 function referencesName(root: Node, name: string): boolean {
   let found = false;
@@ -984,16 +1066,36 @@ function methodNode(member: ClassMember): ESTree.MethodDefinition {
   for (const k of ["start", "end", "loc"]) if (k in source) carrier[k] = source[k];
   return node;
 }
-function convertToClass(a: Analysis, decl: ESTree.FunctionDeclaration, index: number, plan: ProtoPlan, applied: AppliedRewrite[]): void {
+interface ClassExtras {
+  /** The `if (!(this instanceof C)) return new C(...)` guard to drop (every use of C is `new`). */
+  readonly guard?: ESTree.IfStatement;
+  /** The `Parent.call(this, ...)` statement that becomes `super(...)`. */
+  readonly superCall?: SuperCall;
+}
+function convertToClass(a: Analysis, decl: ESTree.FunctionDeclaration, index: number, plan: ProtoPlan, applied: AppliedRewrite[], extras: ClassExtras = {}): void {
   const name = decl.id?.name ?? "";
   const before = gen(decl);
+  const { guard, superCall } = extras;
+  const ctorBody: ESTree.BlockStatement =
+    guard === undefined && superCall === undefined
+      ? decl.body
+      : {
+          ...decl.body,
+          body: decl.body.body
+            .filter((s) => s !== guard)
+            .map((s): ESTree.Statement =>
+              superCall !== undefined && s === superCall.statement
+                ? { type: "ExpressionStatement", expression: { type: "CallExpression", callee: { type: "Super" }, arguments: superCall.args, optional: false } }
+                : s
+            ),
+        };
   const ctor: ESTree.MethodDefinition = {
     type: "MethodDefinition",
     kind: "constructor",
     static: false,
     computed: false,
     key: ident("constructor"),
-    value: { type: "FunctionExpression", id: null, params: decl.params, body: decl.body, generator: false, async: false },
+    value: { type: "FunctionExpression", id: null, params: decl.params, body: ctorBody, generator: false, async: false },
   };
   const carrier = ctor as unknown as Record<string, unknown>;
   const original = decl as unknown as Record<string, unknown>;
@@ -1001,22 +1103,48 @@ function convertToClass(a: Analysis, decl: ESTree.FunctionDeclaration, index: nu
   const cls: ESTree.ClassDeclaration = {
     type: "ClassDeclaration",
     id: ident(name),
-    superClass: null,
+    superClass: plan.superName !== undefined ? ident(plan.superName) : null,
     body: { type: "ClassBody", body: [ctor, ...plan.members.map(methodNode)] },
   };
   const clsCarrier = cls as unknown as Record<string, unknown>;
   for (const k of ["start", "end", "loc"]) if (k in original) clsCarrier[k] = original[k];
   // Static members stay evaluated in their original order relative to each other because only functions move.
   a.program.body = a.program.body.flatMap((s, i) => (i === index ? [cls] : plan.removed.has(s) ? [] : [s]));
-  applied.push({
-    rule: "prototype-class",
-    variant: "class",
-    line: lineOf(decl),
-    before,
-    after: gen(cls),
-    speculative: true,
-    note: PROTOTYPE_CLASS_NOTE,
-  });
+  const notes = [PROTOTYPE_CLASS_NOTE];
+  if (plan.superName !== undefined) notes.push(`Object.create(${plan.superName}.prototype) + ${plan.superName}.call(this, ...) -> extends ${plan.superName} + super(...)`);
+  if (guard !== undefined) notes.push("the `this instanceof` guard was dropped because every use is `new`");
+  applied.push(
+    track(
+      {
+        rule: "prototype-class",
+        variant: "class",
+        line: lineOf(decl),
+        before,
+        after: gen(cls),
+        speculative: true,
+        note: notes.join("; "),
+      },
+      cls
+    )
+  );
+}
+/** `Child.prototype = Object.create(Parent.prototype)` is only a class `extends` when the parent is a plain declaration that is fully set up first. */
+function checkInheritance(a: Analysis, decl: ESTree.FunctionDeclaration, index: number, plan: ProtoPlan, guard: ESTree.IfStatement | undefined): SuperCall | string {
+  const parent = plan.superName ?? "";
+  if (parent === (decl.id?.name ?? "")) return "extends itself";
+  const binding = a.scopes.find((s) => s.kind === "program")?.bindings.get(parent);
+  const parentDecl = binding?.declNodes[0];
+  if (binding === undefined || binding.conflict || binding.declNodes.length !== 1 || parentDecl === undefined || (parentDecl.type !== "FunctionDeclaration" && parentDecl.type !== "ClassDeclaration") || !a.program.body.includes(parentDecl)) {
+    return `the parent ${parent} is not a plain function or class declaration of this module`;
+  }
+  if (parentDecl.type === "ClassDeclaration" && a.program.body.indexOf(parentDecl) > index) return `the parent class ${parent} is declared after the child`;
+  for (let i = (plan.inheritanceIndex ?? 0) + 1; i < a.program.body.length; i++) {
+    const s = a.program.body[i];
+    if (s?.type === "ExpressionStatement" && s.expression.type === "AssignmentExpression" && s.expression.left.type === "MemberExpression" && isProtoOf(s.expression.left, parent)) {
+      return `${parent}.prototype is reassigned after the child links to it`;
+    }
+  }
+  return superCallOf(decl, parent, guard);
 }
 /** Converts the first convertible constructor. Returns true when it rewrote something (the caller re-analyzes and repeats). */
 function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: FlaggedSite[]): boolean {
@@ -1047,6 +1175,18 @@ function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: Fla
       keep("the name is declared more than once");
       continue;
     }
+    // ES5 idioms: a `this instanceof C` guard that is provably dead, and `Object.create` inheritance with a `Parent.call(this, ...)`.
+    const guard = scopeGuardOf(decl);
+    const guardRange = guard !== undefined ? positionOf(guard) : undefined;
+    let superCall: SuperCall | undefined;
+    if (plan.superName !== undefined) {
+      const checked = checkInheritance(a, decl, index, plan, guard);
+      if (typeof checked === "string") {
+        keep(checked);
+        continue;
+      }
+      superCall = checked;
+    }
     // Every reference must be safe once `C` is a class (not callable, no .call/.apply/.bind, no stray .prototype).
     let reason: string | undefined;
     const ctorRange = positionOf(decl);
@@ -1054,6 +1194,8 @@ function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: Fla
       const parent = a.parents.get(ref.id) ?? null;
       if (ref.id === decl.id) continue;
       if (parent === null) continue;
+      const refPos = positionOf(ref.id);
+      if (guardRange !== undefined && refPos.start >= guardRange.start && refPos.end <= guardRange.end) continue;
       if (parent.type === "CallExpression" && parent.callee === ref.id) reason = "is called without `new`";
       else if (parent.type === "MemberExpression" && parent.object === ref.id && !parent.computed && parent.property.type === "Identifier") {
         if (["call", "apply", "bind"].includes(parent.property.name)) reason = `uses .${parent.property.name}()`;
@@ -1069,6 +1211,17 @@ function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: Fla
         positionOf(ref.id).end <= ctorRange.end
       ) {
         reason = "guards `this instanceof` inside the constructor";
+      }
+      if (reason === undefined && guard !== undefined) {
+        // With the guard gone a class throws when called without `new`: every use must be `new`, a member access or `instanceof`.
+        const plainUse =
+          (parent.type === "NewExpression" && parent.callee === ref.id) ||
+          (parent.type === "MemberExpression" && parent.object === ref.id) ||
+          (parent.type === "BinaryExpression" && parent.operator === "instanceof" && parent.right === ref.id) ||
+          (parent.type === "ClassDeclaration" && parent.superClass === ref.id) ||
+          // `C.prototype.constructor = C` is dropped with the class.
+          (parent.type === "AssignmentExpression" && parent.right === ref.id && parent.left.type === "MemberExpression" && memberKey(parent.left) === "constructor" && isProtoOf(parent.left.object, name));
+        if (!plainUse) reason = "is used as a value, so it may be called without `new`";
       }
       if (reason !== undefined) break;
     }
@@ -1101,7 +1254,7 @@ function rulePrototypeClass(a: Analysis, applied: AppliedRewrite[], flagged: Fla
       keep(`strict mode: ${hazard}`);
       continue;
     }
-    convertToClass(a, decl, index, plan, applied);
+    convertToClass(a, decl, index, plan, applied, { ...(guard !== undefined ? { guard } : {}), ...(superCall !== undefined ? { superCall } : {}) });
     return true;
   }
   return false;
@@ -1136,7 +1289,21 @@ export function modernize(source: string, options: ModernizeOptions = {}): Moder
   if (on("bitor0-trunc") && options.speculativeTruncation !== false) ruleBitOr0(analyze(ast), applied);
   ruleLooseEquality(analyze(ast), on("loose-equality"), applied, flagged);
 
-  return { code: print(ast, comments), parsed: true, levels, applied, flagged };
+  const lines = new Map<Node, number>();
+  const code = print(ast, comments, lines);
+  // Nodes astring prints without a generator call of their own (a `for (var i ...)` head) take their nearest printed ancestor's line.
+  const parentOf = new Map<Node, Node | null>();
+  walk(ast, (n, parent) => {
+    parentOf.set(n, parent);
+  });
+  const resultLines = applied.map((entry) => {
+    for (let node: Node | null | undefined = NODE_OF.get(entry); node !== undefined && node !== null; node = parentOf.get(node)) {
+      const line = lines.get(node);
+      if (line !== undefined) return line;
+    }
+    return 0;
+  });
+  return { code, parsed: true, levels, applied, flagged, resultLines };
 }
 
 /** Markdown bullets describing planned rewrites and flagged idioms, for the Kiro spec. */

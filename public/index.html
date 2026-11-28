@@ -464,6 +464,36 @@ body.tour-docked { padding-bottom: 64px; }
 .causal-node.bad { border-color: var(--crimson); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
 .causal-node.heal { border-color: var(--violet); color: #c4b5fd; background: rgba(139, 92, 246, 0.1); }
 .causal-arrow { align-self: center; color: var(--muted); font-size: 14px; }
+/* ---- V15: Shrink Trace waterfall + Rule Blame X-Ray ----------------------------- */
+.shrink-toggle { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--crimson); background: rgba(239, 68, 68, 0.1); color: #fecaca; font-size: 10px; font-weight: 800; letter-spacing: .3px; cursor: pointer; }
+.shrink-toggle:hover, .shrink-toggle[aria-expanded="true"] { background: rgba(239, 68, 68, 0.22); }
+.shrink-waterfall { padding: 8px 10px; border: 1px solid #3f1d24; border-radius: 10px; background: #0b0f1a; }
+.shrink-waterfall[hidden] { display: none; }
+.sw-head { font-size: 11px; font-weight: 700; color: #fecaca; margin-bottom: 6px; }
+.sw-row { display: grid; grid-template-columns: 2.6em 90px minmax(0, 1fr); gap: 4px 8px; align-items: center; padding: 3px 0; border-top: 1px dashed #1e293b; font-size: 11px; }
+.sw-row:first-of-type { border-top: 0; }
+.sw-step { color: var(--muted); font-weight: 700; }
+.sw-bar { height: 6px; border-radius: 3px; background: #1e293b; overflow: hidden; }
+.sw-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--crimson), var(--amber)); }
+.sw-row.minimal .sw-bar i { background: var(--emerald); }
+.sw-input { font: 11px ui-monospace, Consolas, monospace; color: #e2e8f0; word-break: break-all; }
+.sw-out { grid-column: 3; color: var(--muted); font: 10px ui-monospace, Consolas, monospace; word-break: break-all; }
+.sw-out b { color: #fca5a5; font-weight: 700; }
+.xray-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: #090d16; }
+.xray-bar[hidden] { display: none; }
+.xray-title { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--violet); font-weight: 800; }
+.xray-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+button.xray-chip { font-family: inherit; cursor: pointer; background: transparent; }
+button.xray-chip.xray-applied { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.6); background: rgba(16, 185, 129, 0.1); }
+button.xray-chip.xray-rolled-back { color: #fcd34d; border-color: var(--amber); background: rgba(245, 158, 11, 0.12); }
+button.xray-chip:hover { filter: brightness(1.25); }
+button.xray-chip:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+button.xray-chip[aria-pressed="true"] { box-shadow: 0 0 0 2px currentColor; font-weight: 800; }
+.xray-callout { flex-basis: 100%; font-size: 11px; line-height: 1.5; padding: 4px 8px; border-left: 3px solid var(--emerald); background: rgba(16, 185, 129, 0.08); color: #d1fae5; }
+.xray-callout.rolled-back { border-left-color: var(--amber); background: rgba(245, 158, 11, 0.1); color: #fde68a; }
+.xray-callout[hidden] { display: none; }
+.d-row.xray-applied { box-shadow: inset 3px 0 0 var(--emerald); background-image: linear-gradient(90deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.08)); }
+.d-row.xray-rolled-back { box-shadow: inset 3px 0 0 var(--amber); background-image: linear-gradient(90deg, rgba(245, 158, 11, 0.32), rgba(239, 68, 68, 0.1)); }
 /* ---- V13: Ed25519 signature badge + tamper simulator ------------------------- */
 .sig-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e293b; }
 .sig-badge { font-size: 11px; font-weight: 800; letter-spacing: .5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--emerald); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
@@ -656,8 +686,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1066 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">24 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1147 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -814,6 +844,14 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       <div class="deck-wide">
         <!-- Self-Healing Causal Strip: the real run pipeline in 4 nodes, shown once a resurrection succeeds -->
         <div id="causalStrip" class="causal-strip" role="list" aria-label="Self-Healing Causal Strip" hidden></div>
+        <!-- Shrink Trace waterfall: opened from the Counterexample Caught node, collapsed by default -->
+        <div id="shrinkWaterfall" class="shrink-waterfall" role="region" aria-label="Shrink Trace waterfall" hidden></div>
+        <!-- Rule Blame X-Ray: the AST rules of this run as chips; selecting one highlights its lines in the Legacy vs. Resurrected diff -->
+        <div id="xrayBar" class="xray-bar" hidden>
+          <span class="xray-title">Rule Blame X-Ray</span>
+          <span id="xrayChips" class="xray-chips" role="group" aria-label="AST rules: select one to highlight its lines in the Legacy vs. Resurrected diff"></span>
+          <div id="xrayCallout" class="xray-callout" role="status" aria-live="polite" hidden></div>
+        </div>
         <!-- Self-Healing Matrix: shown when a run needed more than one attempt or rolled an AST rule back -->
         <div id="healingMatrix" class="matrix" hidden>
           <div class="matrix-head"><span>Self-Healing Matrix</span><span id="matrixSummary" class="badge badge-pass"></span></div>
@@ -1400,6 +1438,22 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     schema: '{"text": "string"}',
     bug: false
   });
+  extraPresets.push({
+    value: "legacySubclassMeter",
+    label: "Preset 12: ES5 Inheritance (Object.create + arguments.apply -> class extends + rest/spread)",
+    name: "legacySubclassMeter",
+    code: "// ES5 inheritance meter: Object.create + Parent.call + scope-safe constructor, arguments and apply\nfunction Meter(unit) {\n  if (!(this instanceof Meter)) return new Meter(unit);\n  this.unit = unit;\n  this.readings = [];\n}\nMeter.prototype.record = function () {\n  var values = Array.prototype.slice.call(arguments);\n  for (var i = 0; i < values.length; i++) {\n    this.readings.push(values[i]);\n  }\n  return this;\n};\nMeter.prototype.total = function () {\n  var sum = 0;\n  for (var i = 0; i < this.readings.length; i++) {\n    sum += this.readings[i];\n  }\n  return sum;\n};\nfunction ScaledMeter(unit, factor) {\n  if (!(this instanceof ScaledMeter)) return new ScaledMeter(unit, factor);\n  Meter.call(this, unit);\n  this.factor = factor;\n}\nScaledMeter.prototype = Object.create(Meter.prototype);\nScaledMeter.prototype.constructor = ScaledMeter;\nScaledMeter.prototype.scaled = function () {\n  return this.total() * this.factor;\n};\nfunction peak() {\n  return Math.max.apply(null, Array.prototype.slice.call(arguments));\n}\nvar meter = new ScaledMeter(\"kWh\", factor);\nmeter.record(a, b, a + b);\npeak(meter.scaled(), meter.total(), a);",
+    schema: '{"factor": "integer", "a": "integer", "b": "integer"}',
+    bug: false
+  });
+  extraPresets.push({
+    value: "legacyPromiseChain",
+    label: "Preset 13: Promise Chain (.then().catch() -> async/await try/catch)",
+    name: "legacyPromiseChain",
+    code: "// Legacy Promise chain (ES2015 era): load a level, format it, and recover from a range error with .catch\nfunction loadLevel(raw) {\n  return new Promise(function (resolve, reject) {\n    var level = parseInt(raw, 10);\n    if (isNaN(level)) reject(new TypeError(\"Level must be a number: \" + raw));\n    else if (level < 0 || level > 100) reject(new RangeError(\"Level out of range: \" + level));\n    else setTimeout(function () { resolve(level); }, 0);\n  });\n}\n\nfunction legacyPromiseChain(text) {\n  if (typeof text !== \"string\") return Promise.reject(new TypeError(\"Level must be a string\"));\n  return loadLevel(text)\n    .then(function (level) {\n      return { level: level, band: level >= 50 ? \"high\" : \"low\" };\n    })\n    .catch(function (err) {\n      if (err instanceof RangeError) return { level: 100, band: \"clamped\" };\n      throw err;\n    });\n}\n\nmodule.exports = legacyPromiseChain;",
+    schema: '{"text": "string"}',
+    bug: false
+  });
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -1640,12 +1694,23 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     if (!o) return "n/a";
     return o.ok ? show(o.output) : "threw " + (o.errorMessage || o.errorCode || "error");
   }
-  function chip(kind, text) {
-    const el = document.createElement("span");
-    el.className = "chip-rule " + kind;
+  /** A rule chip; when the Rule Blame X-Ray knows the rule it is a keyboard-accessible button that highlights its diff lines. */
+  function chip(kind, text, rule) {
+    const xray = window.LazarusXray;
+    const live = !!(rule && xray && xray.has(rule));
+    const el = document.createElement(live ? "button" : "span");
+    el.className = "chip-rule " + kind + (live ? " xray-chip" : "");
     el.textContent = text;
+    if (live) {
+      el.type = "button";
+      el.dataset.rule = rule;
+      el.title = "Highlight where " + rule + " acted in the Legacy vs. Resurrected diff";
+      el.addEventListener("click", () => xray.toggle(rule));
+      xray.register(el, rule);
+    }
     return el;
   }
+  const ruleOf = (text) => { const m = /^[a-z0-9-]+/.exec(String(text || "")); return m ? m[0] : ""; };
   function renderMatrix(r) {
     const events = Array.isArray(r.events) ? r.events : [];
     const synthesized = events.filter((e) => e.type === "code_synthesized" && e.payload);
@@ -1673,12 +1738,12 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     const chips = $("matrixRules");
     chips.textContent = "";
     if (refine) {
-      chips.append(chip("blamed", "AST rule blamed: " + refine.blamed), chip("repaired", "rolled back " + refine.rolledBack));
+      chips.append(chip("blamed", "AST rule blamed: " + refine.blamed, refine.blamed), chip("repaired", "rolled back " + refine.rolledBack, ruleOf(refine.rolledBack)));
     } else {
       const naive = /Math\.floor/.test(draft) ? "Math.floor truncation (naive draft)" : "first draft";
       chips.append(chip("blamed", "Blamed: " + naive), chip("repaired", "Repaired: re-derived by the AST rules"));
     }
-    activeRules(r.modernCode).forEach((p) => chips.append(chip("active", p[0] + " \u00b7 " + p[1])));
+    activeRules(r.modernCode).forEach((p) => chips.append(chip("active", p[0] + " \u00b7 " + p[1], p[0])));
     matrix.hidden = false;
   }
 
@@ -1706,18 +1771,55 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     var rule = refine ? refine[2].trim() : rolled.length ? rolled.join(", ") : "draft rewrite";
     return [
       { kind: "bad", step: "1", label: "Draft 1" },
-      { kind: "bad", step: "2", label: "Counterexample Caught (" + input + ")" },
+      { kind: "bad", step: "2", label: "Counterexample Caught (" + input + ")", shrink: cx && cx.shrinkTrace && cx.shrinkTrace.steps && cx.shrinkTrace.steps.length ? cx.shrinkTrace : null },
       { kind: "heal", step: "3", label: "Rule Rolled Back (" + rule + ")" },
       { kind: "ok", step: "4", label: "Draft " + r.attempts + " Proven (Object.is 100%)" }
     ];
   }
   /* lz-causal:end */
+  /* lz-shrink:start */
+  /** Size of the failing input in characters: the value text, without the `name = ` prefix or a string's quotes. */
+  function lzShrinkSize(step) {
+    var text = String(step && step.input != null ? step.input : "").replace(/^[^=]+= /, "");
+    return text.length >= 2 && text.charAt(0) === "\"" && text.charAt(text.length - 1) === "\"" ? text.length - 2 : text.length;
+  }
+  /** `40-char input \u2192 \u2026 \u2192 minimal killer (3 chars)` for the waterfall header. */
+  function lzShrinkSummary(trace) {
+    var first = lzShrinkSize(trace.initialFailure), last = lzShrinkSize(trace.finalMinimal);
+    return first + "-char input \u2192 " + (trace.steps.length > 2 ? "\u2026 \u2192 " : "") + "minimal killer (" + last + " char" + (last === 1 ? "" : "s") + ") \u00b7 " + trace.totalShrinks + " shrink" + (trace.totalShrinks === 1 ? "" : "s");
+  }
+  /** Bar width (percent) of each step, relative to the largest input in the trace. */
+  function lzShrinkWidths(trace) {
+    var sizes = trace.steps.map(lzShrinkSize), top = Math.max.apply(null, sizes.concat([1]));
+    return sizes.map(function (s) { return Math.max(6, Math.round(100 * s / top)); });
+  }
+  /* lz-shrink:end */
+  function renderShrink(trace) {
+    const wf = $("shrinkWaterfall");
+    wf.textContent = "";
+    const head = document.createElement("div"); head.className = "sw-head"; head.textContent = "Shrink Trace \u00b7 " + lzShrinkSummary(trace);
+    wf.append(head);
+    const widths = lzShrinkWidths(trace);
+    trace.steps.forEach((s, i) => {
+      const row = document.createElement("div"); row.className = "sw-row" + (i === trace.steps.length - 1 ? " minimal" : "");
+      const no = document.createElement("span"); no.className = "sw-step"; no.textContent = "#" + s.step;
+      const bar = document.createElement("span"); bar.className = "sw-bar"; const fill = document.createElement("i"); fill.style.width = widths[i] + "%"; bar.append(fill);
+      const input = document.createElement("code"); input.className = "sw-input"; input.textContent = s.input;
+      const out = document.createElement("span"); out.className = "sw-out";
+      const lg = document.createElement("b"); lg.textContent = "legacy " + s.legacyOutput;
+      out.append(lg, " \u00b7 draft " + s.modernOutput);
+      row.append(no, bar, input, out);
+      wf.append(row);
+    });
+  }
   function renderCausalStrip(r) {
     const strip = $("causalStrip");
     if (!strip) return;
     strip.textContent = "";
     const nodes = lzCausalNodes(r, show);
     strip.hidden = nodes.length === 0;
+    const wf = $("shrinkWaterfall");
+    if (wf) { wf.hidden = true; wf.textContent = ""; }
     nodes.forEach((n, idx) => {
       if (idx > 0) { const a = document.createElement("span"); a.className = "causal-arrow"; a.textContent = "\u2192"; a.setAttribute("aria-hidden", "true"); strip.append(a); }
       const el = document.createElement("div");
@@ -1725,6 +1827,20 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       el.setAttribute("role", "listitem");
       const s = document.createElement("i"); s.textContent = "Step " + n.step;
       el.append(s, n.label);
+      if (n.shrink && wf) {
+        // The real fast-check shrinking journey, collapsed until asked for.
+        const toggle = document.createElement("button");
+        toggle.type = "button"; toggle.id = "shrinkToggle"; toggle.className = "shrink-toggle";
+        toggle.textContent = "Shrink Trace (" + n.shrink.steps.length + " step" + (n.shrink.steps.length === 1 ? "" : "s") + ")";
+        toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", "shrinkWaterfall");
+        toggle.addEventListener("click", () => {
+          const open = wf.hidden;
+          wf.hidden = !open;
+          toggle.setAttribute("aria-expanded", open ? "true" : "false");
+          if (open) renderShrink(n.shrink);
+        });
+        el.append(toggle);
+      }
       strip.append(el);
     });
   }
@@ -1921,6 +2037,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       $("probeNaiveSide").hidden = true;
       const strip = $("causalStrip");
       if (strip) { strip.hidden = true; strip.textContent = ""; }
+      const waterfall = $("shrinkWaterfall");
+      if (waterfall) { waterfall.hidden = true; waterfall.textContent = ""; }
       setStatus("Resurrecting...");
     },
     onResult(r) {
@@ -2858,7 +2976,7 @@ function lzDecodeSpecimen(hash) {
   /* lz-diff:end */
 
   /** Renders a diff with line numbers; long unchanged runs collapse to 2 lines of context on each side. */
-  function renderDiff(container, oldText, newText, statsEl) {
+  function renderDiff(container, oldText, newText, statsEl, expandAll) {
     const lines = lzDiffLines(oldText, newText);
     container.textContent = "";
     const keep = new Array(lines.length).fill(false);
@@ -2866,7 +2984,8 @@ function lzDecodeSpecimen(hash) {
       if (l.kind === "same") return;
       for (let x = Math.max(0, idx - 2); x <= Math.min(lines.length - 1, idx + 2); x++) keep[x] = true;
     });
-    const anyChange = lines.some((l) => l.kind !== "same");
+    // `expandAll` (the Rule Blame X-Ray) keeps unchanged lines visible so a rolled-back rule's untouched lines can be highlighted.
+    const anyChange = lines.some((l) => l.kind !== "same") && !expandAll;
     let hidden = 0;
     const flushGap = () => {
       if (hidden === 0) return;
@@ -2960,6 +3079,101 @@ function lzDecodeSpecimen(hash) {
   });
   $("runBtn").addEventListener("click", () => { tscBadge.hidden = true; });
 
+  // ---- Rule Blame X-Ray: AST rule chips that highlight their lines in the Legacy vs. Resurrected diff ----
+  /* lz-xray:start */
+  /** Blank lines trimmed off the front of the legacy text (the diff compares trimmed text). */
+  function lzXrayLeading(text) { var lead = /^\s*/.exec(String(text))[0]; return (lead.match(/\n/g) || []).length; }
+  /** Lines to highlight for one `ruleBlame` entry and its one-line callout. */
+  function lzXrayMarks(entry, leading) {
+    var shift = leading || 0;
+    var legacy = (entry.legacyLines || []).map(function (n) { return n - shift; }).filter(function (n) { return n > 0; });
+    var modern = (entry.resurrectedLines || []).filter(function (n) { return n > 0; });
+    var kind = entry.status === "rolled-back" ? "rolled-back" : "applied";
+    var where = [];
+    if (legacy.length) where.push("legacy line" + (legacy.length === 1 ? " " : "s ") + legacy.join(", "));
+    if (modern.length) where.push("resurrected line" + (modern.length === 1 ? " " : "s ") + modern.join(", "));
+    return { kind: kind, legacy: legacy, modern: modern, callout: entry.rule + " (" + (kind === "applied" ? "applied" : "rolled back") + "): " + entry.reason + (where.length ? " [" + where.join(" \u2192 ") + "]" : "") };
+  }
+  /** Chips, highlight and callout. `env` carries the DOM pieces, so the logic runs unchanged in tests. */
+  function lzMakeXray(env) {
+    var blame = [], active = null, registry = [], openedByUs = false;
+    function entryOf(rule) { return blame.filter(function (b) { return b.rule === rule; })[0]; }
+    function paint() { registry.forEach(function (c) { c.el.setAttribute("aria-pressed", c.rule === active ? "true" : "false"); }); }
+    function draw(expand) { env.renderDiff(env.diffEl, env.legacyText().trim(), env.modernText().trim(), env.statsEl, expand); }
+    function highlight(marks) {
+      Array.prototype.slice.call(env.diffEl.children).forEach(function (row) {
+        var cells = row.children;
+        if (!cells || cells.length < 2) return;
+        var name = String(row.className);
+        var oldNo = Number(cells[0].textContent), newNo = Number(cells[1].textContent);
+        var hit = (oldNo > 0 && marks.legacy.indexOf(oldNo) >= 0 && name.indexOf("d-add") < 0) || (newNo > 0 && marks.modern.indexOf(newNo) >= 0 && name.indexOf("d-del") < 0);
+        var rest = name.split(/\s+/).filter(function (c) { return c && c.indexOf("xray-") !== 0; });
+        if (hit) rest.push("xray-" + marks.kind);
+        row.className = rest.join(" ");
+      });
+    }
+    function unmark() { highlight({ kind: "applied", legacy: [], modern: [] }); }
+    function clear() {
+      if (active === null) return;
+      active = null;
+      unmark();
+      env.callout.hidden = true;
+      env.callout.textContent = "";
+      if (openedByUs) { env.diffBlock.hidden = true; env.toggle.setAttribute("aria-pressed", "false"); openedByUs = false; }
+      else draw(false);
+      paint();
+    }
+    function activate(rule) {
+      var entry = entryOf(rule);
+      if (!entry) return;
+      if (env.diffBlock.hidden) { env.diffBlock.hidden = false; env.toggle.setAttribute("aria-pressed", "true"); openedByUs = true; }
+      active = rule;
+      draw(true);
+      var marks = lzXrayMarks(entry, lzXrayLeading(env.legacyText()));
+      highlight(marks);
+      env.callout.hidden = false;
+      env.callout.className = "xray-callout " + marks.kind;
+      env.callout.textContent = marks.callout;
+      paint();
+      var first = Array.prototype.slice.call(env.diffEl.children).filter(function (r) { return String(r.className).indexOf("xray-") >= 0; })[0];
+      if (first && typeof first.scrollIntoView === "function") first.scrollIntoView({ block: "nearest" });
+    }
+    function register(el, rule) { registry.push({ el: el, rule: rule }); el.setAttribute("aria-pressed", rule === active ? "true" : "false"); }
+    function setBlame(list) {
+      if (active !== null) unmark();
+      if (openedByUs) { env.diffBlock.hidden = true; env.toggle.setAttribute("aria-pressed", "false"); openedByUs = false; }
+      blame = Array.isArray(list) ? list.filter(function (b) { return b && typeof b.rule === "string"; }) : [];
+      active = null;
+      registry = [];
+      env.chips.textContent = "";
+      env.callout.hidden = true;
+      env.callout.textContent = "";
+      blame.forEach(function (b) {
+        var el = env.createEl("button");
+        el.type = "button";
+        el.className = "chip-rule xray-chip xray-" + b.status;
+        el.dataset.rule = b.rule;
+        el.textContent = b.rule + (b.status === "rolled-back" ? " \u00b7 rolled back" : "");
+        el.title = b.reason;
+        el.addEventListener("click", function () { toggleRule(b.rule); });
+        register(el, b.rule);
+        env.chips.append(el);
+      });
+      env.bar.hidden = blame.length === 0;
+    }
+    function toggleRule(rule) { if (active === rule) clear(); else activate(rule); }
+    return { setBlame: setBlame, toggle: toggleRule, clear: clear, register: register, has: function (rule) { return !!entryOf(rule); }, active: function () { return active; } };
+  }
+  /* lz-xray:end */
+  const xray = lzMakeXray({
+    bar: $("xrayBar"), chips: $("xrayChips"), callout: $("xrayCallout"),
+    diffBlock: legacyBlock, diffEl: $("legacyDiff"), statsEl: $("legacyDiffStats"), toggle: toggle,
+    legacyText: () => legacyCode.value, modernText: () => modernOut.textContent || "",
+    renderDiff: renderDiff, createEl: (tag) => document.createElement(tag)
+  });
+  window.LazarusXray = xray;
+  document.addEventListener("lazarus:run-start", () => xray.setBlame([]));
+  document.addEventListener("lazarus:result", (e) => { const r = e.detail || {}; xray.setBlame(r.success ? r.ruleBlame : []); });
   // ---- Guided Judge Tour: real live API calls only ----
   const tourBtn = $("tourBtn"), tourCancel = $("tourCancel"), hud = $("tourHud");
   const stepEl = $("tourStep"), textEl = $("tourText"), bar = $("tourBar"), actions = $("tourActions");
@@ -3742,8 +3956,10 @@ function lzHealthGuard(deps) {
     const a = r.asyncCallback;
     note.textContent = "";
     note.append(
-      el("b", "Error-first callback \u2192 async/await. "),
-      document.createTextNode(a.entry + "(" + a.params.concat([a.callback]).join(", ") + ") became await " + a.entry + "(" + a.params.join(", ") + ") via " + a.strategy + ". "),
+      el("b", a.kind === "promise-chain" ? "Promise chain \u2192 async/await. " : "Error-first callback \u2192 async/await. "),
+      document.createTextNode(a.kind === "promise-chain"
+        ? a.entry + "(" + a.params.join(", ") + ") returned a .then()/.catch() chain; it became await " + a.entry + "(" + a.params.join(", ") + ") via " + a.strategy + ". "
+        : a.entry + "(" + a.params.concat([a.callback]).join(", ") + ") became await " + a.entry + "(" + a.params.join(", ") + ") via " + a.strategy + ". "),
       document.createTextNode(r.success
         ? "Both settlements proven: " + a.outcomes.resolved + " resolved and " + a.outcomes.rejected + " rejected inputs matched exactly (Object.is values, error name + message)."
         : "Parity not proven: " + ((r.fuzzReport && r.fuzzReport.counterexample && r.fuzzReport.counterexample.reason) || "see the telemetry log") + ".")
