@@ -1,4 +1,4 @@
-// Runtime performance parity: a small, bounded, deterministic micro-benchmark of the legacy specimen against its
+﻿// Runtime performance parity: a small, bounded, deterministic micro-benchmark of the legacy specimen against its
 // resurrected code, run inside the isolated sandbox (never on the host).
 //
 // The sandbox has no high-resolution clock, so each side times calibrated batches with Date.now() (a batch is made long
@@ -140,7 +140,7 @@ export const BENCH_PROBE = `(function (cfg) {
     if (Date.now() - start > cfg.budgetMs / 2) break;
   }
   var samples = [], calls = 0;
-  while (Date.now() - start < cfg.budgetMs && samples.length < cfg.maxSamples) {
+  while (((samples.length < 3 && Date.now() - start < 450) || Date.now() - start < cfg.budgetMs) && samples.length < cfg.maxSamples) {
     var e = batch(k);
     calls += k;
     samples.push(Math.max(e, 0.5) * 1000 / k);
