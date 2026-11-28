@@ -1,0 +1,11 @@
+# Tasks: V19 Graveyard and Graph Studio
+- [x] 1. Spec: requirements, design and tasks for `v19-graveyard-and-graph-studio` (the 30th spec).
+- [x] 2. `src/crew/graveyard-classics.ts`: the five classics, `GET /api/graveyard-classics`.
+- [x] 3. npm importer `source` (`live`, `snapshot`, `auto`) with clean CDN fallback; license in the certificate provenance.
+- [x] 4. Strict-TypeScript boundary fix for wrapped parameters, so the five classics compile with 0 errors.
+- [x] 5. Tab 1: the Famous npm Classics chip strip with provenance badge and one-click resurrection.
+- [x] 6. `src/crew/api-contract.ts` and the additive `apiContract` of the graph resurrection.
+- [x] 7. Tab 2: clickable graph nodes, the Module Inspector and the Public API Contract badge.
+- [x] 8. Tests: graveyard-classics, api-contract, studio-ui, kiro-dna, kiro-power, async-callback; 30 Kiro Specs; Tab 3 hashes.
+- [x] 9. E2E: a Famous npm Classic chip, the Tab 2 inspector and the contract badge.
+- [x] 10. Verify: `npx tsc --noEmit`, `npx vitest run`, `npm run test:e2e`, badges, temp-file cleanup.

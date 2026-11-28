@@ -8,6 +8,7 @@
 //    The final levels feed the CommonJS -> ESM conversion, which rewrites relative require() into imports.
 // 3. Whole-graph parity: the original CommonJS graph and the stitched ESM graph are both loaded in the sandbox
 //    (the ESM graph through a 1:1 import/export linker) and every export of the entry module is fuzzed end to end.
+import { guardApiContract, type ApiContract } from "./api-contract.js";
 import { DifferentialFuzzer } from "../fuzzer/differential.js";
 import type { CounterexampleReport, FuzzReport, InputSchema, ParamKind } from "../fuzzer/types.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
@@ -386,6 +387,8 @@ export interface GraphResurrectionResult {
   readonly parity: GraphParity | undefined;
   /** Strict `tsc` check of the typed project (only after whole-graph parity is proven). */
   readonly typecheck?: GraphTypecheck;
+  /** Public API Contract Guard (additive): the exports of every legacy module against the resurrected ones. Absent when a module could not be described. */
+  readonly apiContract?: ApiContract;
   readonly error?: string;
   readonly durationMs: number;
 }
@@ -742,7 +745,11 @@ async function resurrectWith(
     kind: "log",
     message: `tsc --strict on the typed project: ${plural(typed.typecheck.errorCount, "error")} across ${plural(typed.typecheck.filesChecked, "file")}${typed.typecheck.adjustments.length > 0 ? `, ${plural(typed.typecheck.adjustments.length, "member")} declared any at the migration boundary` : ""}`,
   });
-  return { success: true, name: options.name, graph, files: typed.files, parity, typecheck: typed.typecheck, durationMs: Date.now() - started };
+  const apiContract = await guardApiContract({ legacyFiles, modernGraph, modules: typed.files.map((f) => ({ path: f.path, esmPath: f.esmPath })), executors });
+  if (apiContract !== undefined) {
+    emit({ kind: "log", message: `Public API Contract: ${plural(apiContract.breakingChanges, "breaking change")} (${apiContract.preservedExports}/${apiContract.totalExports} exports preserved across ${plural(apiContract.modules.length, "module")})` });
+  }
+  return { success: true, name: options.name, graph, files: typed.files, parity, typecheck: typed.typecheck, ...(apiContract !== undefined ? { apiContract } : {}), durationMs: Date.now() - started };
 }
 
 /** `lib/money.js` -> `lib/money.ts`. */

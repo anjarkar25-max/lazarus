@@ -981,10 +981,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 29-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 30-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1324,7 +1324,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(29);
+    expect(body["specs"]).toBe(30);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1357,8 +1357,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 29 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+  it("shows 30 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
   });
 });
 
@@ -1596,8 +1596,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 29 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    it("shows 30 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     });
   });
 });
@@ -1785,14 +1785,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 29 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 30 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2105,7 +2105,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 29 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 30 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2117,7 +2117,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
@@ -2444,7 +2444,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
-    it("keeps Tab 3 Red-Team byte-identical, shows 29 Kiro Specs and adds no dependency", () => {
+    it("keeps Tab 3 Red-Team byte-identical, shows 30 Kiro Specs and adds no dependency", () => {
       const between = (a: string, b: string): string => {
         const s = html.indexOf(a);
         const e = html.indexOf(b, s + a.length);
@@ -2456,7 +2456,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
       const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
     });
@@ -2730,7 +2730,7 @@ describe("V17 UX polish: one drawer at a time, Escape, focus return, focus trap,
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
@@ -2976,14 +2976,14 @@ describe("V18 5-Pill Proof Strip, PR Preview drawer and Kiro Ecosystem Map (ship
       expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
       expect(html.indexOf("/* ---- V18:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
     });
-    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 29 Kiro Specs", () => {
+    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 30 Kiro Specs", () => {
       const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
       const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
       expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
       expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
@@ -3105,14 +3105,14 @@ describe("V19 Edge Gauntlet, Seed Replay and the legacyUnsafeMerge preset", () =
     expect(v19()).toContain('fetch("/api/edge-gauntlet"');
   });
 
-  it("keeps the three Tab 3 SHA-256 invariants, unique ids and 29 Kiro Specs", () => {
+  it("keeps the three Tab 3 SHA-256 invariants, unique ids and 30 Kiro Specs", () => {
     const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
     const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
     expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     for (const id of ["gauntletBtn", "gauntletResults", "seedBar", "seedChip", "seedValue", "reseedBtn", "seedNote"]) expect(ids.filter((x) => x === id), id).toHaveLength(1);
@@ -3337,6 +3337,255 @@ describe("V19 Edge Gauntlet, Seed Replay and the legacyUnsafeMerge preset", () =
     it("lists a Proto-Pollution Blocked row in the purity details", () => {
       expect(html).toContain('["protoPollutionBlocked", p.protoPollutionBlocked ? "Proto-Pollution Blocked: JSON.parse(');
       expect(html).toContain("Proto-Pollution NOT blocked: the exploit payload polluted Object.prototype");
+    });
+  });
+});
+// ---------------------------------------------------------------------------
+// V19 Graveyard and Graph Studio: Famous npm Classics, the Tab 2 Module Inspector and the Public API Contract badge
+// ---------------------------------------------------------------------------
+describe("V19 Famous npm Classics, Module Inspector and Public API Contract badge", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const SPECS = ["left-pad@1.3.0", "is-number@3.0.0", "ms@0.7.1", "decamelize@1.2.0", "pad-left@2.1.0"];
+  const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+
+  describe("markup", () => {
+    it("ships the Famous npm Classics chip strip inside the npm Graveyard panel, next to the older chips, with no new tab", () => {
+      const panel = html.slice(html.indexOf('<div class="graveyard" id="npmGraveyard">'), html.indexOf('<input id="modName"'));
+      expect(panel).toContain('<div class="gy-classics" id="classicChips" role="group"');
+      expect(panel).toContain('<span class="gy-classics-title">Famous npm Classics</span>');
+      const chips = [...panel.matchAll(/<button type="button" class="gy-chip gy-classic" data-spec="([^"]+)"[^>]*>([^<]+)<\/button>/g)].map((m) => [m[1], m[2]]);
+      expect(chips).toEqual([["left-pad@1.3.0", "left-pad"], ["is-number@3.0.0", "is-number"], ["ms@0.7.1", "ms"], ["decamelize@1.2.0", "decamelize"], ["pad-left@2.1.0", "pad-left"]]);
+      // The four chips of the older strip are still there.
+      for (const spec of ["left-pad@1.3.0", "is-number@3.0.0", "decamelize@1.2.0", "escape-string-regexp@1.0.5"]) expect(panel).toContain(`<button type="button" class="gy-chip" data-spec="${spec}">${spec}</button>`);
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    });
+
+    it("ships the Tab 2 contract badge, the Module Inspector region and an accessible graph", () => {
+      const graph = html.slice(html.indexOf('<div class="studio-pane" id="pane-graph"'), html.indexOf('<div class="studio-pane" id="pane-redteam"'));
+      expect(graph).toContain('<span class="cycle-pill" id="graphCyclePill" role="status" hidden></span>\n          <span class="api-pill" id="graphApiPill" role="status" hidden></span>');
+      expect(graph).toContain('<section class="module-inspector" id="moduleInspector" role="region" aria-label="Module Inspector" aria-live="polite" hidden>');
+      for (const id of ["miFile", "miRoles", "miTsc", "miApi", "miRightTitle", "miDiff"]) expect(graph, id).toContain(`id="${id}"`);
+      expect(graph.indexOf('id="graphVerdict"')).toBeLessThan(graph.indexOf('id="moduleInspector"'));
+      expect(graph.indexOf('id="moduleInspector"')).toBeLessThan(graph.indexOf('id="graphLog"'));
+      expect(graph).toContain('<svg id="graphSvg" role="group" aria-label="Dependency graph: select a module to inspect it"></svg>');
+    });
+
+    it("makes every graph node a keyboard- and click-operable button with a selection ring", () => {
+      expect(html).toContain('role: "button", "aria-pressed": f === selected ? "true" : "false"');
+      expect(html).toContain('tabindex: "0"');
+      expect(html).toContain('g.addEventListener("click", () => selectNode(f));');
+      expect(html).toContain('if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); selectNode(f); }');
+      expect(html).toContain('n.g.setAttribute("class", nodeClass(file));');
+      const css = html.slice(html.indexOf("/* ---- V20:"), html.indexOf("/* ---- V19:"));
+      for (const s of [".gy-classics", ".gy-classic", ".gy-origin.snap", ".api-pill", ".api-pill.bad", "#graphSvg .node.selected rect", ".module-inspector", ".mi-role.cycle-member", ".mi-tsc.ok", ".mi-cell.del", ".mi-cell.add"]) expect(css, s).toContain(s);
+      expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
+      expect(html.indexOf("/* ---- V20:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
+    });
+
+    it("adds no script block: the stale-proof script is still the last one, and Tab 3 stays byte-identical", () => {
+      expect(html.lastIndexOf("<script>")).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+      const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
+      const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+      const tab3 = html.slice(html.indexOf('<div class="studio-pane" id="pane-redteam"'), html.indexOf('<div class="dna-scrim"'));
+      expect(tab3).not.toMatch(/classicChips|moduleInspector|graphApiPill|graveyard|apiContract/i);
+      const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+      expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+      for (const id of ["classicChips", "graphApiPill", "moduleInspector", "miFile", "miRoles", "miTsc", "miApi", "miRightTitle", "miDiff"]) expect(ids.filter((x) => x === id), id).toHaveLength(1);
+      expect(html).toMatch(/id="badgeTests">\d+ Verified Tests</);
+    });
+  });
+
+  describe("the Module Inspector's pure helpers (shipped lz-inspect region)", () => {
+    const api = runInlineScript(`${regionOf("lz-cycle")}\n${regionOf("lz-inspect")}\n({ roles: lzRolesOf, align: lzAlignRows, pill: lzApiPillText, label: lzExportLabel, errors: lzFileErrors })`, {}) as {
+      roles: (file: string, edges: Array<{ from: string; to: string }>, entry: string) => string[];
+      align: (lines: Array<{ kind: string; text: string }>, limit: number) => Array<{ left: string | null; right: string | null; leftKind: string; rightKind: string }>;
+      pill: (c: { breakingChanges: number; totalExports: number; preservedExports: number }) => string;
+      label: (d: { name: string; form: string; kind: string; arity: number | null }) => string;
+      errors: (tc: unknown, file: { tsPath: string; esmPath: string }) => number | null;
+    };
+    const edge = (from: string, to: string): { from: string; to: string } => ({ from, to });
+
+    it("names the cycle role first, then Entry, Leaf or Intermediate (circular ledger)", () => {
+      const edges = [edge("index.cjs", "tax.cjs"), edge("index.cjs", "discount.cjs"), edge("tax.cjs", "discount.cjs"), edge("discount.cjs", "tax.cjs")];
+      expect(api.roles("tax.cjs", edges, "index.cjs")).toEqual(["Cycle Member"]);
+      expect(api.roles("discount.cjs", edges, "index.cjs")).toEqual(["Cycle Member"]);
+      expect(api.roles("index.cjs", edges, "index.cjs")).toEqual(["Entry"]);
+    });
+    it("names Leaf for a module without dependencies, Intermediate for a middle one, and both for a lone entry", () => {
+      const edges = [edge("invoice.cjs", "tax.cjs"), edge("invoice.cjs", "money.cjs"), edge("tax.cjs", "money.cjs")];
+      expect(api.roles("money.cjs", edges, "invoice.cjs")).toEqual(["Leaf"]);
+      expect(api.roles("tax.cjs", edges, "invoice.cjs")).toEqual(["Intermediate"]);
+      expect(api.roles("invoice.cjs", edges, "invoice.cjs")).toEqual(["Entry"]);
+      expect(api.roles("only.cjs", [], "only.cjs")).toEqual(["Entry", "Leaf"]);
+      expect(api.roles("self.cjs", [edge("self.cjs", "self.cjs")], "x.cjs")).toEqual(["Cycle Member"]);
+    });
+    it("aligns a diff into side-by-side rows: unchanged on both sides, a changed block as removed left and added right", () => {
+      const lines = [
+        { kind: "same", text: "a" },
+        { kind: "del", text: "var x = 1;" },
+        { kind: "del", text: "var y = 2;" },
+        { kind: "add", text: "const x = 1;" },
+        { kind: "same", text: "b" },
+        { kind: "add", text: "export default x;" },
+      ];
+      expect(api.align(lines, 100)).toEqual([
+        { left: "a", right: "a", leftKind: "same", rightKind: "same" },
+        { left: "var x = 1;", right: "const x = 1;", leftKind: "del", rightKind: "add" },
+        { left: "var y = 2;", right: null, leftKind: "del", rightKind: "blank" },
+        { left: "b", right: "b", leftKind: "same", rightKind: "same" },
+        { left: null, right: "export default x;", leftKind: "blank", rightKind: "add" },
+      ]);
+      expect(api.align(lines, 2)).toHaveLength(3);
+      expect(api.align([], 10)).toEqual([]);
+    });
+    it("words the contract badge as the spec says, singular and plural", () => {
+      expect(api.pill({ breakingChanges: 0, totalExports: 6, preservedExports: 6 })).toBe("Public API Contract: 0 Breaking Changes (6/6 Exports Preserved)");
+      expect(api.pill({ breakingChanges: 1, totalExports: 6, preservedExports: 5 })).toBe("Public API Contract: 1 Breaking Change (5/6 Exports Preserved)");
+      expect(api.pill({ breakingChanges: 2, totalExports: 3, preservedExports: 1 })).toBe("Public API Contract: 2 Breaking Changes (1/3 Exports Preserved)");
+    });
+    it("labels exports by name and arity, defaults, values and classes", () => {
+      expect(api.label({ name: "taxOf", form: "named", kind: "function", arity: 1 })).toBe("taxOf(1)");
+      expect(api.label({ name: "default", form: "default", kind: "function", arity: 2 })).toBe("default(2)");
+      expect(api.label({ name: "RATE", form: "named", kind: "value", arity: null })).toBe("RATE");
+      expect(api.label({ name: "Counter", form: "named", kind: "class", arity: 1 })).toBe("Counter(1) class");
+      expect(api.label({ name: "f", form: "named", kind: "function", arity: null })).toBe("f(0)");
+    });
+    it("counts the tsc diagnostics of one file, and is null without a typecheck", () => {
+      const tc = { diagnostics: [{ file: "tax.ts" }, { file: "tax.ts" }, { file: "money.ts" }] };
+      expect(api.errors(tc, { tsPath: "tax.ts", esmPath: "tax.js" })).toBe(2);
+      expect(api.errors(tc, { tsPath: "slug.ts", esmPath: "slug.js" })).toBe(0);
+      expect(api.errors({ diagnostics: [] }, { tsPath: "a.ts", esmPath: "a.js" })).toBe(0);
+      expect(api.errors({}, { tsPath: "a.ts", esmPath: "a.js" })).toBe(0);
+      expect(api.errors(undefined, { tsPath: "a.ts", esmPath: "a.js" })).toBeNull();
+    });
+  });
+
+  describe("the npm Graveyard script (shipped, minimal DOM, scripted fetch)", () => {
+    interface Rig {
+      doc: FakeDocument;
+      calls: Array<{ url: string; body: Record<string, unknown> }>;
+      el: Record<string, FakeElement>;
+      classics: FakeElement[];
+      older: FakeElement[];
+      win: Record<string, unknown>;
+      starts: number;
+    }
+    function rig(respond: (url: string, body: Record<string, unknown>) => Response | Promise<Response>): Rig {
+      const doc = new FakeDocument();
+      const names = ["legacyCode", "modName", "schemaJson", "simulateBug", "presetSelect", "runBtn", "certCard", "npmPill", "npmError", "npmImportBtn", "npmSpec", "npmChips", "classicChips"];
+      const el: Record<string, FakeElement> = {};
+      for (const n of names) el[n] = doc.element(n.endsWith("Btn") ? "button" : "div", n);
+      const chip = (spec: string, cls: string): FakeElement => { const c = new FakeElement("button"); c.dataset["spec"] = spec; c.className = cls; return c; };
+      const older = ["left-pad@1.3.0", "is-number@3.0.0", "decamelize@1.2.0", "escape-string-regexp@1.0.5"].map((s) => chip(s, "gy-chip"));
+      const classics = SPECS.map((s) => chip(s, "gy-chip gy-classic"));
+      (el["npmChips"] as unknown as { querySelectorAll: () => FakeElement[] }).querySelectorAll = () => older;
+      (el["classicChips"] as unknown as { querySelectorAll: () => FakeElement[] }).querySelectorAll = () => classics;
+      const calls: Rig["calls"] = [];
+      const win: Record<string, unknown> = {};
+      const state = { starts: 0 };
+      win["LazarusRun"] = { start: () => { state.starts++; return Promise.resolve(null); } };
+      const fetchImpl = (url: string, init?: RequestInit): Promise<Response> => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        calls.push({ url, body });
+        return Promise.resolve(respond(url, body));
+      };
+      const source = inlineScripts.find((s) => s.includes("// ---- npm Graveyard importer")) ?? "";
+      runInlineScript(source, { document: doc, window: win, fetch: fetchImpl, navigator: {}, Blob, URL });
+      const rg = { doc, calls, el, classics, older, win } as Rig;
+      Object.defineProperty(rg, "starts", { get: () => state.starts });
+      return rg;
+    }
+    const SNAP = (spec: string, extra: Record<string, unknown> = {}): Record<string, unknown> => {
+      const [name = "", version = ""] = [spec.slice(0, spec.lastIndexOf("@")), spec.slice(spec.lastIndexOf("@") + 1)];
+      return { packageName: name, version, spec, cdnHost: "lazarus-curated", url: `https://www.npmjs.com/package/${name}/v/${version}`, byteLength: 1137, sha256: "a".repeat(64), source: `// ${spec}\nmodule.exports = function (a) { return a; };`, detectedIdioms: ["CommonJS export"], suggestedSchema: { str: "string", len: "integer" }, functionName: "anonymousSpecimen", functions: [], origin: "curated-snapshot", license: "WTFPL", classic: { author: "azer (Azer Koçulu)", homepage: "h", repository: "r", summary: "s", traps: ["string coercion", "bitwise halving"], modifications: [] }, ...extra };
+    };
+
+    it("a Famous npm Classics chip imports the curated snapshot, shows its provenance badge and starts the resurrection", async () => {
+      const t = rig((_url, body) => json(SNAP(String(body["packageSpec"]))));
+      t.classics[0]?.click();
+      expect(t.classics.every((c) => c.disabled)).toBe(true);
+      await flush();
+      expect(t.calls).toEqual([{ url: "/api/import/npm", body: { packageSpec: "left-pad@1.3.0", source: "snapshot" } }]);
+      expect(t.el["npmSpec"]?.value).toBe("left-pad@1.3.0");
+      expect(t.el["legacyCode"]?.value).toBe("// left-pad@1.3.0\nmodule.exports = function (a) { return a; };");
+      expect(t.el["modName"]?.value).toBe("leftPad");
+      expect(JSON.parse(t.el["schemaJson"]?.value ?? "{}")).toEqual({ str: "string", len: "integer" });
+      expect(t.win["lazarusProvenance"]).toEqual({ kind: "npm", label: "left-pad", version: "1.3.0", cdnHost: "lazarus-curated", url: "https://www.npmjs.com/package/left-pad/v/1.3.0", byteLength: 1137, license: "WTFPL" });
+      const pill = t.el["npmPill"];
+      expect(pill?.style["display"]).toBe("block");
+      expect(pill?.textContent).toContain("left-pad@1.3.0");
+      expect(pill?.textContent).toContain("CURATED SNAPSHOT");
+      expect(pill?.textContent).toContain("WTFPL license");
+      expect(pill?.textContent).toContain("azer (Azer Koçulu)");
+      expect(pill?.textContent).toContain("Legacy traps: string coercion; bitwise halving");
+      expect(t.starts).toBe(1);
+      expect(t.classics.every((c) => !c.disabled)).toBe(true);
+    });
+
+    it("names each classic after its package (leftPad, isNumber, ms, decamelize, padLeft)", async () => {
+      const names: string[] = [];
+      for (const [i, spec] of SPECS.entries()) {
+        const t = rig((_u, body) => json(SNAP(String(body["packageSpec"]))));
+        t.classics[i]?.click();
+        await flush();
+        expect(t.calls[0]?.body).toEqual({ packageSpec: spec, source: "snapshot" });
+        names.push(t.el["modName"]?.value ?? "");
+        expect(t.starts, spec).toBe(1);
+      }
+      expect(names).toEqual(["leftPad", "isNumber", "ms", "decamelize", "padLeft"]);
+    });
+
+    it("does not start a resurrection when the import fails, and shows why", async () => {
+      const t = rig(() => json({ error: "ms@0.7.1 is not one of the curated npm Graveyard Classics", code: "NOT_FOUND" }, 404));
+      t.classics[2]?.click();
+      await flush();
+      expect(t.starts).toBe(0);
+      expect(t.el["npmError"]?.style["display"]).toBe("block");
+      expect(t.el["npmError"]?.textContent).toContain("NOT_FOUND");
+      expect(t.classics.every((c) => !c.disabled)).toBe(true);
+    });
+
+    it("IMPORT NPM and the older chips ask for auto (live first, curated fallback); a typed classic never flakes", async () => {
+      const t = rig((_u, body) => json(SNAP(String(body["packageSpec"]), { origin: "curated-snapshot", fallback: { code: "UPSTREAM_ERROR", message: "unpkg.com answered HTTP 429" } })));
+      t.el["npmSpec"]!.value = "left-pad@1.3.0";
+      t.el["npmImportBtn"]?.click();
+      await flush();
+      expect(t.calls[0]?.body).toEqual({ packageSpec: "left-pad@1.3.0", source: "auto" });
+      expect(t.el["npmPill"]?.textContent).toContain("The live CDN answered UPSTREAM_ERROR; the curated snapshot was used instead.");
+      expect(t.starts).toBe(0);
+      t.older[1]?.click();
+      await flush();
+      expect(t.calls[1]?.body).toEqual({ packageSpec: "is-number@3.0.0", source: "auto" });
+    });
+
+    it("keeps a plain live import of any other package as it was (no origin line)", async () => {
+      const t = rig(() => json(SNAP("escape-string-regexp@1.0.5", { origin: undefined, license: undefined, classic: undefined, cdnHost: "unpkg.com" })));
+      t.older[3]?.click();
+      await flush();
+      expect(t.el["npmPill"]?.textContent).not.toContain("CURATED");
+      expect(t.el["npmPill"]?.textContent).not.toContain("LIVE CDN");
+      expect(t.win["lazarusProvenance"]).not.toHaveProperty("license");
+      expect(t.starts).toBe(0);
+    });
+
+    it("exposes LazarusNpm for the page", () => {
+      const t = rig(() => json(SNAP("left-pad@1.3.0")));
+      expect(typeof (t.win["LazarusNpm"] as { importNpm: unknown }).importNpm).toBe("function");
     });
   });
 });

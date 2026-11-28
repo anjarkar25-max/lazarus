@@ -6,6 +6,7 @@ import { z } from "zod";
 import { analyze, walk } from "../crew/ast-scope.js";
 import { parseProgram } from "../crew/ast-modernizer.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
+import { findClassic, sha256Of, type GraveyardClassic } from "../crew/graveyard-classics.js";
 
 export const MAX_NPM_BYTES = 32 * 1024;
 export const NPM_TIMEOUT_MS = 5000;
@@ -113,9 +114,18 @@ export function assertAllowedUrl(url: URL): void {
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * Where a package comes from. `live` (the default, and what every existing caller gets) fetches the CDN only. `snapshot` serves a curated
+ * npm Graveyard Classic from the snapshot that ships with Lazarus, with no network at all. `auto` tries the live CDN first and, when the
+ * package is a curated classic and the CDN times out, rate-limits, fails, or serves something the sandbox cannot run, falls back to the
+ * snapshot (the result says so). A package that is not a classic behaves exactly like `live` in every mode but `snapshot`, which refuses it.
+ */
+export type NpmSource = "live" | "snapshot" | "auto";
+
 export interface ImportOptions {
   readonly fetch?: FetchLike;
   readonly timeoutMs?: number;
+  readonly source?: NpmSource;
 }
 
 interface Fetched {
@@ -256,10 +266,68 @@ export interface NpmImportResult {
   readonly suggestedSchema: Record<string, string>;
   readonly functionName?: string;
   readonly functions: Array<{ name: string; exportedAs?: string; paramNames: string[] }>;
+  /** Where the source came from; absent for a plain live import (the shape every earlier caller sees). */
+  readonly origin?: "live-cdn" | "curated-snapshot";
+  /** SPDX license, for a curated classic. */
+  readonly license?: string;
+  /** Curated metadata of a classic (author, links, summary, legacy traps, deviations from the published file). */
+  readonly classic?: { readonly author: string; readonly homepage: string; readonly repository: string; readonly summary: string; readonly traps: readonly string[]; readonly modifications: readonly string[] };
+  /** Why a live import fell back to the curated snapshot. */
+  readonly fallback?: { readonly code: NpmErrorCode; readonly message: string };
+}
+
+/** CDN host name shown for a curated snapshot. */
+export const CURATED_HOST = "lazarus-curated";
+
+function classicMeta(c: GraveyardClassic): NonNullable<NpmImportResult["classic"]> {
+  return { author: c.author, homepage: c.homepage, repository: c.repository, summary: c.summary, traps: c.traps, modifications: c.modifications };
+}
+
+/** The import result of a curated classic, built from the snapshot that ships with Lazarus. */
+export function importClassicSnapshot(classic: GraveyardClassic, fallback?: { code: NpmErrorCode; message: string }): NpmImportResult {
+  const scan = scanLegacyAst(classic.source);
+  return {
+    packageName: classic.name,
+    version: classic.version,
+    spec: classic.spec,
+    cdnHost: CURATED_HOST,
+    url: classic.homepage,
+    byteLength: Buffer.byteLength(classic.source, "utf8"),
+    sha256: sha256Of(classic.source),
+    source: classic.source,
+    extractedExpression: scan.primaryExpression,
+    detectedIdioms: scan.detectedIdioms,
+    suggestedSchema: classic.schema,
+    ...(scan.primary !== undefined ? { functionName: scan.primary.name } : {}),
+    functions: scan.functions.map((f) => ({ name: f.name, ...(f.exportedAs !== undefined ? { exportedAs: f.exportedAs } : {}), paramNames: f.paramNames })),
+    origin: "curated-snapshot",
+    license: classic.license,
+    classic: classicMeta(classic),
+    ...(fallback !== undefined ? { fallback } : {}),
+  };
 }
 
 export async function importNpmPackage(rawSpec: unknown, options: ImportOptions = {}): Promise<NpmImportResult> {
   const spec = parsePackageSpec(rawSpec);
+  const classic = findClassic(spec.spec);
+  const mode = options.source ?? "live";
+  if (mode === "snapshot") {
+    if (classic === undefined) throw new NpmImportError("NOT_FOUND", `${spec.spec} is not one of the curated npm Graveyard Classics`);
+    return importClassicSnapshot(classic);
+  }
+  if (mode === "auto" && classic !== undefined) {
+    try {
+      const live = await importLive(spec, options);
+      return { ...live, origin: "live-cdn", license: classic.license, classic: classicMeta(classic) };
+    } catch (err: unknown) {
+      if (!(err instanceof NpmImportError)) throw err;
+      return importClassicSnapshot(classic, { code: err.code, message: err.message });
+    }
+  }
+  return importLive(spec, options);
+}
+
+async function importLive(spec: ParsedSpec, options: ImportOptions): Promise<NpmImportResult> {
   const fetchImpl: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const timeoutMs = options.timeoutMs ?? NPM_TIMEOUT_MS;
   const failures: NpmImportError[] = [];

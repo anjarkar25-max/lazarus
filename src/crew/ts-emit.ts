@@ -143,6 +143,35 @@ function declareJsonParameter(code: string, name: string, line: number, insertio
 }
 
 /**
+ * The legacy specimen is wrapped as `(function name(a, b) { ... })(typeof a !== "undefined" ? a : undefined, ...)`. TypeScript types the
+ * wrapped function's parameters from those call arguments (a possibly-undefined value, or the `{}` left of a narrowed `unknown`), which
+ * legacy code does not respect (`num.trim()`, `len = len - str.length`). Such a parameter becomes an explicit `any`, reported.
+ */
+function declareWrappedParameter(code: string, name: string, line: number, insertions: Insertion[], adjustments: string[]): boolean {
+  // `(function name(a, b) {` and, after the function-arrow rule, `((a, b) => {`.
+  const headers = [/\(function\s*(?:[A-Za-z_$][\w$]*)?\s*\(([^()]*)\)\s*\{/g, /\(\(([^()]*)\)\s*=>/g];
+  const found = headers.flatMap((re) => [...code.matchAll(re)]).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  for (const m of found) {
+    const list = m[1] ?? "";
+    const listStart = (m.index ?? 0) + m[0].lastIndexOf(list === "" ? "(" : list, m[0].length);
+    if (list === "") continue;
+    let offset = 0;
+    for (const part of list.split(",")) {
+      const trimmed = part.trim();
+      if (trimmed === name) {
+        const at = listStart + offset + part.indexOf(name) + name.length;
+        if (insertions.some((i) => i.at === at)) return true;
+        insertions.push({ at, text: ": any" });
+        adjustments.push(`parameter ${name} (line ${line}): typed from a possibly-undefined call argument, declared any like in the legacy code`);
+        return true;
+      }
+      offset += part.length + 1;
+    }
+  }
+  return false;
+}
+
+/**
  * Declares, as explicit `any`, exactly the members strict mode reports as untypeable in legacy code:
  * TS7006 (inner parameter), TS7019 (rest parameter, e.g. the `...args` that replaced `arguments`), TS7034 (variable) and TS2339
  * on a class's own `this.x` (undeclared field), and TS18046 for a `const x = await ...` of a legacy Promise that strict mode cannot
@@ -179,6 +208,13 @@ export function applyBoundaryFixes(code: string, diagnostics: readonly TsDiagnos
       if (insertions.some((i) => i.at === end)) continue;
       insertions.push({ at: end, text: ": any" });
       adjustments.push(`variable ${name} (line ${d.line}): awaited value of an untyped legacy Promise`);
+    } else if (d.code === 18048 || d.code === 18049 || d.code === 2362 || d.code === 2363 || d.code === 2367 || (d.code === 2339 && / on type '\{\}'/.test(d.message))) {
+      // 'num' is possibly 'undefined', `num.trim()` on `{}`, `num - num`: the subject is a name before the position, or at it.
+      const named = /^'([A-Za-z_$][\w$]*)' is possibly/.exec(d.message)?.[1];
+      const before = /([A-Za-z_$][\w$]*)\.$/.exec(code.slice(0, at))?.[1];
+      const here = /^[A-Za-z_$][\w$]*/.exec(code.slice(at))?.[0];
+      const name = d.code === 2339 ? before : (named ?? here);
+      if (name !== undefined) declareWrappedParameter(code, name, d.line, insertions, adjustments);
     } else if (d.code === 2407) {
       // `for (k in x)` over a json input typed `unknown`: the diagnostic starts at the iterated identifier.
       const name = /^[A-Za-z_$][\w$]*/.exec(code.slice(at))?.[0];

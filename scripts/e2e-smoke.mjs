@@ -616,7 +616,7 @@ async function main() {
       await waitFor(`/^\\d+ Specs$/.test(document.getElementById("dmSpecs").textContent)`, "the map to load the specs count", 20_000);
       const m = await evaluate(`({ specs: document.getElementById("dmSpecs").textContent, agents: document.getElementById("dmAgents").textContent, hooks: document.getElementById("dmHooks").textContent, steering: document.getElementById("dmSteering").textContent, power: document.getElementById("dmPower").textContent, nodes: document.querySelectorAll("#dnaMap .dm-node").length, badge: document.getElementById("badgeSpecs").textContent })`);
       check(m.nodes === 7, `the map has ${m.nodes} nodes`);
-      check(m.specs === "29 Specs" && m.badge === "29 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
+      check(m.specs === "30 Specs" && m.badge === "30 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
       check(m.agents === "4 Crew Agents" && m.hooks === "4 Hooks" && m.steering === "3 Steering Docs", `counts: ${m.agents}, ${m.hooks}, ${m.steering}`);
       check(/power-lazarus\/ \u00b7 v/.test(m.power), `power node: ${m.power}`);
       const l = await evaluate(LAYOUT);
@@ -642,7 +642,70 @@ async function main() {
       check(l.scrollWidth <= l.vw && l.offenders.length === 0, `Tab 2 overflow after the run: ${l.scrollWidth}/${l.vw} ${l.offenders.join(", ")}`);
     });
 
-    // ---- 6. Final layout sweep with the results on screen ----
+    // ---- 5b. V19 Graveyard: a Famous npm Classic chip, the Tab 2 Module Inspector and the Public API Contract badge ----
+    await step("Tab 1: the Famous npm Classics chip strip imports left-pad@1.3.0 and resurrects it with 100% parity, tsc --strict: 0 errors and the 5-pillar proof", async () => {
+      await load(VIEWPORTS[1]);
+      const strip = await evaluate(`({ title: document.querySelector("#classicChips .gy-classics-title").textContent, chips: Array.from(document.querySelectorAll("#classicChips .gy-classic")).map((b) => b.dataset.spec + "=" + b.textContent).join("|") })`);
+      check(strip.title === "Famous npm Classics", `strip title: ${strip.title}`);
+      check(strip.chips === "left-pad@1.3.0=left-pad|is-number@3.0.0=is-number|ms@0.7.1=ms|decamelize@1.2.0=decamelize|pad-left@2.1.0=pad-left", `chips: ${strip.chips}`);
+      await evaluate(`document.querySelector('#classicChips [data-spec="left-pad@1.3.0"]').click(); true`);
+      await waitFor(`window.__e2e.results.some((r) => r.name === "leftPad")`, "the left-pad result", 90_000);
+      await waitFor(`document.getElementById("tscBadge").textContent === "tsc --strict: 0 errors"`, "tsc --strict: 0 errors", 60_000);
+      const out = await evaluate(`({ ok: window.__e2e.results.find((r) => r.name === "leftPad").success, parity: document.getElementById("parityBadge").textContent, pill: document.getElementById("npmPill").textContent, spec: document.getElementById("npmSpec").value, cert: document.getElementById("certCard").textContent, code: document.getElementById("legacyCode").value.slice(0, 40) })`);
+      check(out.ok, "left-pad: parity was not proven");
+      check(/100% PARITY PROVEN/.test(out.parity), `parity badge: ${out.parity}`);
+      check(out.spec === "left-pad@1.3.0" && /left-pad@1\.3\.0/.test(out.pill) && /CURATED SNAPSHOT/.test(out.pill) && /WTFPL license/.test(out.pill), `provenance badge: ${out.pill}`);
+      check(/Legacy traps: /.test(out.pill), "the provenance badge lists no legacy trap");
+      check(/left-pad/.test(out.cert) && /lazarus-curated/.test(out.cert), `the certificate does not name the package: ${out.cert.slice(0, 200)}`);
+      const pills = await evaluate(`({ parity: document.getElementById("pillParity").lastElementChild.textContent, purity: document.getElementById("pillPurity").dataset.tone })`);
+      check(/^PROVEN/.test(pills.parity) && pills.purity === "ok", `5-pillar strip: ${JSON.stringify(pills)}`);
+      await waitFor(`/Verified/.test(document.getElementById("pillEd").lastElementChild.textContent)`, "the Ed25519 pill to verify", 30_000);
+    });
+    await step("Tab 2: legacy-circular-ledger shows 'Public API Contract: 0 Breaking Changes' next to Cycle Resolved", async () => {
+      await load(VIEWPORTS[0]);
+      await evaluate(`document.querySelector('[data-studio-tab="graph"]').click(); true`);
+      await waitFor(`!document.getElementById("pane-graph").hidden`, "Tab 2", 5_000);
+      await evaluate(`(() => { const s = document.getElementById("graphPreset"); s.value = "circular"; s.dispatchEvent(new Event("change")); return true; })()`);
+      await sleep(200);
+      const nodes = await evaluate(`Array.from(document.querySelectorAll("#graphSvg .node")).map((g) => g.getAttribute("role") + ":" + g.getAttribute("tabindex") + ":" + g.getAttribute("aria-pressed")).join("|")`);
+      check(nodes === "button:0:false|button:0:false|button:0:false", `graph nodes are not keyboard buttons: ${nodes}`);
+      await evaluate(`document.getElementById("graphRunBtn").click(); true`);
+      await waitFor(`!document.getElementById("graphApiPill").hidden && !document.getElementById("graphCyclePill").hidden && /Cycle Resolved/.test(document.getElementById("graphCyclePill").textContent)`, "the contract badge", 90_000);
+      const badge = await evaluate(`({ api: document.getElementById("graphApiPill").textContent, cycle: document.getElementById("graphCyclePill").textContent, sameRow: document.getElementById("graphApiPill").parentElement === document.getElementById("graphCyclePill").parentElement })`);
+      check(badge.api === "Public API Contract: 0 Breaking Changes (6/6 Exports Preserved)", `contract badge: ${badge.api}`);
+      check(badge.cycle === "Cycle Resolved (ESM Live Bindings)" && badge.sameRow, `cycle pill: ${badge.cycle}`);
+    });
+    await step("Tab 2: clicking the tax.cjs node opens the Module Inspector with its role, exports, tsc badge and side-by-side diff, and it follows the next node", async () => {
+      const pick = (file) => `Array.from(document.querySelectorAll("#graphSvg .node")).find((g) => g.querySelector(".file").textContent.indexOf("${file}") === 0)`;
+      check((await evaluate(`document.getElementById("moduleInspector").hidden`)) === true, "the inspector is open before any node is selected");
+      await evaluate(`${pick("tax.cjs")}.dispatchEvent(new MouseEvent("click", { bubbles: true })); true`);
+      await waitFor(`!document.getElementById("moduleInspector").hidden && document.getElementById("miFile").textContent === "tax.cjs"`, "the inspector for tax.cjs", 5_000);
+      const tax = await evaluate(`({ roles: document.getElementById("miRoles").textContent, tsc: document.getElementById("miTsc").textContent, api: document.getElementById("miApi").textContent, right: document.getElementById("miRightTitle").textContent, rows: document.querySelectorAll("#miDiff .mi-row").length, del: document.querySelectorAll("#miDiff .mi-cell.del").length, add: document.querySelectorAll("#miDiff .mi-cell.add").length, left: document.querySelector("#miDiff .mi-row .mi-cell").textContent, selected: document.querySelectorAll("#graphSvg .node.selected").length, pressed: ${pick("tax.cjs")}.getAttribute("aria-pressed"), rect: getComputedStyle(${pick("tax.cjs")}.querySelector("rect")).strokeWidth })`);
+      check(tax.roles === "Cycle Member", `tax.cjs role: ${tax.roles}`);
+      check(tax.tsc === "tsc --strict: 0 errors", `tax.cjs tsc badge: ${tax.tsc}`);
+      check(/preserved/.test(tax.api) && /taxOf\(1\) \u2713/.test(tax.api) && /settle\(2\) \u2713/.test(tax.api), `tax.cjs API: ${tax.api}`);
+      check(/tax\.ts/.test(tax.right), `right column title: ${tax.right}`);
+      check(tax.rows > 3 && tax.del > 0 && tax.add > 0, `no side-by-side diff: ${JSON.stringify(tax)}`);
+      check(tax.selected === 1 && tax.pressed === "true" && parseFloat(tax.rect) >= 3, `selection ring: ${JSON.stringify(tax)}`);
+      const taxDiff = await evaluate(`document.getElementById("miDiff").textContent`);
+      check(/taxOf/.test(taxDiff), "the diff of tax.cjs does not show its code");
+      // Keyboard: Space on the discount.cjs node selects it, and the inspector follows.
+      await evaluate(`${pick("discount.cjs")}.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })); true`);
+      await waitFor(`document.getElementById("miFile").textContent === "discount.cjs"`, "the inspector to follow to discount.cjs", 5_000);
+      const discount = await evaluate(`({ roles: document.getElementById("miRoles").textContent, diff: document.getElementById("miDiff").textContent, selected: Array.from(document.querySelectorAll("#graphSvg .node.selected")).map((g) => g.querySelector(".file").textContent).join() })`);
+      check(discount.roles === "Cycle Member" && /discountOf/.test(discount.diff), `discount.cjs inspector: ${discount.roles}`);
+      check(/^discount\.cjs/.test(discount.selected), `selected node: ${discount.selected}`);
+      check(discount.diff !== taxDiff, "the diff did not change when another node was selected");
+      await evaluate(`${pick("index.cjs")}.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); true`);
+      await waitFor(`document.getElementById("miFile").textContent === "index.cjs"`, "the inspector to follow to index.cjs", 5_000);
+      check((await evaluate(`document.getElementById("miRoles").textContent`)) === "Entry", "index.cjs is not the Entry");
+      const l = await evaluate(LAYOUT);
+      check(l.scrollWidth <= l.vw && l.offenders.length === 0, `Tab 2 overflow with the inspector open: ${l.scrollWidth}/${l.vw} ${l.offenders.join(", ")}`);
+    });
+    await step("Tab 2: editing a file clears the inspector and the contract badge", async () => {
+      await evaluate(`(() => { const e = document.getElementById("graphEditor"); e.value = e.value + "\\n"; e.dispatchEvent(new Event("input")); return true; })()`);
+      await waitFor(`document.getElementById("graphApiPill").hidden && document.getElementById("graphApiPill").textContent === ""`, "the contract badge to clear", 5_000);
+    });    // ---- 6. Final layout sweep with the results on screen ----
     for (const vp of VIEWPORTS) {
       await step(`result layout ${vp.width}x${vp.height}: no overflow with a finished resurrection on screen`, async () => {
         await load(vp);

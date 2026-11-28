@@ -15,6 +15,8 @@ export interface Provenance {
   readonly cdnHost?: string;
   readonly url?: string;
   readonly byteLength?: number;
+  /** SPDX license of a curated npm Graveyard Classic (shown in the certificate). */
+  readonly license?: string;
 }
 
 export interface CertificateInput {
@@ -120,7 +122,7 @@ export function gradeFor(score: number): DebtGrade {
 export function describeProvenance(p: Provenance): string {
   switch (p.kind) {
     case "npm":
-      return `npm \`${p.label}${p.version !== undefined ? `@${p.version}` : ""}\`${p.cdnHost !== undefined ? ` via ${p.cdnHost}` : ""}${p.byteLength !== undefined ? ` (${p.byteLength} bytes)` : ""}`;
+      return `npm \`${p.label}${p.version !== undefined ? `@${p.version}` : ""}\`${p.cdnHost !== undefined ? ` via ${p.cdnHost}` : ""}${p.byteLength !== undefined ? ` (${p.byteLength} bytes${p.license !== undefined ? `, ${p.license}` : ""})` : p.license !== undefined ? ` (${p.license})` : ""}`;
     case "github":
       return `GitHub ${p.url ?? p.label}`;
     case "preset":
@@ -306,6 +308,7 @@ export function sanitizeProvenance(value: unknown): Provenance {
   const version = text(v.version, 64);
   const cdnHost = text(v.cdnHost, 100);
   const url = text(v.url, 300);
+  const license = text(v.license, 64);
   const byteLength = typeof v.byteLength === "number" && Number.isFinite(v.byteLength) && v.byteLength >= 0 ? Math.floor(v.byteLength) : undefined;
   return {
     kind,
@@ -314,5 +317,6 @@ export function sanitizeProvenance(value: unknown): Provenance {
     ...(cdnHost !== undefined ? { cdnHost } : {}),
     ...(url !== undefined ? { url } : {}),
     ...(byteLength !== undefined ? { byteLength } : {}),
+    ...(license !== undefined ? { license } : {}),
   };
 }

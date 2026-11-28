@@ -12,6 +12,7 @@ import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
+import { GRAVEYARD_CLASSICS, summarizeClassic } from "../crew/graveyard-classics.js";
 import { EdgeGauntletBodySchema, EdgeGauntletError, prepareEdgeGauntlet, runEdgeGauntlet } from "../crew/edge-gauntlet.js";
 import { buildExportReport, parseReportExtras } from "../exporter/export-report.js";
 import { REPORT_FILE } from "../exporter/html-report.js";
@@ -449,7 +450,8 @@ export async function buildExportBundle(
   /** `fetch` used by POST /api/import/github-dir (api.github.com + raw.githubusercontent.com). Injected by tests. */
   githubFetch?: FetchLike;
 }
-const NpmImportBody = z.object({ packageSpec: z.string().max(300) }).strict();
+/** `source` (V19 Graveyard): `live` (default), `snapshot` (a curated classic, no network) or `auto` (live CDN first, curated fallback). */
+const NpmImportBody = z.object({ packageSpec: z.string().max(300), source: z.enum(["live", "snapshot", "auto"]).optional() }).strict();
 const GitHubDirBody = z.object({ url: z.string().max(500) }).strict();
 const KindSchema = z.enum(["integer", "number", "string", "boolean", "json"]);
 const GraphSchemaArg = z.record(z.string().regex(/^[A-Za-z_$][\w$]*$/), KindSchema);
@@ -525,6 +527,7 @@ function summarizeGraph(result: GraphResurrectionResult, bundleId: string | unde
       success: f.success,
     })),
     ...(result.typecheck !== undefined ? { typecheck: result.typecheck } : {}),
+    ...(result.apiContract !== undefined ? { apiContract: result.apiContract } : {}),
     parity:
       result.parity === undefined
         ? undefined
@@ -578,6 +581,12 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       return;
     }
 
+    if (method === "GET" && url.split("?")[0] === "/api/graveyard-classics") {
+      // The curated npm Graveyard Classics: static data, no sandbox, no network.
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ count: GRAVEYARD_CLASSICS.length, classics: GRAVEYARD_CLASSICS.map(summarizeClassic) }));
+      return;
+    }
     if (method === "GET" && url.split("?")[0] === "/api/health") {
       // Lightweight liveness probe for the Studio's cold-start guard (never touches the sandbox).
       healthTests ??= badgeTestCount(publicDir);
@@ -919,11 +928,11 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       }
       const checked = NpmImportBody.safeParse(rawBody);
       if (!checked.success) {
-        fail(400, { error: "Body must be exactly { packageSpec: string }", code: "INVALID_SPEC" });
+        fail(400, { error: "Body must be { packageSpec: string, source?: live | snapshot | auto }", code: "INVALID_SPEC" });
         return;
       }
       try {
-        const imported = await importNpmPackage(checked.data.packageSpec, options.npmFetch === undefined ? {} : { fetch: options.npmFetch });
+        const imported = await importNpmPackage(checked.data.packageSpec, { ...(options.npmFetch === undefined ? {} : { fetch: options.npmFetch }), ...(checked.data.source === undefined ? {} : { source: checked.data.source }) });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(imported));
       } catch (err: unknown) {

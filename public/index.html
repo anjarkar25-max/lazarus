@@ -768,6 +768,45 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
 #dnaMap .dm-title { fill: #e2e8f0; font: 700 12px system-ui, sans-serif; }
 #dnaMap .dm-sub { fill: #94a3b8; font: 10px ui-monospace, Consolas, monospace; }
 #dnaMap .dm-flow { fill: none; stroke: var(--violet); stroke-width: 1.6; }
+/* ---- V20: Famous npm Classics, Graph Node Inspector and the Public API Contract badge ------------------ */
+.gy-classics { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155; }
+.gy-classics-title { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #c4b5fd; font-weight: 700; margin-right: 4px; }
+.gy-classic { border-color: var(--violet); color: #ddd6fe; }
+.gy-classic:hover:not(:disabled) { background: rgba(139, 92, 246, 0.2); color: #fff; border-color: #a78bfa; }
+.gy-classic:disabled { opacity: .55; cursor: progress; }
+.gy-origin { font-weight: 700; letter-spacing: 1px; font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+.gy-origin.snap { color: #ddd6fe; border: 1px solid var(--violet); background: rgba(139, 92, 246, 0.16); }
+.gy-origin.live { color: #a7f3d0; border: 1px solid var(--emerald); background: rgba(16, 185, 129, 0.12); }
+.api-pill { display: inline-block; margin: 6px 0 0 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--emerald); color: #a7f3d0; background: rgba(16, 185, 129, 0.12); font-size: 11px; font-weight: 700; }
+.api-pill.bad { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
+.api-pill[hidden] { display: none; }
+#graphSvg .node.selected rect { stroke: #a78bfa; stroke-width: 3.5; filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.85)); }
+#graphSvg .node:focus { outline: none; }
+#graphSvg .node:focus-visible rect { stroke: #fff; stroke-width: 3; }
+.module-inspector { margin: 8px 0; padding: 10px; border: 1px solid #334155; border-radius: 10px; background: #0b1120; }
+.module-inspector[hidden] { display: none; }
+.mi-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mi-file { color: #e2e8f0; font: 700 13px ui-monospace, Consolas, monospace; }
+.mi-role { padding: 1px 8px; border-radius: 999px; border: 1px solid #475569; color: #cbd5e1; font-size: 10px; font-weight: 700; letter-spacing: .5px; }
+.mi-role.cycle-member { border-color: #f59e0b; color: #fde68a; background: rgba(245, 158, 11, 0.12); }
+.mi-role.entry { border-color: var(--violet); color: #ddd6fe; background: rgba(139, 92, 246, 0.14); }
+.mi-role.leaf { border-color: var(--emerald); color: #a7f3d0; background: rgba(16, 185, 129, 0.1); }
+.mi-tsc { margin-left: auto; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--muted); border: 1px solid #334155; }
+.mi-tsc.ok { color: #a7f3d0; border-color: var(--emerald); background: rgba(16, 185, 129, 0.1); }
+.mi-tsc.bad { color: #fecaca; border-color: var(--crimson); background: rgba(239, 68, 68, 0.12); }
+.mi-api { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 8px; font-size: 11px; }
+.mi-api-lead { color: var(--muted); font-weight: 700; }
+.mi-export { padding: 1px 7px; border-radius: 5px; border: 1px solid var(--emerald); color: #a7f3d0; background: rgba(16, 185, 129, 0.08); font-family: ui-monospace, Consolas, monospace; }
+.mi-export.bad { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
+.mi-note { color: var(--muted); }
+.mi-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+.mi-diff { max-height: 320px; overflow: auto; border: 1px solid #1e293b; border-radius: 6px; font: 11px/1.45 ui-monospace, Consolas, monospace; }
+.mi-row { display: grid; grid-template-columns: 1fr 1fr; min-width: max-content; }
+.mi-cell { padding: 0 8px; white-space: pre; min-height: 1.45em; border-right: 1px solid #1e293b; }
+.mi-cell.same { color: #94a3b8; }
+.mi-cell.del { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+.mi-cell.add { background: rgba(16, 185, 129, 0.14); color: #a7f3d0; }
+.mi-cell.blank { background: rgba(15, 23, 42, 0.6); }
 /* ---- V19: 12-Case Edge Gauntlet and Seed Replay ------------------------------------------------ */
 .gauntlet-btn { padding: 7px 14px; border: 1px solid var(--violet, #8b5cf6); border-radius: 8px; background: rgba(139, 92, 246, 0.14); color: #ddd6fe; font: inherit; font-weight: 700; cursor: pointer; }
 .gauntlet-btn:hover:not(:disabled) { background: rgba(139, 92, 246, 0.28); }
@@ -810,8 +849,8 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1340 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1428 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -894,6 +933,14 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       <button type="button" class="gy-chip" data-spec="is-number@3.0.0">is-number@3.0.0</button>
       <button type="button" class="gy-chip" data-spec="decamelize@1.2.0">decamelize@1.2.0</button>
       <button type="button" class="gy-chip" data-spec="escape-string-regexp@1.0.5">escape-string-regexp@1.0.5</button>
+    </div>
+    <div class="gy-classics" id="classicChips" role="group" aria-label="Famous npm Classics: one click imports, resurrects and proves">
+      <span class="gy-classics-title">Famous npm Classics</span>
+      <button type="button" class="gy-chip gy-classic" data-spec="left-pad@1.3.0" title="left-pad@1.3.0 (WTFPL): string coercion, bitwise halving, padding boundaries">left-pad</button>
+      <button type="button" class="gy-chip gy-classic" data-spec="is-number@3.0.0" title="is-number@3.0.0 (MIT): numeric coercion, NaN and Infinity">is-number</button>
+      <button type="button" class="gy-chip gy-classic" data-spec="ms@0.7.1" title="ms@0.7.1 (MIT): regex boundaries, rounding, the error path">ms</button>
+      <button type="button" class="gy-chip gy-classic" data-spec="decamelize@1.2.0" title="decamelize@1.2.0 (MIT): regex backreferences and uppercase runs">decamelize</button>
+      <button type="button" class="gy-chip gy-classic" data-spec="pad-left@2.1.0" title="pad-left@2.1.0 (MIT): coercion, padding boundaries, bitwise repeat">pad-left</button>
     </div>
     <div class="gy-pill" id="npmPill" role="status"></div>
     <div class="gy-error" id="npmError" role="alert"></div>
@@ -1125,8 +1172,19 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
         </div>
         <div>
           <span class="cycle-pill" id="graphCyclePill" role="status" hidden></span>
-          <div class="graph-svg-wrap"><svg id="graphSvg" role="img" aria-label="Dependency graph"></svg></div>
+          <span class="api-pill" id="graphApiPill" role="status" hidden></span>
+          <div class="graph-svg-wrap"><svg id="graphSvg" role="group" aria-label="Dependency graph: select a module to inspect it"></svg></div>
           <div class="graph-verdict" id="graphVerdict" role="status"></div>
+          <section class="module-inspector" id="moduleInspector" role="region" aria-label="Module Inspector" aria-live="polite" hidden>
+            <div class="mi-head">
+              <strong class="mi-file" id="miFile"></strong>
+              <span class="mi-roles" id="miRoles"></span>
+              <span class="mi-tsc" id="miTsc"></span>
+            </div>
+            <div class="mi-api" id="miApi"></div>
+            <div class="mi-cols"><span>Legacy CJS</span><span id="miRightTitle">Resurrected TypeScript</span></div>
+            <div class="mi-diff" id="miDiff" role="table" aria-label="Legacy CommonJS next to the resurrected TypeScript of this module"></div>
+          </section>
           <div class="graph-log" id="graphLog" aria-live="polite"></div>
           <pre id="graphEsmOut"></pre>
         </div>
@@ -2313,6 +2371,16 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     part(pill, "|", "sep"); part(pill, "sha256 " + d.sha256.slice(0, 12));
     pill.append(document.createElement("br"));
     part(pill, "ES5 idioms: " + (d.detectedIdioms.length ? d.detectedIdioms.join(", ") : "none detected"));
+    if (d.origin) {
+      // V20: provenance badge of a Famous npm Classic (curated snapshot, or the live CDN with the curated metadata).
+      pill.append(document.createElement("br"));
+      part(pill, d.origin === "curated-snapshot" ? "CURATED SNAPSHOT" : "LIVE CDN", "gy-origin " + (d.origin === "curated-snapshot" ? "snap" : "live"));
+      if (d.license) { part(pill, "|", "sep"); part(pill, d.license + " license"); }
+      if (d.classic && d.classic.author) { part(pill, "|", "sep"); part(pill, d.classic.author); }
+      if (d.classic && d.classic.modifications && d.classic.modifications.length) { part(pill, "|", "sep"); part(pill, "vendored: " + d.classic.modifications.length + " inlined dependency"); }
+      if (d.fallback) { pill.append(document.createElement("br")); part(pill, "The live CDN answered " + d.fallback.code + "; the curated snapshot was used instead."); }
+      if (d.classic && d.classic.traps && d.classic.traps.length) { pill.append(document.createElement("br")); part(pill, "Legacy traps: " + d.classic.traps.join("; ")); }
+    }
     pill.style.display = "block";
   }
   function showError(status, data) {
@@ -2323,33 +2391,49 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     part(banner, data.error || "Unknown error");
     banner.style.display = "block";
   }
-  async function importNpm(spec) {
+  async function importNpm(spec, source) {
     banner.style.display = "none"; pill.style.display = "none";
     importBtn.disabled = true; importBtn.textContent = "IMPORTING...";
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch("/api/import/npm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageSpec: spec }), signal: controller.signal });
+      const res = await fetch("/api/import/npm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(source ? { packageSpec: spec, source: source } : { packageSpec: spec }), signal: controller.signal });
       const data = await res.json();
-      if (!res.ok) { showError(res.status, data); return; }
+      if (!res.ok) { showError(res.status, data); return null; }
       legacyCode.value = data.source;
       if (window.LazarusStale) window.LazarusStale.check();
-      modName.value = (data.functionName || data.packageName).replace(/[^A-Za-z0-9_$]/g, "_");
+      // A curated classic is named after its package (decamelize, isNumber, padLeft), not after the anonymous function it exports.
+      modName.value = (data.origin ? data.packageName.replace(/-([a-z0-9])/g, (m, c) => c.toUpperCase()) : (data.functionName || data.packageName)).replace(/[^A-Za-z0-9_$]/g, "_");
       if (data.suggestedSchema && Object.keys(data.suggestedSchema).length > 0) schemaJson.value = JSON.stringify(data.suggestedSchema);
       if (simulateBug) simulateBug.checked = false;
       const importStatus = $("importStatus"); if (importStatus) importStatus.style.display = "none";
-      window.lazarusProvenance = { kind: "npm", label: data.packageName, version: data.version, cdnHost: data.cdnHost, url: data.url, byteLength: data.byteLength };
+      window.lazarusProvenance = Object.assign({ kind: "npm", label: data.packageName, version: data.version, cdnHost: data.cdnHost, url: data.url, byteLength: data.byteLength }, data.license ? { license: data.license } : {});
       showPill(data);
       if (window.LazarusUI) window.LazarusUI.refreshProbeInputs();
+      return data;
     } catch (err) {
       showError(0, { code: err && err.name === "AbortError" ? "TIMEOUT" : "NETWORK", error: err && err.message ? err.message : String(err) });
+      return null;
     } finally {
       clearTimeout(timer); importBtn.disabled = false; importBtn.textContent = "IMPORT NPM";
     }
   }
-  importBtn.addEventListener("click", () => { const v = specInput.value.trim(); if (v) importNpm(v); });
+  importBtn.addEventListener("click", () => { const v = specInput.value.trim(); if (v) importNpm(v, "auto"); });
   specInput.addEventListener("keydown", (e) => { if (e.key === "Enter") importBtn.click(); });
-  $("npmChips").querySelectorAll(".gy-chip").forEach((chip) => chip.addEventListener("click", () => { specInput.value = chip.dataset.spec; importNpm(chip.dataset.spec); }));
+  $("npmChips").querySelectorAll(".gy-chip").forEach((chip) => chip.addEventListener("click", () => { specInput.value = chip.dataset.spec; importNpm(chip.dataset.spec, "auto"); }));
+  // Famous npm Classics: one click imports the curated snapshot (no network, so a slow CDN never matters) and resurrects it.
+  const classicButtons = Array.from($("classicChips").querySelectorAll(".gy-classic"));
+  classicButtons.forEach((chip) => chip.addEventListener("click", async () => {
+    specInput.value = chip.dataset.spec;
+    classicButtons.forEach((b) => { b.disabled = true; });
+    try {
+      const data = await importNpm(chip.dataset.spec, "snapshot");
+      if (data && window.LazarusRun) window.LazarusRun.start();
+    } finally {
+      classicButtons.forEach((b) => { b.disabled = false; });
+    }
+  }));
+  window.LazarusNpm = { importNpm: importNpm };
 
   // ---- Resurrection Certificate -------------------------------------------
   function row(label, value, cls) {
@@ -2800,6 +2884,7 @@ function lzDecodeSpecimen(hash) {
   const presetSel = $("graphPreset"), tabs = $("graphTabs"), editor = $("graphEditor"), svg = $("graphSvg");
   const runBtn = $("graphRunBtn"), zipBtn = $("graphZipBtn"), log = $("graphLog"), verdict = $("graphVerdict"), esmOut = $("graphEsmOut");
   let project = null, files = {}, active = "", entry = "", bundleId = null, states = {}, esmByFile = {}, layout = null, busy = false;
+  let selected = "", lastResult = null, lastGraph = null;
 
   function logLine(text, cls) { const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = text; log.append(d); log.scrollTop = log.scrollHeight; }
   function el(name, attrs, text) { const n = document.createElementNS(SVG_NS, name); Object.keys(attrs || {}).forEach((k) => n.setAttribute(k, attrs[k])); if (text !== undefined) n.textContent = text; return n; }
@@ -2836,6 +2921,110 @@ function lzDecodeSpecimen(hash) {
     pill.hidden = !hasCycle;
     pill.textContent = cycleResolved ? "Cycle Resolved (ESM Live Bindings)" : "Cycle detected (resolves as ESM live bindings)";
   }
+
+  // ---- V20: Graph Node Inspector and the Public API Contract badge ----
+  const inspector = $("moduleInspector"), apiPill = $("graphApiPill");
+  function nodeClass(f) { return "node " + (states[f] || "dead") + (f === selected ? " selected" : ""); }
+  /* lz-inspect:start */
+  /** Cycle role first, then Entry, Leaf (no dependency) or Intermediate. Needs lzCycleEdges (lz-cycle). Pure. */
+  function lzRolesOf(file, edges, entryFile) {
+    var keys = lzCycleEdges(edges);
+    var inCycle = Object.keys(keys).some(function (k) { var ends = k.split("->"); return ends[0] === file || ends[1] === file; }) || edges.some(function (e) { return e.from === file && e.to === file; });
+    var dependsOn = edges.some(function (e) { return e.from === file && e.to !== file; });
+    var roles = [];
+    if (inCycle) roles.push("Cycle Member");
+    if (file === entryFile) roles.push("Entry");
+    if (!dependsOn && !inCycle) roles.push("Leaf");
+    else if (!inCycle && file !== entryFile) roles.push("Intermediate");
+    return roles;
+  }
+  /** A line diff (LazarusDiff.diffLines) as aligned side-by-side rows: a changed block is its removed lines on the left and its added lines on the right. Pure. */
+  function lzAlignRows(lines, limit) {
+    var rows = [], i = 0;
+    while (i < lines.length && rows.length < limit) {
+      if (lines[i].kind === "same") { rows.push({ left: lines[i].text, right: lines[i].text, leftKind: "same", rightKind: "same" }); i++; continue; }
+      var dels = [], adds = [];
+      while (i < lines.length && lines[i].kind !== "same") { (lines[i].kind === "del" ? dels : adds).push(lines[i].text); i++; }
+      for (var k = 0; k < Math.max(dels.length, adds.length); k++) {
+        rows.push({ left: k < dels.length ? dels[k] : null, right: k < adds.length ? adds[k] : null, leftKind: k < dels.length ? "del" : "blank", rightKind: k < adds.length ? "add" : "blank" });
+      }
+    }
+    return rows;
+  }
+  /** "Public API Contract: 0 Breaking Changes (6/6 Exports Preserved)". Pure. */
+  function lzApiPillText(c) {
+    return "Public API Contract: " + c.breakingChanges + " Breaking Change" + (c.breakingChanges === 1 ? "" : "s") + " (" + c.preservedExports + "/" + c.totalExports + " Exports Preserved)";
+  }
+  /** "taxOf(1)", "default(2)", "RATE" (a value), "Counter(1) class". Pure. */
+  function lzExportLabel(d) { return (d.form === "default" ? "default" : d.name) + (d.kind === "value" ? "" : "(" + (d.arity === null ? 0 : d.arity) + ")") + (d.kind === "class" ? " class" : ""); }
+  /** The number of tsc diagnostics that belong to one file of the typed project, or null when there was no typecheck. Pure. */
+  function lzFileErrors(typecheck, file) {
+    if (!typecheck) return null;
+    return (typecheck.diagnostics || []).filter(function (d) { return d.file === file.tsPath || d.file === file.esmPath; }).length;
+  }
+  /* lz-inspect:end */
+  function rolesOf(f) { return lzRolesOf(f, lastGraph ? lastGraph.edges : clientEdges(), entry); }
+  function blankRow(left, right, kind) {
+    const row = document.createElement("div"); row.className = "mi-row"; row.setAttribute("role", "row");
+    const cell = (text, cls) => { const c = document.createElement("div"); c.className = "mi-cell " + cls; c.setAttribute("role", "cell"); c.textContent = text === null ? "" : text; return c; };
+    row.append(cell(left, kind.left), cell(right, kind.right));
+    return row;
+  }
+  /** Aligned side-by-side diff: unchanged lines on both sides, a changed block as removed lines on the left and added lines on the right. */
+  function renderSideBySide(container, legacyText, modernText) {
+    container.textContent = "";
+    if (modernText === null) {
+      String(legacyText).split("\n").slice(0, 400).forEach((l) => container.append(blankRow(l, null, { left: "same", right: "blank" })));
+      return;
+    }
+    const lines = window.LazarusDiff ? window.LazarusDiff.diffLines(legacyText, modernText) : [];
+    lzAlignRows(lines, 600).forEach((r) => container.append(blankRow(r.left, r.right, { left: r.leftKind, right: r.rightKind })));
+  }
+  function renderApiPill(r) {
+    if (!apiPill) return;
+    const c = r && r.success ? r.apiContract : null;
+    apiPill.hidden = !c;
+    if (!c) { apiPill.textContent = ""; apiPill.className = "api-pill"; return; }
+    apiPill.className = "api-pill" + (c.breakingChanges === 0 ? "" : " bad");
+    apiPill.textContent = lzApiPillText(c);
+  }
+  function renderInspector() {
+    if (!inspector) return;
+    if (!selected || files[selected] === undefined) { inspector.hidden = true; return; }
+    const f = selected, rec = esmByFile[f] || null;
+    inspector.hidden = false;
+    $("miFile").textContent = f;
+    const roles = $("miRoles"); roles.textContent = "";
+    rolesOf(f).forEach((r) => { const s = document.createElement("span"); s.className = "mi-role " + r.toLowerCase().replace(/ /g, "-"); s.textContent = r; roles.append(s); });
+    const tsc = $("miTsc");
+    const errors = rec ? lzFileErrors(lastResult && lastResult.typecheck, rec) : null;
+    tsc.className = "mi-tsc" + (errors === null ? "" : errors === 0 ? " ok" : " bad");
+    tsc.textContent = errors === null ? "tsc --strict: run the resurrection" : "tsc --strict: " + errors + " error" + (errors === 1 ? "" : "s");
+    const api = $("miApi"); api.textContent = "";
+    const mod = lastResult && lastResult.apiContract ? lastResult.apiContract.modules.find((m) => m.file === f) : null;
+    const lead = document.createElement("span"); lead.className = "mi-api-lead";
+    lead.textContent = mod ? "Public API " + (mod.preserved ? "preserved" : "BROKEN") + ":" : "Public API:";
+    api.append(lead);
+    if (mod) {
+      mod.legacyExports.forEach((d) => {
+        const broken = mod.breaking.some((b) => b.export === lzExportLabel(d).replace(" class", ""));
+        const chip = document.createElement("span"); chip.className = "mi-export" + (broken ? " bad" : ""); chip.textContent = lzExportLabel(d) + (broken ? " \u2717" : " \u2713"); chip.title = (d.form === "default" ? "default export" : "named export") + ", " + d.kind + (d.kind === "value" ? "" : ", " + d.arity + " parameter" + (d.arity === 1 ? "" : "s")); api.append(chip);
+      });
+    } else {
+      const note = document.createElement("span"); note.className = "mi-note"; note.textContent = "resurrect the project to compare the exports of this module with the legacy ones"; api.append(note);
+    }
+    const modern = rec ? (rec.tsCode || rec.esmCode || null) : null;
+    $("miRightTitle").textContent = modern ? "Resurrected TypeScript (" + (rec.tsCode ? rec.tsPath : rec.esmPath) + ")" : "Resurrected TypeScript (not resurrected yet)";
+    renderSideBySide($("miDiff"), files[f], modern);
+  }
+  function selectNode(f) {
+    selected = f;
+    if (layout) Object.keys(layout.nodeEls).forEach((name) => { const n = layout.nodeEls[name]; n.g.setAttribute("class", nodeClass(name)); n.g.setAttribute("aria-pressed", name === f ? "true" : "false"); });
+    showFile(f);
+    renderInspector();
+  }
+  function resetResult() { lastResult = null; lastGraph = null; renderApiPill(null); renderInspector(); }
+  window.LazarusInspector = { select: selectNode, selected: () => selected, roles: rolesOf };
 
   // ---- static analysis on the client (only to draw the graph before the run; the server re-analyzes) ----
   function clientEdges() { return lzRequireEdges(files); }
@@ -2901,15 +3090,15 @@ function lzDecodeSpecimen(hash) {
     });
     const nodeEls = {};
     Object.keys(pos).forEach((f) => {
-      const g = el("g", { class: "node dead", transform: "translate(" + pos[f].x + "," + pos[f].y + ")", tabindex: "0" });
+      const g = el("g", { class: nodeClass(f), transform: "translate(" + pos[f].x + "," + pos[f].y + ")", tabindex: "0", role: "button", "aria-pressed": f === selected ? "true" : "false", "aria-label": f + (f === entry ? ", entry module" : "") + ": inspect this module" });
       g.append(el("rect", { width: String(W), height: String(H), rx: "8" }));
       g.append(el("text", { class: "file", x: "12", y: "21" }, f + (f === entry ? "  \u2605" : "")));
       const state = el("text", { class: "state", x: "12", y: "38" }, STATE_LABEL.dead);
       g.append(state);
       const title = el("title", {}, f);
       g.append(title);
-      g.addEventListener("click", () => showFile(f));
-      g.addEventListener("keydown", (ev) => { if (ev.key === "Enter") showFile(f); });
+      g.addEventListener("click", () => selectNode(f));
+      g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); selectNode(f); } });
       svg.append(g);
       nodeEls[f] = { g: g, state: state, title: title };
     });
@@ -2922,7 +3111,7 @@ function lzDecodeSpecimen(hash) {
     states[file] = state;
     if (!layout || !layout.nodeEls[file]) return;
     const n = layout.nodeEls[file];
-    n.g.setAttribute("class", "node " + state);
+    n.g.setAttribute("class", nodeClass(file));
     n.state.textContent = STATE_LABEL[state] || state.toUpperCase();
     if (detail) n.title.textContent = file + ": " + detail;
     layout.edgeEls.forEach((x) => {
@@ -2963,7 +3152,7 @@ function lzDecodeSpecimen(hash) {
   function loadProject(key) {
     project = PROJECTS[key];
     files = Object.assign({}, project.files);
-    states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true; cycleResolved = false;
+    states = {}; esmByFile = {}; bundleId = null; zipBtn.disabled = true; cycleResolved = false; selected = ""; resetResult();
     log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmOut.style.display = "none";
     redraw();
     showFile(Object.keys(files)[0]);
@@ -3036,8 +3225,9 @@ function lzDecodeSpecimen(hash) {
     files[active] = editor.value;
     bundleId = null; zipBtn.disabled = true;
     delete esmByFile[active];
-    states = {}; cycleResolved = false;
+    states = {}; cycleResolved = false; resetResult();
     redraw();
+    renderInspector();
   });
   presetSel.addEventListener("change", () => loadProject(presetSel.value));
 
@@ -3045,7 +3235,7 @@ function lzDecodeSpecimen(hash) {
     if (busy) return;
     busy = true; runBtn.disabled = true; zipBtn.disabled = true; bundleId = null;
     log.textContent = ""; verdict.className = "graph-verdict"; verdict.textContent = ""; esmByFile = {}; esmOut.style.display = "none";
-    states = {}; cycleResolved = false;
+    states = {}; cycleResolved = false; resetResult();
     Object.keys(files).forEach((f) => { states[f] = "dead"; });
     redraw();
     logLine("Streaming /api/resurrect-graph ...");
@@ -3073,6 +3263,7 @@ function lzDecodeSpecimen(hash) {
           const data = JSON.parse(frame.slice(6));
           if (data.kind === "graph") {
             entry = data.graph.entry || entry;
+            lastGraph = data.graph;
             drawGraph(data.graph.edges, data.graph.depth);
             renderTabs();
             logLine("Topological resurrection order: " + data.graph.order.join(" \u2192 "));
@@ -3084,7 +3275,10 @@ function lzDecodeSpecimen(hash) {
             logLine(data.message, /parity proven/i.test(data.message) ? "ok" : "");
           } else if (data.kind === "result") {
             const r = data.result;
+            lastResult = r;
+            if (r.edges) lastGraph = { edges: r.edges, cycles: r.cycles || [], entry: r.entry };
             (r.files || []).forEach((f) => { esmByFile[f.path] = f; });
+            renderApiPill(r);
             if (r.success) {
               bundleId = r.bundleId; zipBtn.disabled = !bundleId;
               cycleResolved = !(r.typecheck && !r.typecheck.passed);
@@ -3099,6 +3293,7 @@ function lzDecodeSpecimen(hash) {
               verdict.textContent = "NOT RESURRECTED \u2717 " + (r.error || "parity could not be proven");
             }
             showFile(active);
+            renderInspector();
           } else if (data.kind === "error") {
             verdict.className = "graph-verdict fail"; verdict.textContent = data.message;
           }

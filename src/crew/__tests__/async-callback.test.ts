@@ -363,11 +363,16 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
     // V19: the Edge Gauntlet and Seed Replay controls live in Tab 1 only.
     expect(tab3).not.toMatch(/gauntlet|seedBar|reseedBtn|proofSeed|legacyUnsafeMerge/i);
+    // V19 Graveyard: the Famous npm Classics and the Tab 2 inspector never reach Tab 3, and an async preset is not a classic.
+    expect(tab3).not.toMatch(/classicChips|moduleInspector|graphApiPill|apiContract|graveyard/i);
+    expect(pageHtml.indexOf('id="classicChips"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(pageHtml.indexOf('id="moduleInspector"')).toBeGreaterThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(pageHtml.indexOf('id="moduleInspector"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
     expect(pageHtml.indexOf('id="gauntletBtn"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
     expect(pageHtml.indexOf('id="reseedBtn"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
   });
