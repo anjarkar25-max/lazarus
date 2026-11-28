@@ -981,10 +981,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 28-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 29-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1324,7 +1324,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(28);
+    expect(body["specs"]).toBe(29);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1357,8 +1357,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 28 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+  it("shows 29 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
   });
 });
 
@@ -1511,7 +1511,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       const r = await resurrect();
       const sig = r.certificate.signature;
       expect(sig.keyId).toMatch(/^[0-9a-f]{16}$/);
-      expect(Object.keys(sig.payload)).toEqual(["legacySha256", "resurrectedSha256", "paritySummary", "mutantsKilled", "tscStrictErrors", "issuedAt"]);
+      expect(Object.keys(sig.payload)).toEqual(["legacySha256", "resurrectedSha256", "paritySummary", "mutantsKilled", "tscStrictErrors", "issuedAt", "proofSeed"]);
+      expect(sig.payload["proofSeed"]).toBe(7);
       const ok = await fetch(`${baseUrl}/api/verify-certificate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload: sig.payload, signatureB64: sig.signatureB64, publicKeyPem: sig.publicKeyPem, resurrectedCode: r.modernCode, legacyCode: LEGACY }) });
       expect(((await ok.json()) as { valid: boolean }).valid).toBe(true);
     }, 60_000);
@@ -1595,8 +1596,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 28 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+    it("shows 29 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
     });
   });
 });
@@ -1784,14 +1785,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 28 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 29 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2104,7 +2105,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 28 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 29 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2116,7 +2117,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
@@ -2443,7 +2444,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
-    it("keeps Tab 3 Red-Team byte-identical, shows 28 Kiro Specs and adds no dependency", () => {
+    it("keeps Tab 3 Red-Team byte-identical, shows 29 Kiro Specs and adds no dependency", () => {
       const between = (a: string, b: string): string => {
         const s = html.indexOf(a);
         const e = html.indexOf(b, s + a.length);
@@ -2455,7 +2456,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
       const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
     });
@@ -2729,7 +2730,7 @@ describe("V17 UX polish: one drawer at a time, Escape, focus return, focus trap,
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
@@ -2975,14 +2976,14 @@ describe("V18 5-Pill Proof Strip, PR Preview drawer and Kiro Ecosystem Map (ship
       expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
       expect(html.indexOf("/* ---- V18:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
     });
-    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 28 Kiro Specs", () => {
+    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 29 Kiro Specs", () => {
       const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
       const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
       expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
       expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
@@ -2990,3 +2991,352 @@ describe("V18 5-Pill Proof Strip, PR Preview drawer and Kiro Ecosystem Map (ship
   });
 });
 const LOADS_IN_SVG = /<script|<image|<foreignObject|xlink:href|\shref\s*=|https?:\/\//i;
+
+// ---------------------------------------------------------------------------
+// V19: 12-Case Edge Gauntlet card, Seed Replay control, the legacyUnsafeMerge preset (shipped scripts, minimal DOM)
+// ---------------------------------------------------------------------------
+describe("V19 Edge Gauntlet, Seed Replay and the legacyUnsafeMerge preset", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const v19 = (): string => regionOf("lz-v19");
+  const all = (root: FakeElement, test: (el: FakeElement) => boolean): FakeElement[] => [...(test(root) ? [root] : []), ...root.children.flatMap((c) => all(c, test))];
+  const withClass = (root: FakeElement, cls: string): FakeElement[] => all(root, (el) => el.className.split(/\s+/).includes(cls));
+  class FakeCustomEvent {
+    readonly detail: unknown;
+    constructor(readonly type: string, init?: { detail?: unknown }) {
+      this.detail = init?.detail;
+    }
+  }
+  const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+
+  const SCORE = {
+    total: 5,
+    lazarusPassed: 5,
+    naivePassed: 2,
+    naiveApplies: true,
+    rows: [
+      { label: "-0", inputDisplay: "n = -0", legacyOut: "+0", naiveOut: "-0", lazarusOut: "+0", naiveMatch: false, lazarusMatch: true },
+      { label: "2147483647", inputDisplay: "n = 2147483647", legacyOut: "1073741823", naiveOut: "1073741823", lazarusOut: "1073741823", naiveMatch: true, lazarusMatch: true },
+      { label: "2147483648", inputDisplay: "n = 2147483648", legacyOut: "1073741824", naiveOut: "1073741824", lazarusOut: "1073741824", naiveMatch: true, lazarusMatch: true },
+      { label: "-2147483648", inputDisplay: "n = -2147483648", legacyOut: "-1073741824", naiveOut: "-1073741824", lazarusOut: "-1073741824", naiveMatch: true, lazarusMatch: true },
+      { label: "-3", inputDisplay: "n = -3", legacyOut: "-1", naiveOut: "-2", lazarusOut: "-1", naiveMatch: false, lazarusMatch: true },
+    ],
+  };
+
+  function rig(respond: (url: string, init?: RequestInit) => Promise<Response>) {
+    const doc = new FakeDocument();
+    const el = (id: string, tag = "div"): FakeElement => doc.element(tag, id);
+    const gBtn = el("gauntletBtn", "button");
+    const gBox = el("gauntletResults");
+    gBox.hidden = true;
+    const modernOut = el("modernOut", "pre");
+    modernOut.textContent = "Math.trunc(n / 2) || 0;";
+    const legacy = el("legacyCode", "textarea");
+    legacy.value = "var half = (n / 2) | 0; half;";
+    const schema = el("schemaJson", "textarea");
+    schema.value = '{"n": "integer"}';
+    const bar = el("seedBar");
+    bar.hidden = true;
+    const seedValue = el("seedValue", "b");
+    const reseed = el("reseedBtn", "button");
+    const note = el("seedNote");
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetchImpl = (url: string, init?: RequestInit): Promise<Response> => {
+      calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+      return respond(url, init);
+    };
+    const win: Record<string, unknown> = {};
+    const starts: Array<{ override: unknown }> = [];
+    win["LazarusRun"] = { start: () => { starts.push({ override: win["lazarusSeedOverride"] }); return Promise.resolve(null); } };
+    runInlineScript(v19(), {
+      document: doc,
+      window: win,
+      fetch: fetchImpl,
+      CustomEvent: FakeCustomEvent,
+      Uint32Array,
+      crypto: { getRandomValues: (a: Uint32Array) => { a[0] = Math.floor(Math.random() * 2 ** 32); return a; } },
+    });
+    return { doc, gBtn, gBox, modernOut, legacy, schema, bar, seedValue, reseed, note, calls, win, starts };
+  }
+
+  it("ships the gauntlet button inside the 3-Way Judge Probe card and the seed controls inside the Verification Deck, with no new tab", () => {
+    const probeCard = html.slice(html.indexOf('<div id="probeCard"'), html.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(probeCard).toContain('<button id="gauntletBtn" type="button" class="gauntlet-btn" aria-controls="gauntletResults">Run 12-Case Edge Gauntlet</button>');
+    expect(probeCard).toContain('<div id="gauntletResults" class="gauntlet" role="region" aria-label="12-Case Edge Gauntlet scorecard" aria-live="polite" hidden></div>');
+    const deck = html.slice(html.indexOf('<section class="verify-deck" id="verifyDeck"'), html.indexOf('<div class="deck-wide">'));
+    expect(deck).toContain('<span id="seedBar" class="seed-bar" hidden>');
+    expect(deck).toContain('Seed: <b id="seedValue">-</b>');
+    expect(deck).toContain('>Re-Verify New Seed</button>');
+    expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+  });
+
+  it("ships the legacyUnsafeMerge preset, byte for byte the benchmark preset, and sends the proof seed on export", () => {
+    expect(html).toContain('value: "legacyUnsafeMerge"');
+    expect(html).toContain("Preset 15: Prototype-Pollution Merge");
+    expect(html).toContain("for (var key in source) {");
+    expect(html).toContain("legacyUnsafeMerge(target[key], source[key]);");
+    expect(html).toContain("schema: '{\"target\": \"json\", \"source\": \"json\"}'");
+    expect(html).toContain("...(window.lazarusSeedOverride !== undefined ? { seed: window.lazarusSeedOverride } : {}),");
+    expect(html).toContain("seed: window.lastProofSeed,");
+    expect(html).not.toContain("seed: 1337,\n            simulateBuggyFirstDraft");
+    expect(html).toContain("Proto-Pollution Blocked");
+  });
+
+  it("loads after the other scripts and before the stale-proof script, adds its CSS outside the Red-Team region and never touches Tab 3", () => {
+    expect(html.indexOf("/* lz-v19:start */")).toBeGreaterThan(html.indexOf("/* ---- V18:") - 1);
+    expect(html.indexOf("/* lz-v19:end */")).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+    expect(html.lastIndexOf("<script>")).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+    expect(v19()).not.toMatch(/redteam|redTeam|rtLog|rtButtons|rt-btn/i);
+    const css = html.slice(html.indexOf("/* ---- V19:"), html.indexOf("</style>"));
+    for (const s of [".gauntlet-btn", ".gauntlet td.g-ok", ".gauntlet td.g-bad", ".gauntlet tr.g-trap", ".seed-chip", ".reseed-btn"]) expect(css, s).toContain(s);
+    expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
+    expect(html.indexOf("/* ---- V19:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
+    // The only request the V19 script makes is the gauntlet.
+    expect(v19().match(/fetch\(/g)).toHaveLength(1);
+    expect(v19()).toContain('fetch("/api/edge-gauntlet"');
+  });
+
+  it("keeps the three Tab 3 SHA-256 invariants, unique ids and 29 Kiro Specs", () => {
+    const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
+    const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
+    expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+    expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+    const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+    expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
+    const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    for (const id of ["gauntletBtn", "gauntletResults", "seedBar", "seedChip", "seedValue", "reseedBtn", "seedNote"]) expect(ids.filter((x) => x === id), id).toHaveLength(1);
+    expect(html).toMatch(/id="badgeTests">\d+ Verified Tests</);
+  });
+
+  describe("Run 12-Case Edge Gauntlet (shipped script, scripted fetch)", () => {
+    it("posts the specimen, the resurrected code and the schema, then renders a 3-column red/green scorecard that highlights the traps", async () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      let seen: unknown;
+      t.doc.addEventListener("lazarus:gauntlet", (e) => { seen = e.detail; });
+      t.gBtn.click();
+      await flush();
+      expect(t.calls).toEqual([{ url: "/api/edge-gauntlet", body: { legacyCode: "var half = (n / 2) | 0; half;", modernCode: "Math.trunc(n / 2) || 0;", schema: { n: "integer" } } }]);
+      expect(t.gBox.hidden).toBe(false);
+      expect(withClass(t.gBox, "g-lazarus")[0]?.textContent).toBe("Lazarus: 5/5 Exact Parity");
+      expect(withClass(t.gBox, "g-naive")[0]?.textContent).toBe("Naive AI: 2/5");
+      expect(withClass(t.gBox, "gauntlet-traps")[0]?.textContent).toBe("Naive AI diverges from Legacy on 2 traps where Lazarus holds exact parity: -0, -3");
+      const th = all(t.gBox, (el) => el.tagName === "th").map((c) => c.textContent);
+      expect(th).toEqual(["Edge input", "Legacy", "Naive AI", "Lazarus Proven"]);
+      const rows = all(t.gBox, (el) => el.tagName === "tr").slice(1);
+      expect(rows).toHaveLength(5);
+      expect(rows.map((r) => r.className)).toEqual(["g-trap", "", "", "", "g-trap"]);
+      const cells = (r: FakeElement): FakeElement[] => r.children;
+      expect(cells(rows[0] as FakeElement).map((c) => c.className)).toEqual(["", "", "g-bad", "g-ok"]);
+      expect(cells(rows[0] as FakeElement).map((c) => c.textContent)).toEqual(["-0TRAP", "+0", "\u2717 -0", "\u2713 +0"]);
+      expect(cells(rows[1] as FakeElement).map((c) => c.className)).toEqual(["", "", "g-ok", "g-ok"]);
+      expect(cells(rows[4] as FakeElement).map((c) => c.textContent)).toEqual(["-3TRAP", "-1", "\u2717 -2", "\u2713 -1"]);
+      expect((seen as { total: number }).total).toBe(5);
+      expect(t.gBtn.disabled).toBe(false);
+    });
+
+    it("shows a failing Lazarus row in red and says so in the score", async () => {
+      const bad = { ...SCORE, lazarusPassed: 4, rows: SCORE.rows.map((r, i) => (i === 1 ? { ...r, lazarusOut: "9", lazarusMatch: false } : r)) };
+      const t = rig(() => Promise.resolve(json(bad)));
+      t.gBtn.click();
+      await flush();
+      expect(withClass(t.gBox, "g-lazarus")[0]?.textContent).toBe("Lazarus: 4/5 Exact Parity (1 MISMATCH)");
+      expect(all(t.gBox, (el) => el.tagName === "tr").slice(1)[1]?.children.map((c) => c.className)).toEqual(["", "", "g-ok", "g-bad"]);
+    });
+
+    it("says when the specimen has no naive trap, and when naive AI held on every case", async () => {
+      const clean = { total: 2, lazarusPassed: 2, naivePassed: 2, rows: SCORE.rows.slice(1, 3).map((r) => ({ ...r })) };
+      const noTrap = rig(() => Promise.resolve(json({ ...clean, naiveApplies: false })));
+      noTrap.gBtn.click();
+      await flush();
+      expect(withClass(noTrap.gBox, "g-naive")[0]?.className).toBe("g-naive clean");
+      expect(withClass(noTrap.gBox, "gauntlet-traps")[0]?.textContent).toContain("No naive-trap pattern");
+      const held = rig(() => Promise.resolve(json({ ...clean, naiveApplies: true })));
+      held.gBtn.click();
+      await flush();
+      expect(withClass(held.gBox, "gauntlet-traps")[0]?.textContent).toBe("Naive AI matched Legacy on every case of this specimen.");
+    });
+
+    it("asks for a resurrection first, and for a valid schema, without calling the server", async () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      t.modernOut.textContent = "// Modernized code will appear here";
+      t.gBtn.click();
+      await flush();
+      expect(t.calls).toEqual([]);
+      expect(t.gBox.textContent).toBe("Run RESURRECT SPECIMEN first, so there is resurrected code to attack.");
+      t.modernOut.textContent = "n;";
+      t.schema.value = "{nope";
+      t.gBtn.click();
+      await flush();
+      expect(t.calls).toEqual([]);
+      expect(t.gBox.textContent).toBe("Fix the Input Fuzz Schema JSON first.");
+    });
+
+    it("surfaces server errors, malformed bodies and network failures visibly, and re-enables the button", async () => {
+      const cases: Array<[() => Promise<Response>, string]> = [
+        [() => Promise.resolve(json({ error: "No input to probe", code: "NO_SCHEMA" }, 422)), "Edge gauntlet failed: No input to probe"],
+        [() => Promise.resolve(json({ error: "An edge gauntlet is already running", code: "BUSY" }, 429)), "Edge gauntlet failed: An edge gauntlet is already running"],
+        [() => Promise.resolve(new Response("<html>502</html>", { status: 502 })), "Edge gauntlet failed: HTTP 502"],
+        [() => Promise.resolve(json({ hello: "world" })), "Edge gauntlet failed: HTTP 200"],
+        [() => Promise.reject(new TypeError("Failed to fetch")), "Edge gauntlet failed: Failed to fetch"],
+      ];
+      for (const [respond, message] of cases) {
+        const t = rig(respond);
+        t.gBtn.click();
+        await flush();
+        expect(t.gBox.textContent, message).toBe(message);
+        expect(t.gBox.hidden).toBe(false);
+        expect(t.gBtn.disabled).toBe(false);
+        expect(t.gBtn.getAttribute("aria-busy")).toBeNull();
+      }
+    });
+
+    it("disables the button while the gauntlet runs, targets the picked function of a module, and clears on the next resurrection", async () => {
+      let release: (r: Response) => void = () => undefined;
+      const t = rig(() => new Promise<Response>((resolve) => { release = resolve; }));
+      t.schema.value = '{"halve": {"n": "integer"}, "twice": {"n": "integer"}}';
+      t.win["lastModuleFunctions"] = [{ exportedAs: "halve", modernCode: "M1;" }, { exportedAs: "twice", modernCode: "M2;" }];
+      const picker = t.doc.element("select", "probeFn");
+      picker.value = "twice";
+      t.gBtn.click();
+      expect(t.gBtn.disabled).toBe(true);
+      expect(t.gBtn.getAttribute("aria-busy")).toBe("true");
+      expect(t.gBox.textContent).toContain("Running the 12 edge cases");
+      expect(t.calls[0]?.body).toEqual({ legacyCode: "var half = (n / 2) | 0; half;", modernCode: "M2;", schema: { n: "integer" }, functionName: "twice" });
+      release(json(SCORE));
+      await flush();
+      expect(t.gBtn.disabled).toBe(false);
+      expect(t.gBox.hidden).toBe(false);
+      t.doc.dispatchEvent({ type: "lazarus:run-start" });
+      expect(t.gBox.hidden).toBe(true);
+      expect(t.gBox.textContent).toBe("");
+    });
+
+    it("drops the answer of a gauntlet that a new resurrection superseded", async () => {
+      let release: (r: Response) => void = () => undefined;
+      const t = rig(() => new Promise<Response>((resolve) => { release = resolve; }));
+      t.gBtn.click();
+      t.doc.dispatchEvent({ type: "lazarus:run-start" });
+      release(json(SCORE));
+      await flush();
+      expect(t.gBox.hidden).toBe(true);
+      expect(t.gBox.textContent).toBe("");
+    });
+  });
+
+  describe("Seed chip and Re-Verify New Seed (shipped script)", () => {
+    const result = (proofSeed: number, success = true): { detail: unknown; type: string } => ({ type: "lazarus:result", detail: { success, proofSeed, numRuns: 100 } });
+
+    it("shows Seed: N and the run count once a result carries a proofSeed, and ignores one that does not", () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      expect(t.bar.hidden).toBe(true);
+      t.doc.dispatchEvent({ type: "lazarus:result", detail: { success: true } });
+      expect(t.bar.hidden).toBe(true);
+      t.doc.dispatchEvent(result(1375503261));
+      expect(t.bar.hidden).toBe(false);
+      expect(t.seedValue.textContent).toBe("1375503261");
+      expect(t.win["lastProofSeed"]).toBe(1375503261);
+      expect(t.note.textContent).toBe("Parity held over 100 runs with this seed.");
+      expect(t.note.className).toBe("seed-note ok");
+      t.doc.dispatchEvent(result(5, false));
+      expect(t.note.className).toBe("seed-note bad");
+      expect(t.note.textContent).toContain("Divergence");
+    });
+
+    it("re-runs the verification with a fresh integer seed, and clears the override afterwards", async () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      t.doc.dispatchEvent(result(1375503261));
+      t.reseed.click();
+      await flush();
+      expect(t.starts).toHaveLength(1);
+      const seed = t.starts[0]?.override as number;
+      expect(Number.isInteger(seed)).toBe(true);
+      expect(seed).toBeGreaterThanOrEqual(0);
+      expect(seed).toBeLessThan(2 ** 31 - 16);
+      expect(seed).not.toBe(1375503261);
+      expect(t.win["lazarusSeedOverride"]).toBeUndefined();
+      expect(t.note.textContent).toBe(`Re-verifying with seed ${seed}...`);
+      t.reseed.click();
+      await flush();
+      expect(t.starts).toHaveLength(2);
+    });
+
+    it("disables the button during a run and re-enables it afterwards", () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      t.doc.dispatchEvent({ type: "lazarus:run-start" });
+      expect(t.reseed.disabled).toBe(true);
+      t.reseed.click();
+      expect(t.starts).toHaveLength(0);
+      t.doc.dispatchEvent({ type: "lazarus:run-end" });
+      expect(t.reseed.disabled).toBe(false);
+    });
+
+    it("draws a new integer each time, never the previous one", () => {
+      const t = rig(() => Promise.resolve(json(SCORE)));
+      const fresh = (t.win["LazarusSeed"] as { freshSeed: (p?: number) => number }).freshSeed;
+      const seen = new Set<number>();
+      for (let i = 0; i < 40; i++) {
+        const n = fresh(7);
+        expect(Number.isInteger(n) && n >= 0 && n < 2 ** 31 - 16 && n !== 7).toBe(true);
+        seen.add(n);
+      }
+      expect(seen.size).toBeGreaterThan(30);
+    });
+  });
+
+  describe("offline Ed25519 verification of a certificate that signs its proof seed (shipped lz-sig script, node WebCrypto)", () => {
+    type Verdict = { supported: boolean; valid?: boolean; reason?: string };
+    const verifyOffline = (sig: unknown, code: string): Promise<Verdict> => {
+      const fn = runInlineScript(`${regionOf("lz-sig")}; lzOfflineVerify`, { window: {}, document: new FakeDocument() }) as (s: unknown, sig: unknown, code: string) => Promise<Verdict>;
+      return fn(webcrypto.subtle, sig, code);
+    };
+    const CODE = "export const x = 1;\n";
+    const seeded = (): ReturnType<typeof signCertificate> => signCertificate({ legacySource: "var x = 1;", resurrectedSource: CODE, paritySummary: "exact Object.is parity, 100 fuzz runs, 1 attempt", tscStrictErrors: 0, issuedAt: "2026-01-01T00:00:00.000Z", proofSeed: 1375503261 });
+    const asSig = (b: ReturnType<typeof signCertificate>, payload: unknown = b.payload): Record<string, unknown> => ({ payload, signatureB64: b.signatureB64, publicKeyPem: b.publicKeyPem, keyId: b.keyId });
+    it("builds the same canonical bytes as the server, with and without a seed", async () => {
+      const canonical = runInlineScript(`${regionOf("lz-sig")}; lzCanonicalPayload`, { window: {}, document: new FakeDocument() }) as (p: unknown) => string;
+      const block = seeded();
+      expect(canonical(block.payload)).toBe(block.canonical);
+      const plain = signCertificate({ legacySource: "var x = 1;", resurrectedSource: CODE, paritySummary: "x", issuedAt: "2026-01-01T00:00:00.000Z" });
+      expect(canonical(plain.payload)).toBe(plain.canonical);
+      expect(plain.canonical).not.toContain("proofSeed");
+    });
+    it("verifies a seeded certificate offline, and catches a changed or malformed seed", async () => {
+      const block = seeded();
+      expect(await verifyOffline(asSig(block), CODE)).toMatchObject({ supported: true, valid: true });
+      expect((await verifyOffline(asSig(block, { ...block.payload, proofSeed: 1375503262 }), CODE)).reason).toMatch(/^Signature mismatch/);
+      const { proofSeed: _seed, ...stripped } = block.payload;
+      expect((await verifyOffline(asSig(block, stripped), CODE)).reason).toMatch(/^Signature mismatch/);
+      for (const bad of [1.5, "7", 2 ** 31, null]) expect(await verifyOffline(asSig(block, { ...block.payload, proofSeed: bad }), CODE), String(bad)).toMatchObject({ valid: false, reason: "Invalid certificate payload" });
+    });
+    it("still verifies a certificate signed without a seed", async () => {
+      const plain = signCertificate({ legacySource: "var x = 1;", resurrectedSource: CODE, paritySummary: "x", issuedAt: "2026-01-01T00:00:00.000Z" });
+      expect(await verifyOffline(asSig(plain), CODE)).toMatchObject({ supported: true, valid: true });
+    });
+  });
+
+  describe("Purity proof details", () => {
+    const pill = (r: unknown): { value: string; tone: string } => (runInlineScript(`${regionOf("lz-proof")}; lzProofPills`, {}) as (r: unknown, c: unknown) => Array<{ id: string; value: string; tone: string }>)(r, {}).find((p) => p.id === "purity") ?? { value: "", tone: "" };
+    const proof = (extra: Record<string, unknown>): Record<string, unknown> => ({ success: true, fuzzReport: { totalRuns: 80 }, certificate: { signature: {} }, purityProof: { globalLeaksDetected: [], globalLeaksEliminated: true, prototypeSafe: true, inputMutationParity: true, legacyMutatesInput: true, legacyLeakedGlobals: [], samples: 6, proven: true, details: [], ...extra } });
+    it("names Proto-Pollution Blocked on the purity pill when the exploit probe was blocked, and Zero leaks otherwise", () => {
+      expect(pill(proof({ protoPollutionBlocked: true }))).toMatchObject({ tone: "ok", value: "Proto-Pollution Blocked" });
+      expect(pill(proof({}))).toMatchObject({ tone: "ok", value: "Zero leaks" });
+      expect(pill(proof({ protoPollutionBlocked: false, proven: false }))).toMatchObject({ tone: "bad", value: "NOT PROVEN" });
+      expect(pill(proof({ protoPollutionBlocked: true, globalLeaksDetected: ["total"] })).value).toBe("Fixed 1 leak");
+    });
+    it("lists a Proto-Pollution Blocked row in the purity details", () => {
+      expect(html).toContain('["protoPollutionBlocked", p.protoPollutionBlocked ? "Proto-Pollution Blocked: JSON.parse(');
+      expect(html).toContain("Proto-Pollution NOT blocked: the exploit payload polluted Object.prototype");
+    });
+  });
+});

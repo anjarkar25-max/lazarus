@@ -11,6 +11,8 @@ import { analyzeGraph } from "./crew/graph-resurrector.js";
 import { detectErrorFirst, liftErrorFirst } from "./crew/async-callback.js";
 import { detectPromiseChain, inheritanceParentOf } from "./crew/es5-idioms.js";
 import { detectGlobalLeaksInProgram } from "./crew/purity-audit.js";
+import { analyze } from "./crew/ast-scope.js";
+import { findLooseEqualitySites, findProtoPollutionSites } from "./crew/security-exorcist.js";
 import { resolveRelative } from "./sandbox/virtual-fs.js";
 
 export const MAX_AUDIT_FILES = 500;
@@ -18,7 +20,7 @@ export const MAX_AUDIT_FILE_BYTES = 256 * 1024;
 export const IGNORED_DIRS: ReadonlySet<string> = new Set(["node_modules", ".git", "dist"]);
 
 export type Severity = "high" | "medium" | "info";
-export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error" | "inheritance-chain" | "apply-forwarding" | "promise-chain" | "global-leak";
+export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error" | "inheritance-chain" | "apply-forwarding" | "promise-chain" | "global-leak" | "proto-pollution" | "loose-equality";
 
 export interface Finding {
   readonly kind: FindingKind;
@@ -108,7 +110,12 @@ interface Scan {
   readonly requires: Array<{ readonly specifier: string; readonly line: number }>;
 }
 
-function scanProgram(ast: ESTree.Program): Scan {
+/** `security` adds LAZ010 (loose equality). It is opt-in because `==` is everywhere in real legacy code and would change every existing report. */
+export interface AuditOptions {
+  readonly security?: boolean;
+}
+
+function scanProgram(ast: ESTree.Program, options: AuditOptions = {}): Scan {
   const findings: Finding[] = [];
   const requires: Array<{ specifier: string; line: number }> = [];
   const functions = new Set<string>();
@@ -176,6 +183,24 @@ function scanProgram(ast: ESTree.Program): Scan {
       message: `\`${leak.name}\` is assigned in ${leak.functionName}() without var, let or const: it leaks onto the global object in sloppy ES5 and throws a ReferenceError in strict ES2022. ${leak.fix !== undefined ? "Lazarus declares it with let because it is private to the function" : `Lazarus keeps it and flags it: ${leak.keptBecause ?? "it may be shared state"}`}`,
     });
   }
+  for (const site of findProtoPollutionSites(analyze(ast))) {
+    findings.push({
+      kind: "proto-pollution",
+      severity: "high",
+      line: site.line,
+      message: `\`for (${site.key} in ${site.sourceText})\` copies keys without skipping \`__proto__\`, \`constructor\` and \`prototype\`: a JSON.parse('{"__proto__":{"polluted":true}}') input can write onto Object.prototype. ${site.fixable ? "Lazarus guards the loop (the proto-pollution-guard rule) and proves it with a live exploit probe" : `Lazarus keeps it and flags it: ${site.keptBecause ?? "it cannot be guarded safely"}`}`,
+    });
+  }
+  const looseSites = options.security === true ? findLooseEqualitySites(ast) : [];
+  if (looseSites.length > 0) {
+    const first = looseSites[0];
+    findings.push({
+      kind: "loose-equality",
+      severity: "medium",
+      line: first?.line ?? 0,
+      message: `${looseSites.length} loose \`==\` / \`!=\` comparison(s), first \`${first?.text ?? ""}\`: operands are coerced (\`0 == ""\`, \`null == undefined\`, \`"1" == 1\`). Lazarus tightens a comparison to \`===\` only where both operand types are provably equal`,
+    });
+  }
   if (varCount > 0) {
     findings.push({ kind: "var-hoisting", severity: "medium", line: firstVarLine, message: `${varCount} \`var\` binding(s): function-scoped and hoisted; \`let\`/\`const\` change loop closures and use-before-declare behaviour` });
   }
@@ -208,16 +233,16 @@ export function readAuditSources(dir: string): AuditInput {
 }
 
 /** `displayName` is the folder as it is shown in the report and its commands (default: `dir`). */
-export function auditDirectory(dir: string, displayName?: string): AuditReport {
+export function auditDirectory(dir: string, displayName?: string, options: AuditOptions = {}): AuditReport {
   const { sources, skipped } = readAuditSources(dir);
-  return auditSources(sources, skipped, displayName ?? dir);
+  return auditSources(sources, skipped, displayName ?? dir, options);
 }
 
 /**
  * The audit itself, on files already in memory (relative path -> text): the same rules for a folder on disk and for pasted code.
  * Files are parsed with acorn and never executed.
  */
-export function auditSources(sources: ReadonlyMap<string, string>, skipped: Array<{ file: string; reason: string }>, directory: string): AuditReport {
+export function auditSources(sources: ReadonlyMap<string, string>, skipped: Array<{ file: string; reason: string }>, directory: string, options: AuditOptions = {}): AuditReport {
   const known = new Set(sources.keys());
   const scans = new Map<string, Scan>();
   const edges: Array<{ from: string; to: string }> = [];
@@ -228,7 +253,7 @@ export function auditSources(sources: ReadonlyMap<string, string>, skipped: Arra
       scans.set(rel, { findings: [{ kind: "parse-error", severity: "high", line: 0, message: `does not parse: ${ast.error}` }], requires: [] });
       continue;
     }
-    const scan = scanProgram(ast);
+    const scan = scanProgram(ast, options);
     const errorFirst = detectErrorFirst(source).functions;
     if (errorFirst.length > 0) {
       const lift = liftErrorFirst(source);
@@ -439,6 +464,8 @@ export const SARIF_RULES: readonly SarifRule[] = [
  */
 export const SARIF_EXTENSION_RULES: readonly SarifRule[] = [
   rule("LAZ008", "UndeclaredGlobalLeak", "Undeclared global assigned inside a function", "A function assigns an identifier that no scope declares. In sloppy ES5 that silently creates a property on the global object (global pollution, state shared between calls); in strict ES2022 and ES modules it throws a ReferenceError, and tsc --strict rejects it.", "Let Lazarus declare it (the global-leak-fix rule turns `total = 0;` into `let total = 0;` when the name is private to the function) and verify with the purity proof, or declare it yourself with let.", "warning"),
+  rule("LAZ009", "PrototypePollutionRisk", "Key-copy loop without a prototype-pollution guard", "A `for (k in src) { dst[k] = src[k]; }` loop copies every enumerable key, including `__proto__`, `constructor` and `prototype`. In a recursive merge, JSON.parse('{\"__proto__\":{\"polluted\":true}}') then writes onto Object.prototype and every object in the process inherits the property (CWE-1321).", "Let Lazarus guard the loop (the proto-pollution-guard rule skips keys the source does not own and the three dangerous names) and verify with the live exploit probe, or guard it yourself with Object.prototype.hasOwnProperty.call and explicit key checks.", "error"),
+  rule("LAZ010", "LooseEqualityCoercion", "Loose equality (== / !=) coerces its operands", "`==` and `!=` convert operand types before comparing (`0 == \"\"`, `\"1\" == 1`, `null == undefined`), which hides type confusion and can bypass checks on untrusted input.", "Use === and !== (Lazarus rewrites a comparison only where both operand types are provably equal and flags the rest), or convert the operands explicitly first.", "warning"),
 ];
 const RULE_OF_KIND: Record<FindingKind, string> = {
   "bitwise-truncation": "LAZ001",
@@ -453,6 +480,8 @@ const RULE_OF_KIND: Record<FindingKind, string> = {
   "apply-forwarding": "LAZ004",
   "promise-chain": "LAZ007",
   "global-leak": "LAZ008",
+  "proto-pollution": "LAZ009",
+  "loose-equality": "LAZ010",
 };
 const LEVEL_OF_SEVERITY: Record<Severity, SarifLevel> = { high: "error", medium: "warning", info: "note" };
 
@@ -518,7 +547,8 @@ Scan every .js / .cjs file under <dir> (node_modules, .git and dist are skipped)
 anything, and print a Legacy Risk Report: bitwise truncation traps, prototype chains, var / arguments usage, the
 require() graph, a migration readiness score and the exact resurrection command to run next.
   --json      print the full report as JSON
-  --sarif     print a SARIF 2.1.0 log for GitHub Code Scanning (rules LAZ001-LAZ007)
+  --sarif     print a SARIF 2.1.0 log for GitHub Code Scanning (rules LAZ001-LAZ010)
+  --security  also report loose == / != comparisons (LAZ010); LAZ009 prototype-pollution loops are always reported
   --out <f>   write the report to <f> instead of stdout (relative to the current directory)
   --help, -h  show this help
 Exit codes: 0 report written, 2 bad usage or unreadable directory.`;
@@ -532,12 +562,14 @@ export interface AuditIo {
 export function runAuditCli(argv: readonly string[], io: AuditIo): number {
   let json = false;
   let sarif = false;
+  let security = false;
   let out: string | undefined;
   let dir: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (arg === "--json") json = true;
     else if (arg === "--sarif") sarif = true;
+    else if (arg === "--security") security = true;
     else if (arg === "--out" || arg === "-o") {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith("-")) {
@@ -568,7 +600,7 @@ export function runAuditCli(argv: readonly string[], io: AuditIo): number {
   let report: AuditReport;
   try {
     const resolved = nodePath.resolve(io.cwd, dir);
-    report = auditDirectory(resolved);
+    report = auditDirectory(resolved, undefined, { security });
     // Show the directory as the user typed it.
     const typed = dir.replace(/\\/g, "/").replace(/(.)\/+$/, "$1");
     report = { ...report, directory: typed, recommendedCommand: report.recommendedCommand.split(resolved.replace(/\\/g, "/")).join(typed) };

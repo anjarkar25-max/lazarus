@@ -87,6 +87,7 @@ const RULE_LABEL: Record<RuleId, string> = {
   "bitor0-trunc": "| 0 → Math.trunc(x) || 0",
   "loose-equality": "== → === (proven types)",
   "global-leak-fix": "undeclared global -> let (no global leak)",
+  "proto-pollution-guard": "key-copy loop guarded against __proto__ pollution",
 };
 
 /** Debt points per rewrite site and the cap per rule. */
@@ -99,6 +100,7 @@ const WEIGHTS: Record<RuleId, { per: number; cap: number }> = {
   "bitor0-trunc": { per: 3, cap: 15 },
   "loose-equality": { per: 2, cap: 10 },
   "global-leak-fix": { per: 3, cap: 9 },
+  "proto-pollution-guard": { per: 4, cap: 8 },
 };
 const COMMONJS_POINTS = 5;
 const FLAGGED_POINTS = 2;

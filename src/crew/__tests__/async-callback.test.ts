@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "acorn";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { auditDirectory } from "../../cli-audit.js";
+import { readZip } from "../../exporter/zip.js";
 import { BENCHMARK_PRESETS } from "../../benchmark-presets.js";
 import { resurrectAny } from "../../resurrect-any.js";
 import { DifferentialFuzzer } from "../../fuzzer/differential.js";
@@ -312,6 +313,10 @@ describe("HTTP: /api/resurrect, /api/export-zip and /api/mutation-audit for lega
     expect(resurrected["typecheck"]).toMatchObject({ passed: true, errorCount: 0 });
     expect(resurrected["typeSignatureText"]).toBe("legacyReadConfigCb(text: string): Promise<{ port: number; secure: boolean; source: string }>");
     expect(resurrected["certificate"]).toBeDefined();
+    // V19: the async pass replays the seed it was given, and the signed certificate carries it.
+    expect(resurrected["proofSeed"]).toBe(1337);
+    expect(resurrected["numRuns"]).toBe((resurrected["fuzzReport"] as { totalRuns: number }).totalRuns);
+    expect((resurrected["certificate"] as { signature: { payload: Record<string, unknown> } }).signature.payload["proofSeed"]).toBe(1337);
     const a = resurrected["asyncCallback"] as { outcomes: { resolved: number; rejected: number } };
     expect(a.outcomes.resolved).toBeGreaterThan(0);
     expect(a.outcomes.rejected).toBeGreaterThan(0);
@@ -325,6 +330,14 @@ describe("HTTP: /api/resurrect, /api/export-zip and /api/mutation-audit for lega
     expect(zip.subarray(0, 4).toString("hex")).toBe("504b0304");
     const names = zip.toString("latin1");
     for (const n of ["resurrected.ts", "resurrected.test.ts", "legacy.cjs", "SPEC.md", "resurrection.patch"]) expect(names).toContain(n);
+  });
+  it("exports the async Vitest suite with the proof seed when the Studio sends it", async () => {
+    const res = await post("/api/export-zip", { specimenName: "legacyReadConfigCb", legacyCode: PRESET, modernCode: resurrected["modernCode"], schema: { text: "string" }, fuzzRuns: 100, attempts: 1, seed: 1337 });
+    expect(res.status).toBe(200);
+    const zip = Buffer.from(await res.arrayBuffer());
+    const test = readZip(zip).find((e) => e.name === "resurrected.test.ts")?.data.toString("utf8") ?? "";
+    expect(test).toContain("{ numRuns: 100, seed: 1337 }");
+    expect(JSON.parse(readZip(zip).find((e) => e.name === "certificate.json")?.data.toString("utf8") ?? "{}")).toMatchObject({ payload: { proofSeed: 1337 } });
   });
 
   it("audits the async proof: mutants are settled in the sandbox and all killed", async () => {
@@ -350,9 +363,13 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
+    // V19: the Edge Gauntlet and Seed Replay controls live in Tab 1 only.
+    expect(tab3).not.toMatch(/gauntlet|seedBar|reseedBtn|proofSeed|legacyUnsafeMerge/i);
+    expect(pageHtml.indexOf('id="gauntletBtn"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
+    expect(pageHtml.indexOf('id="reseedBtn"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));
   });
 
   it("ships the legacyPromiseChain preset (Preset 13) and describes a Promise chain, not a callback, in the async note", () => {

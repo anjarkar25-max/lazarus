@@ -58,7 +58,7 @@ export interface ReportInput {
   readonly kind?: "single" | "async" | "project";
   readonly legacyCode: string;
   readonly modernCode: string;
-  readonly fuzz: { readonly runs: number; readonly attempts: number; readonly healed?: boolean; readonly exact?: boolean };
+  readonly fuzz: { readonly runs: number; readonly attempts: number; readonly healed?: boolean; readonly exact?: boolean; readonly seed?: number };
   readonly typecheck?: ReportTypecheck;
   readonly purity?: PurityProof;
   readonly mutation?: { readonly killed: number; readonly total: number; readonly mutants?: readonly ReportMutant[] };
@@ -126,7 +126,7 @@ function scorecard(i: ReportInput): string {
       "1 \u00b7 Object.is parity",
       "PROVEN",
       "ok",
-      `${i.fuzz.runs} ${i.fuzz.exact === false ? "JSON-level" : "exact"} fuzz runs, ${i.fuzz.attempts} attempt${i.fuzz.attempts === 1 ? "" : "s"}${i.fuzz.healed === true || i.fuzz.attempts > 1 ? ", self-healed" : ""}. Over the inputs fuzzed, not all inputs.`
+      `${i.fuzz.runs} ${i.fuzz.exact === false ? "JSON-level" : "exact"} fuzz runs, ${i.fuzz.attempts} attempt${i.fuzz.attempts === 1 ? "" : "s"}${i.fuzz.healed === true || i.fuzz.attempts > 1 ? ", self-healed" : ""}. Over the inputs fuzzed, not all inputs.${i.fuzz.seed !== undefined ? ` Proof seed ${i.fuzz.seed}: pass it to fast-check to replay exactly these runs.` : ""}`
     )
   );
   const p = i.purity;
@@ -137,7 +137,7 @@ function scorecard(i: ReportInput): string {
           "2 \u00b7 Purity / no global leaks",
           p.proven ? "PROVEN" : "NOT PROVEN",
           p.proven ? "ok" : "bad",
-          `${p.globalLeaksDetected.length > 0 ? `leaks fixed: ${p.globalLeaksDetected.join(", ")}` : "no global leak"}; prototypes ${p.prototypeSafe ? "untouched" : "CHANGED"}; inputs ${p.inputMutationParity ? "identical" : "DIFFER"}${p.legacyMutatesInput ? " (the legacy code mutates them)" : ""}. ${p.samples} sandboxed samples.`
+          `${p.globalLeaksDetected.length > 0 ? `leaks fixed: ${p.globalLeaksDetected.join(", ")}` : "no global leak"}; prototypes ${p.prototypeSafe ? "untouched" : "CHANGED"}; inputs ${p.inputMutationParity ? "identical" : "DIFFER"}${p.legacyMutatesInput ? " (the legacy code mutates them)" : ""}${p.protoPollutionBlocked === undefined ? "" : p.protoPollutionBlocked ? "; Proto-Pollution Blocked" : "; PROTO-POLLUTION NOT BLOCKED"}. ${p.samples} sandboxed samples.`
         )
   );
   const m = i.mutation;

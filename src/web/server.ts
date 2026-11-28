@@ -6,12 +6,13 @@ import { closeSharedTsVerifier, describeTypecheck } from "../crew/ts-verifier.js
 import { TRACE_TOOLS, type WireTrace } from "../crew/orchestrator.js";
 import { plural } from "../text/plural.js";
 import { RedTeamBodySchema, runRedTeam } from "../sandbox/redteam.js";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { resurrectGraph, type GraphProgress, type GraphResurrectionResult } from "../crew/graph-resurrector.js";
 import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/graph-bundle.js";
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
+import { EdgeGauntletBodySchema, EdgeGauntletError, prepareEdgeGauntlet, runEdgeGauntlet } from "../crew/edge-gauntlet.js";
 import { buildExportReport, parseReportExtras } from "../exporter/export-report.js";
 import { REPORT_FILE } from "../exporter/html-report.js";
 import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
@@ -257,6 +258,10 @@ function readJsonBody(req: http.IncomingMessage): Promise<ResurrectBody> {
   });
 }
 
+/** A 32-bit integer: what fast-check accepts as a seed and what the signed certificate carries. */
+export const isSeed = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
+/** A fresh proof seed: a real integer, kept below 2^31 - 16 so the Exorcist's per-attempt offsets stay in range. */
+export const freshSeed = (): number => randomInt(0, 2 ** 31 - 16);
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 /** `{ fn: { param: kind } }` rather than `{ param: kind }`. */
@@ -274,6 +279,8 @@ export type ExportRequest = {
   modernCode?: string;
   specMarkdown?: string;
   fuzzRuns?: number;
+  /** The fast-check seed of the proof (V19): signed into the certificate, shown in the report, printed in the Vitest suite. */
+  seed?: number;
   healed?: boolean;
   schema?: Record<string, string> | Record<string, Record<string, string>>;
   functions?: Array<{ name?: string; schema?: Record<string, string>; modernCode?: string }>;
@@ -325,6 +332,7 @@ async function buildUnsignedExportBundle(parsed: ExportRequest & { legacyCode: s
         entry: asyncEntry,
         schema,
         fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
+        ...(isSeed(parsed.seed) ? { seed: parsed.seed } : {}),
         attempts: typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : 1,
         specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
       },
@@ -375,6 +383,7 @@ async function buildUnsignedExportBundle(parsed: ExportRequest & { legacyCode: s
       modernCode: parsed.modernCode,
       specMarkdown: parsed.specMarkdown ?? "# Synthesized Kiro Specification",
       fuzzRuns: parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS,
+      ...(isSeed(parsed.seed) ? { seed: parsed.seed } : {}),
       healed: Boolean(parsed.healed),
       ...(schema ? { schema } : {}),
       ...(esm.complete ? { esmModule: { code: esm.code, exports: esm.exports } } : {}),
@@ -398,6 +407,7 @@ export async function buildExportBundle(
   const built = await buildUnsignedExportBundle(parsed);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const runs = parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS;
+  const proofSeed = isSeed(parsed.seed) ? parsed.seed : undefined;
   const attempts = typeof parsed.attempts === "number" && parsed.attempts >= 1 ? Math.floor(parsed.attempts) : parsed.healed ? 2 : 1;
   const signature = signCertificate({
     legacySource: parsed.legacyCode,
@@ -405,6 +415,7 @@ export async function buildExportBundle(
     paritySummary: `exact Object.is parity, ${runs} fuzz runs, ${attempts} attempt${attempts === 1 ? "" : "s"}`,
     mutantsKilled: checkedScore?.success === true ? checkedScore.data.killed : null,
     tscStrictErrors: built.typecheck.errorCount,
+    ...(proofSeed !== undefined ? { proofSeed } : {}),
   });
   const signed = { ...built, certificateSvg: embedSignatureInSvg(built.certificateSvg, signature), certificateJson: buildCertificateJson(signature), signature };
   if (options.report !== true) return signed;
@@ -420,6 +431,7 @@ export async function buildExportBundle(
     postedModernCode: parsed.modernCode,
     resurrectedTs: built.bundle.files[SIGNED_SUBJECT_FILE],
     fuzzRuns: runs,
+    ...(proofSeed !== undefined ? { seed: proofSeed } : {}),
     attempts,
     healed: Boolean(parsed.healed) || attempts > 1,
     typecheck: built.typecheck,
@@ -540,6 +552,10 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   let naiveLegacy: PooledProbeRunner | undefined;
   let naiveModern: PooledProbeRunner | undefined;
   let naiveBusy = false;
+  // Dedicated workers for the 12-case Edge Gauntlet, one gauntlet at a time.
+  let gauntletLegacy: PooledProbeRunner | undefined;
+  let gauntletModern: PooledProbeRunner | undefined;
+  let gauntletBusy = false;
   // Dedicated workers for the performance micro-benchmark (no other work shares them while it times), one run at a time.
   let perfLegacy: PooledProbeRunner | undefined;
   let perfModern: PooledProbeRunner | undefined;
@@ -597,6 +613,14 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         return;
       }
 
+      if (body.seed !== undefined && !isSeed(body.seed)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "seed must be a 32-bit integer" }));
+        return;
+      }
+      // Every proof is reproducible: the seed the client sent, or a real integer drawn now, goes straight into fast-check.
+      const proofSeed = body.seed ?? freshSeed();
+
       res.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
@@ -653,7 +677,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           typeof body.fuzzRuns === "number"
             ? Math.min(Math.max(body.fuzzRuns, 5), MAX_LIVE_FUZZ_RUNS)
             : DEFAULT_LIVE_FUZZ_RUNS,
-        ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
+        seed: proofSeed,
         maxHealingAttempts: 3,
         exact: true,
         collectObservations: true,
@@ -685,6 +709,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
                   resurrectedSource: r.modernCode,
                   paritySummary: `exact Object.is parity, ${r.fuzzReport.totalRuns} fuzz runs, ${r.attempts} attempt${r.attempts === 1 ? "" : "s"}`,
                   tscStrictErrors: typecheck?.errorCount ?? null,
+                  proofSeed,
                 }),
               },
             }
@@ -715,6 +740,8 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           const result = {
             ...resurrected,
             events: [...serverTraces.slice(0, 1), ...resurrected.events, ...serverTraces.slice(1)],
+            proofSeed,
+            numRuns: resurrected.fuzzReport.totalRuns,
             ...certificateFor(resurrected, false, verified?.typecheck),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             ...(sig !== undefined ? { typeSignature: sig, typeSignatureText: `${errorFirst.name}(${sig.params.map((p) => `${p.name}: ${renderType(p.type)}`).join(", ")}): Promise<${returns}>` } : {}),
@@ -759,6 +786,8 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           const result = {
             ...aggregate,
             events: [...serverTraces.slice(0, 1), ...aggregate.events, ...serverTraces.slice(1)],
+            proofSeed,
+            numRuns: merged.fuzzReport.totalRuns,
             ...certificateFor(merged, esm.complete, verified?.typecheck),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             module: {
@@ -798,6 +827,8 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           const result = {
             ...resurrected,
             events: [...serverTraces.slice(0, 1), ...resurrected.events, ...serverTraces.slice(1)],
+            proofSeed,
+            numRuns: resurrected.fuzzReport.totalRuns,
             ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete, verified?.typecheck),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             ...(typeSignature !== undefined ? { typeSignature, typeSignatureText: renderSignature(typeSignature, sanitizeIdentifier(request.name)) } : {}),
@@ -1191,6 +1222,50 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
       }
       return;
     }
+    if (req.method === "POST" && routePath === "/api/edge-gauntlet") {
+      const reply = (status: number, payload: Record<string, unknown>): void => {
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(payload));
+      };
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        reply(err instanceof PayloadTooLarge ? 413 : 400, { error: err instanceof PayloadTooLarge ? "Payload too large" : "Invalid JSON body" });
+        return;
+      }
+      const checked = EdgeGauntletBodySchema.safeParse(rawBody);
+      if (!checked.success) {
+        reply(400, { error: `Invalid edge gauntlet request: ${checked.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` });
+        return;
+      }
+      let prepared: ReturnType<typeof prepareEdgeGauntlet>;
+      try {
+        // Parse only: the specimen runs exclusively inside the sandbox workers below.
+        prepared = prepareEdgeGauntlet(checked.data);
+      } catch (err: unknown) {
+        if (err instanceof EdgeGauntletError) reply(err.status, { error: err.message, code: err.code });
+        else reply(500, { error: err instanceof Error ? err.message : "Edge gauntlet failed", code: "INTERNAL_ERROR" });
+        return;
+      }
+      if (gauntletBusy) {
+        reply(429, { error: "An edge gauntlet is already running", code: "BUSY" });
+        return;
+      }
+      gauntletBusy = true;
+      try {
+        gauntletLegacy ??= new PooledProbeRunner();
+        gauntletModern ??= new PooledProbeRunner();
+        const result = await runEdgeGauntlet(checked.data, { legacy: gauntletLegacy, modern: gauntletModern });
+        reply(200, { ...result, naiveApplies: prepared.naiveApplies, naiveCode: prepared.naiveCode });
+      } catch (err: unknown) {
+        if (err instanceof EdgeGauntletError) reply(err.status, { error: err.message, code: err.code });
+        else reply(500, { error: err instanceof Error ? err.message : "Edge gauntlet failed", code: "INTERNAL_ERROR" });
+      } finally {
+        gauntletBusy = false;
+      }
+      return;
+    }
     if (req.method === "POST" && routePath === "/api/redteam") {
       const reply = (status: number, payload: Record<string, unknown>): void => {
         res.writeHead(status, { "Content-Type": "application/json" });
@@ -1394,7 +1469,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
   });
 
   server.on("close", () => {
-    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), naiveLegacy?.close(), naiveModern?.close(), perfLegacy?.close(), perfModern?.close(), closeSharedTsVerifier()]);
+    void Promise.all([probeLegacy?.close(), probeModern?.close(), redTeamPool?.close(), auditLegacy?.close(), auditModern?.close(), naiveLegacy?.close(), naiveModern?.close(), gauntletLegacy?.close(), gauntletModern?.close(), perfLegacy?.close(), perfModern?.close(), closeSharedTsVerifier()]);
   });
   return server;
 }

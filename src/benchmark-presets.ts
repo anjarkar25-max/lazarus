@@ -63,4 +63,9 @@ export const BENCHMARK_PRESETS: readonly BenchmarkPreset[] = [
     code: "// ES5 reducer: leaks its accumulator onto the global object and mutates the array it was given\nfunction legacyLeakyMutator(list, factor) {\n  total = 0;\n  if (!Array.isArray(list)) return total;\n  for (var i = 0; i < list.length; i++) {\n    list[i] = list[i] * factor;\n    total = total + list[i];\n  }\n  return total;\n}\n\nmodule.exports = legacyLeakyMutator;",
     schema: { list: "json", factor: "integer" },
   },
+  {
+    name: "legacyUnsafeMerge",
+    code: "// ES5 deep merge: copies every key of source onto target and recurses into nested objects\nfunction legacyUnsafeMerge(target, source) {\n  if (Array.isArray(target) || Array.isArray(source)) {\n    return source;\n  }\n  for (var key in source) {\n    if (typeof source[key] === \"object\" && source[key] !== null) {\n      if (typeof target[key] !== \"object\" || target[key] === null) {\n        target[key] = {};\n      }\n      legacyUnsafeMerge(target[key], source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n\nmodule.exports = legacyUnsafeMerge;",
+    schema: { target: "json", source: "json" },
+  },
 ];

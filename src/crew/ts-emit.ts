@@ -13,6 +13,8 @@ import type { TsDiagnostic } from "./ts-verifier.js";
 interface Insertion {
   readonly at: number;
   readonly text: string;
+  /** Characters at `at` that `text` replaces (default 0: a pure insertion). */
+  readonly remove?: number;
 }
 
 const pos = (n: ESTree.Node): { start: number; end: number } => {
@@ -22,7 +24,7 @@ const pos = (n: ESTree.Node): { start: number; end: number } => {
 
 function applyInsertions(source: string, insertions: Insertion[]): string {
   let out = source;
-  for (const ins of [...insertions].sort((a, b) => b.at - a.at)) out = out.slice(0, ins.at) + ins.text + out.slice(ins.at);
+  for (const ins of [...insertions].sort((a, b) => b.at - a.at)) out = out.slice(0, ins.at) + ins.text + out.slice(ins.at + (ins.remove ?? 0));
   return out;
 }
 
@@ -127,6 +129,20 @@ const IMPLICIT_REST = /^Rest parameter '([A-Za-z_$][\w$]*)' implicitly has an 'a
 const MISSING_PROPERTY = /^Property '([A-Za-z_$][\w$]*)' does not exist on type '([A-Za-z_$][\w$]*)'/;
 
 /**
+ * A `json` input is typed `unknown` in the generated signature, but legacy code treats it as an object (`source[key]`, `for (k in source)`).
+ * It becomes an explicit `any` parameter, reported as a migration-boundary adjustment. Only a parameter of the form `name: unknown`.
+ */
+function declareJsonParameter(code: string, name: string, line: number, insertions: Insertion[], adjustments: string[]): boolean {
+  const param = new RegExp(`[(,][ \\t]*${name}: (unknown)(?=[,)])`).exec(code);
+  if (param === null) return false;
+  const at = param.index + param[0].length - "unknown".length;
+  if (insertions.some((i) => i.at === at)) return true;
+  insertions.push({ at, text: "any", remove: "unknown".length });
+  adjustments.push(`parameter ${name} (line ${line}): a json input that the legacy code treats as an object`);
+  return true;
+}
+
+/**
  * Declares, as explicit `any`, exactly the members strict mode reports as untypeable in legacy code:
  * TS7006 (inner parameter), TS7019 (rest parameter, e.g. the `...args` that replaced `arguments`), TS7034 (variable) and TS2339
  * on a class's own `this.x` (undeclared field), and TS18046 for a `const x = await ...` of a legacy Promise that strict mode cannot
@@ -153,11 +169,20 @@ export function applyBoundaryFixes(code: string, diagnostics: readonly TsDiagnos
       if (name === undefined) continue;
       // A statement of its own (never the `// promise-lift:` comment that quotes it).
       const declaration = new RegExp(`^[ \\t]*(?:const|let) (${name})(?= = await\\b)`, "m").exec(code);
-      if (declaration === null) continue;
+      if (declaration === null) {
+        // Only a value that is indexed or dereferenced like an object (`source[key]`, `target.x`); `u + 1` on an unknown stays a real error.
+        const next = code.slice(at + name.length).trimStart()[0];
+        if (code.slice(at, at + name.length) === name && (next === "[" || next === ".")) declareJsonParameter(code, name, d.line, insertions, adjustments);
+        continue;
+      }
       const end = declaration.index + declaration[0].length;
       if (insertions.some((i) => i.at === end)) continue;
       insertions.push({ at: end, text: ": any" });
       adjustments.push(`variable ${name} (line ${d.line}): awaited value of an untyped legacy Promise`);
+    } else if (d.code === 2407) {
+      // `for (k in x)` over a json input typed `unknown`: the diagnostic starts at the iterated identifier.
+      const name = /^[A-Za-z_$][\w$]*/.exec(code.slice(at))?.[0];
+      if (name !== undefined) declareJsonParameter(code, name, d.line, insertions, adjustments);
     } else if (d.code === 7019) {
       const name = IMPLICIT_REST.exec(d.message)?.[1];
       // The diagnostic starts at the `...`; the element type goes after the name.

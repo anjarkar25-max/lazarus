@@ -10,6 +10,8 @@ export interface ResurrectionBundleInput {
   modernCode: string;
   specMarkdown: string;
   fuzzRuns?: number;
+  /** The fast-check seed of the proof: the exported Vitest suite runs `{ numRuns, seed }` so it replays the same inputs. */
+  seed?: number;
   healed?: boolean;
   schema?: Record<string, string>;
   /** Complete CommonJS -> ESM conversion of the legacy module (see toEsmModule). */
@@ -275,6 +277,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
   const legacyClean = input.legacyCode.trim();
   const modernClean = input.modernCode.trim();
   const fuzzRuns = input.fuzzRuns && input.fuzzRuns > 0 ? input.fuzzRuns : 100;
+  const seedOption = input.seed !== undefined ? `, seed: ${input.seed}` : "";
   const generatedAt = new Date().toISOString();
   const params = resolveParams(input.schema);
   const signature = params.map((p) => `${p.paramName}: ${p.tsType}`).join(', ');
@@ -344,7 +347,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
     `      fc.property(${arbitraries}, (${argNames}) => {`,
     `        expect(Object.is(${fnName}(${argNames}), runLegacy(${argNames}))).toBe(true);`,
     `      }),`,
-    `      { numRuns: ${fuzzRuns} }`,
+    `      { numRuns: ${fuzzRuns}${seedOption} }`,
     `    );`,
     `  });`,
     `});`,
@@ -420,7 +423,7 @@ function generateSingleBundle(input: ResurrectionBundleInput): ResurrectionBundl
           `        expect(a.ok).toBe(b.ok);`,
           `        if (a.ok) expect(Object.is(a.value, b.value)).toBe(true);`,
           `      }),`,
-          `      { numRuns: ${fuzzRuns} }`,
+          `      { numRuns: ${fuzzRuns}${seedOption} }`,
           `    );`,
           `  });`,
           `});`,
@@ -461,6 +464,7 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
   const fns = input.functions;
   if (fns === undefined || fns.length === 0) return base;
   const fuzzRuns = input.fuzzRuns && input.fuzzRuns > 0 ? input.fuzzRuns : 100;
+  const seedOption = input.seed !== undefined ? `, seed: ${input.seed}` : "";
   const perFn = fns.map((fn) => {
     const params = resolveParams(fn.schema);
     const names = new Set(params.map((p) => p.paramName));
@@ -493,7 +497,7 @@ export function generateResurrectionBundle(input: ResurrectionBundleInput): Resu
       `      fc.property(${f.arbitraries}, (${f.argNames}) => {`,
       `        expect(Object.is(${f.name}(${f.argNames}), runLegacy_${f.name}(${f.argNames}))).toBe(true);`,
       `      }),`,
-      `      { numRuns: ${fuzzRuns} }`,
+      `      { numRuns: ${fuzzRuns}${seedOption} }`,
       `    );`,
       `  });`,
     ]),

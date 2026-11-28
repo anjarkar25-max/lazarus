@@ -548,13 +548,75 @@ async function main() {
       l = await evaluate(LAYOUT);
       check(l.openDrawers.length === 0 && l.openScrims.length === 0, "a drawer is still open after Escape");
     });
-    await step("Kiro DNA: the Ecosystem Architecture Map shows the live counts from disk", async () => {
+    // ---- 4c. V19: legacyUnsafeMerge, the 12-Case Edge Gauntlet and Re-Verify New Seed ----
+    await step("Tab 1: legacyUnsafeMerge is guarded by proto-pollution-guard, proves parity, tsc --strict: 0 errors and shows Proto-Pollution Blocked", async () => {
+      await load(VIEWPORTS[1]);
+      await evaluate(`(() => { const s = document.getElementById("presetSelect"); s.value = "legacyUnsafeMerge"; s.dispatchEvent(new Event("change")); document.getElementById("runBtn").click(); return true; })()`);
+      await waitFor(`window.__e2e.results.some((r) => r.name === "legacyUnsafeMerge")`, "the legacyUnsafeMerge result", 90_000);
+      await waitFor(`document.getElementById("tscBadge").textContent === "tsc --strict: 0 errors"`, "tsc --strict: 0 errors", 60_000);
+      const out = await evaluate(`({ ok: window.__e2e.results.find((r) => r.name === "legacyUnsafeMerge").success, code: document.getElementById("modernOut").textContent, tsc: document.getElementById("tscBadge").textContent })`);
+      check(out.ok, "legacyUnsafeMerge: parity was not proven");
+      check(/Object\.prototype\.hasOwnProperty\.call\(source, key\)/.test(out.code) && /"__proto__"/.test(out.code) && /"constructor"/.test(out.code) && /"prototype"/.test(out.code), "the copy loop is not guarded");
+      check(out.tsc === "tsc --strict: 0 errors", `legacyUnsafeMerge: ${out.tsc}`);
+      const rb = await evaluate(`Array.from(document.querySelectorAll("#xrayChips button")).map((b) => b.textContent).join("|")`);
+      check(/proto-pollution-guard/.test(rb), `Rule Blame X-Ray has no proto-pollution-guard chip: ${rb}`);
+      const pill = await evaluate(`({ text: document.getElementById("pillPurity").lastElementChild.textContent, tone: document.getElementById("pillPurity").dataset.tone })`);
+      check(pill.text === "Proto-Pollution Blocked" && pill.tone === "ok", `purity pill: ${JSON.stringify(pill)}`);
+      await evaluate(`document.getElementById("pillPurity").click(); true`);
+      await waitFor(`!document.getElementById("purityDetail").hidden`, "the purity details", 5_000);
+      const detail = await evaluate(`document.getElementById("purityDetail").textContent`);
+      check(/Proto-Pollution Blocked/.test(detail) && /polluted/.test(detail), `the purity details do not show the blocked exploit: ${detail.slice(0, 300)}`);
+    });
+    await step("Tab 1: the Seed chip shows the proof seed of the run", async () => {
+      const seed = await evaluate(`({ hidden: document.getElementById("seedBar").hidden, chip: document.getElementById("seedChip").textContent, button: document.getElementById("reseedBtn").textContent, note: document.getElementById("seedNote").textContent })`);
+      check(seed.hidden === false, "the seed chip is hidden after a resurrection");
+      check(/^Seed: \d+$/.test(seed.chip), `seed chip: ${seed.chip}`);
+      check(seed.button === "Re-Verify New Seed", `button: ${seed.button}`);
+      check(/Parity held over \d+ runs/.test(seed.note), `seed note: ${seed.note}`);
+    });
+    await step("Tab 1: Run 12-Case Edge Gauntlet renders a 3-column scorecard with Lazarus 12/12 Exact Parity", async () => {
+      const labels = await evaluate(`document.getElementById("gauntletBtn").textContent`);
+      check(labels === "Run 12-Case Edge Gauntlet", `gauntlet button: ${labels}`);
+      const busy = await evaluate(`(() => { const b = document.getElementById("gauntletBtn"); b.click(); return { busy: b.getAttribute("aria-busy"), disabled: b.disabled }; })()`);
+      check(busy.busy === "true" && busy.disabled === true, `the gauntlet button has no busy state: ${JSON.stringify(busy)}`);
+      await waitFor(`!document.getElementById("gauntletResults").hidden && document.querySelectorAll("#gauntletResults tbody tr").length > 0 && !document.getElementById("gauntletBtn").disabled`, "the gauntlet scorecard", 40_000);
+      const card = await evaluate(`({ score: document.querySelector("#gauntletResults .g-lazarus").textContent, naive: document.querySelector("#gauntletResults .g-naive").textContent, heads: Array.from(document.querySelectorAll("#gauntletResults th")).map((h) => h.textContent), rows: document.querySelectorAll("#gauntletResults tbody tr").length, bad: document.querySelectorAll("#gauntletResults td.g-bad").length, overflow: document.documentElement.scrollWidth > window.innerWidth })`);
+      check(card.score === "Lazarus: 12/12 Exact Parity", `gauntlet score: ${card.score}`);
+      check(/^Naive AI: \d+\/12$/.test(card.naive), `naive score: ${card.naive}`);
+      check(card.heads.join("|") === "Edge input|Legacy|Naive AI|Lazarus Proven", `columns: ${card.heads}`);
+      check(card.rows === 12, `gauntlet rows: ${card.rows}`);
+      check(card.bad === 0, `${card.bad} red cells for a specimen whose naive rewrite is its own source`);
+      check(card.overflow === false, "the gauntlet scorecard overflows the page");
+    });
+    await step("Tab 1: the Edge Gauntlet highlights every trap where Naive AI diverges and Lazarus holds exact parity", async () => {
+      await load(VIEWPORTS[1]);
+      await evaluate(`(() => { const s = document.getElementById("presetSelect"); s.value = "bitwise"; s.dispatchEvent(new Event("change")); document.getElementById("runBtn").click(); return true; })()`);
+      await waitFor(`window.__e2e.results.length > 0`, "the bitwise result", 90_000);
+      await evaluate(`document.getElementById("gauntletBtn").click(); true`);
+      await waitFor(`!document.getElementById("gauntletResults").hidden && document.querySelectorAll("#gauntletResults tbody tr").length > 0`, "the gauntlet scorecard", 40_000);
+      const card = await evaluate(`({ score: document.querySelector("#gauntletResults .g-lazarus").textContent, naive: document.querySelector("#gauntletResults .g-naive").textContent, traps: document.querySelectorAll("#gauntletResults tr.g-trap").length, tags: document.querySelectorAll("#gauntletResults .g-tag").length, line: document.querySelector("#gauntletResults .gauntlet-traps").textContent })`);
+      check(/^Lazarus: (\d+)\/\1 Exact Parity$/.test(card.score), `gauntlet score: ${card.score}`);
+      const m = /^Naive AI: (\d+)\/(\d+)$/.exec(card.naive);
+      check(m !== null && Number(m[1]) < Number(m[2]), `the naive rewrite did not fall into a trap: ${card.naive}`);
+      check(card.traps > 0 && card.traps === card.tags, `trap rows ${card.traps} / tags ${card.tags}`);
+      check(/Naive AI diverges from Legacy on \d+ traps? where Lazarus holds exact parity/.test(card.line), `trap line: ${card.line}`);
+    });
+    await step("Tab 1: Re-Verify New Seed re-runs the verification with a fresh integer seed and parity holds", async () => {
+      await evaluate(`window.__e2e.seed = Number(document.getElementById("seedValue").textContent); window.__e2e.before = window.__e2e.results.length; document.getElementById("reseedBtn").click(); true`);
+      await waitFor(`window.__e2e.results.length > window.__e2e.before`, "the re-verification result", 90_000);
+      await waitFor(`!document.getElementById("reseedBtn").disabled`, "the Re-Verify button to re-enable", 30_000);
+      const out = await evaluate(`({ before: window.__e2e.seed, now: Number(document.getElementById("seedValue").textContent), ok: window.__e2e.results[window.__e2e.results.length - 1].success, note: document.getElementById("seedNote").textContent, override: window.lazarusSeedOverride === undefined })`);
+      check(Number.isInteger(out.now) && out.now >= 0 && out.now !== out.before, `the seed did not change: ${out.before} -> ${out.now}`);
+      check(out.ok, "parity did not hold on the new seed");
+      check(/Parity held over \d+ runs/.test(out.note), `seed note: ${out.note}`);
+      check(out.override, "the seed override was not cleared");
+    });    await step("Kiro DNA: the Ecosystem Architecture Map shows the live counts from disk", async () => {
       await load(VIEWPORTS[0]);
       await evaluate(`document.getElementById("dnaBtn").click(); true`);
       await waitFor(`/^\\d+ Specs$/.test(document.getElementById("dmSpecs").textContent)`, "the map to load the specs count", 20_000);
       const m = await evaluate(`({ specs: document.getElementById("dmSpecs").textContent, agents: document.getElementById("dmAgents").textContent, hooks: document.getElementById("dmHooks").textContent, steering: document.getElementById("dmSteering").textContent, power: document.getElementById("dmPower").textContent, nodes: document.querySelectorAll("#dnaMap .dm-node").length, badge: document.getElementById("badgeSpecs").textContent })`);
       check(m.nodes === 7, `the map has ${m.nodes} nodes`);
-      check(m.specs === "28 Specs" && m.badge === "28 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
+      check(m.specs === "29 Specs" && m.badge === "29 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
       check(m.agents === "4 Crew Agents" && m.hooks === "4 Hooks" && m.steering === "3 Steering Docs", `counts: ${m.agents}, ${m.hooks}, ${m.steering}`);
       check(/power-lazarus\/ \u00b7 v/.test(m.power), `power node: ${m.power}`);
       const l = await evaluate(LAYOUT);

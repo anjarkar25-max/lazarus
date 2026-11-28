@@ -26,6 +26,8 @@ export const CertificatePayloadSchema = z
     mutantsKilled: z.number().int().min(0).nullable(),
     tscStrictErrors: z.number().int().min(0).nullable(),
     issuedAt: z.string().min(1).max(40),
+    /** V19: the fast-check seed that reproduces the fuzz run behind the proof. Absent from certificates signed without one. */
+    proofSeed: z.number().int().min(-2147483648).max(2147483647).optional(),
   })
   .strict();
 export type CertificatePayload = z.infer<typeof CertificatePayloadSchema>;
@@ -60,6 +62,8 @@ export function canonicalPayload(p: CertificatePayload): string {
     mutantsKilled: p.mutantsKilled,
     tscStrictErrors: p.tscStrictErrors,
     issuedAt: p.issuedAt,
+    // Appended only when present, so a payload signed before V19 keeps its exact canonical bytes.
+    ...(p.proofSeed !== undefined ? { proofSeed: p.proofSeed } : {}),
   });
 }
 
@@ -106,6 +110,8 @@ export interface SignInput {
   readonly tscStrictErrors?: number | null;
   /** ISO timestamp; defaults to now. Tests pass a fixed value. */
   readonly issuedAt?: string;
+  /** The fast-check seed of the proof; it becomes part of the signed payload. */
+  readonly proofSeed?: number;
 }
 
 export function signCertificate(input: SignInput): SignatureBlock {
@@ -117,6 +123,7 @@ export function signCertificate(input: SignInput): SignatureBlock {
     mutantsKilled: input.mutantsKilled ?? null,
     tscStrictErrors: input.tscStrictErrors ?? null,
     issuedAt: input.issuedAt ?? new Date().toISOString(),
+    ...(input.proofSeed !== undefined ? { proofSeed: input.proofSeed } : {}),
   };
   const canonical = canonicalPayload(payload);
   const signatureB64 = sign(null, Buffer.from(canonical, "utf8"), key.privateKey).toString("base64");

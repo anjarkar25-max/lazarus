@@ -40,6 +40,7 @@ const WHAT: Record<RuleId, string> = {
   "bitor0-trunc": "`x | 0` became `Math.trunc(x) || 0`",
   "loose-equality": "`==` became `===` where both operand types are provably equal",
   "global-leak-fix": "an undeclared global that a function assigned became a `let` of that function",
+  "proto-pollution-guard": "a `for (k in src)` copy loop now skips inherited keys and `__proto__`, `constructor` and `prototype`",
 };
 
 const clip = (text: string, max = 70): string => {

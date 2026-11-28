@@ -12,6 +12,7 @@ import type { ProbeExecutor } from "../sandbox/types.js";
 import { decodeTagged } from "../sandbox/tagged.js";
 import { inheritanceParentOf, scopeGuardOf, superCallOf, type SuperCall } from "./es5-idioms.js";
 import { leakSites } from "./purity-audit.js";
+import { buildProtoGuard, findProtoPollutionSites } from "./security-exorcist.js";
 import {
   analyze,
   inferType,
@@ -40,6 +41,8 @@ export const RULE_LADDERS = {
   "loose-equality": ["strict-proven", "off"],
   /** V18 purity pillar: an undeclared global that a function assigns becomes a `let` of that function. */
   "global-leak-fix": ["declare", "off"],
+  /** V19 security pillar: an unguarded `for (k in src) { dst[k] = src[k]; }` copy loop skips `__proto__`, `constructor` and `prototype`. */
+  "proto-pollution-guard": ["guard", "off"],
 } as const;
 
 export type RuleId = keyof typeof RULE_LADDERS;
@@ -54,6 +57,7 @@ export const RULE_ORDER: readonly RuleId[] = [
   "function-arrow",
   "bitor0-trunc",
   "loose-equality",
+  "proto-pollution-guard",
   "global-leak-fix",
 ];
 
@@ -65,6 +69,7 @@ export const RISK_ORDER: readonly RuleId[] = [
   "arguments-rest",
   "function-arrow",
   "prototype-class",
+  "proto-pollution-guard",
   "global-leak-fix",
   "var-scoping",
 ];
@@ -79,6 +84,7 @@ export function defaultLevels(): RuleLevels {
     "apply-spread": 0,
     "loose-equality": 0,
     "global-leak-fix": 0,
+    "proto-pollution-guard": 0,
   };
 }
 
@@ -140,7 +146,7 @@ export interface AppliedRewrite {
 }
 
 export interface FlaggedSite {
-  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope" | "prototype-kept" | "global-leak";
+  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope" | "prototype-kept" | "global-leak" | "proto-pollution";
   readonly line: number;
   readonly text: string;
   readonly reason: string;
@@ -854,6 +860,40 @@ function ruleGlobalLeakFix(a: Analysis, fix: boolean, inputs: readonly string[],
   }
 }
 // ---------------------------------------------------------------------------
+// Rule: proto-pollution-guard (V19 security pillar)
+// ---------------------------------------------------------------------------
+/**
+ * `for (var k in src) { dst[k] = src[k]; }` copies the key `__proto__` (own, enumerable when it comes from JSON.parse) and so
+ * reaches Object.prototype in a recursive merge. The guard is the first statement of the loop body: keys that `src` does not own
+ * and the keys `__proto__`, `constructor` and `prototype` are skipped. Loops over anything but a plain reference are kept and flagged.
+ */
+function ruleProtoPollutionGuard(a: Analysis, guard: boolean, applied: AppliedRewrite[], flagged: FlaggedSite[]): void {
+  for (const site of findProtoPollutionSites(a)) {
+    if (!guard || !site.fixable) {
+      flagged.push({ kind: "proto-pollution", line: site.line, text: `for (${site.key} in ${site.sourceText})`, reason: site.keptBecause ?? "the rule is rolled back for this specimen" });
+      continue;
+    }
+    const loop = site.loop;
+    const before = `for (${site.key} in ${site.sourceText}) { ... }`;
+    const statement = buildProtoGuard(loop.right as ESTree.Expression, site.key);
+    if (loop.body.type === "BlockStatement") loop.body.body.unshift(statement);
+    else loop.body = { type: "BlockStatement", body: [statement, loop.body] };
+    applied.push(
+      track(
+        {
+          rule: "proto-pollution-guard",
+          variant: "guard",
+          line: site.line,
+          before,
+          after: `for (${site.key} in ${site.sourceText}) { if (!Object.prototype.hasOwnProperty.call(${site.sourceText}, ${site.key}) || ${site.key} === "__proto__" || ...) continue; ... }`,
+          speculative: false,
+          note: `the copy loop over ${site.sourceText} could write __proto__, constructor or prototype onto its target; it now skips inherited keys and those three names`,
+        },
+        statement as unknown as Node
+      )
+    );
+  }
+}// ---------------------------------------------------------------------------
 // Rule: loose-equality
 // ---------------------------------------------------------------------------
 
@@ -1330,6 +1370,7 @@ export function modernize(source: string, options: ModernizeOptions = {}): Moder
   // After prototype-class (which keeps refusing a constructor that leaks, a strict-mode hazard) and before the rest: it changes
   // one statement and keeps every other node, and its position, as parsed. A site whose nodes lost their position is kept.
   ruleGlobalLeakFix(analyze(ast), on("global-leak-fix"), options.inputs ?? [], applied, flagged);
+  ruleProtoPollutionGuard(analyze(ast), on("proto-pollution-guard"), applied, flagged);
   if (on("arguments-rest")) ruleArgumentsRest(analyze(ast), applied);
   if (on("apply-spread")) ruleApplySpread(analyze(ast), levels["apply-spread"], applied);
   if (on("function-arrow")) ruleFunctionArrow(analyze(ast), applied);

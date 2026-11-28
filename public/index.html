@@ -768,6 +768,36 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
 #dnaMap .dm-title { fill: #e2e8f0; font: 700 12px system-ui, sans-serif; }
 #dnaMap .dm-sub { fill: #94a3b8; font: 10px ui-monospace, Consolas, monospace; }
 #dnaMap .dm-flow { fill: none; stroke: var(--violet); stroke-width: 1.6; }
+/* ---- V19: 12-Case Edge Gauntlet and Seed Replay ------------------------------------------------ */
+.gauntlet-btn { padding: 7px 14px; border: 1px solid var(--violet, #8b5cf6); border-radius: 8px; background: rgba(139, 92, 246, 0.14); color: #ddd6fe; font: inherit; font-weight: 700; cursor: pointer; }
+.gauntlet-btn:hover:not(:disabled) { background: rgba(139, 92, 246, 0.28); }
+.gauntlet-btn:disabled { opacity: 0.6; cursor: progress; }
+.gauntlet { margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: #0b1120; }
+.gauntlet[hidden] { display: none; }
+.gauntlet-score { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; margin-bottom: 8px; font-size: 13px; }
+.gauntlet-score .g-lazarus { color: #6ee7b7; font-weight: 700; }
+.gauntlet-score .g-naive { color: #fca5a5; font-weight: 700; }
+.gauntlet-score .g-naive.clean { color: #6ee7b7; }
+.gauntlet-traps { margin: 0 0 8px; color: #fecaca; font-size: 12px; }
+.gauntlet-scroll { max-height: 340px; overflow: auto; }
+.gauntlet table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.gauntlet th { text-align: left; padding: 4px 8px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: #0b1120; }
+.gauntlet td { padding: 4px 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); vertical-align: top; }
+.gauntlet td code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+.gauntlet td.g-ok { background: rgba(16, 185, 129, 0.12); color: #a7f3d0; }
+.gauntlet td.g-bad { background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+.gauntlet tr.g-trap td:first-child { box-shadow: inset 3px 0 0 var(--crimson); }
+.gauntlet .g-tag { margin-left: 6px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--crimson); color: #fca5a5; font-size: 10px; letter-spacing: 1px; }
+.seed-bar { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.seed-bar[hidden] { display: none; }
+.seed-chip { padding: 2px 10px; border: 1px solid var(--violet, #8b5cf6); border-radius: 999px; background: rgba(139, 92, 246, 0.12); color: #ddd6fe; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.seed-chip b { color: #fff; }
+.reseed-btn { padding: 3px 10px; border: 1px solid var(--emerald); border-radius: 8px; background: rgba(16, 185, 129, 0.1); color: #a7f3d0; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.reseed-btn:hover:not(:disabled) { background: rgba(16, 185, 129, 0.22); }
+.reseed-btn:disabled { opacity: 0.6; cursor: progress; }
+.seed-note { color: var(--muted); font-size: 11px; }
+.seed-note.ok { color: #6ee7b7; }
+.seed-note.bad { color: #fca5a5; }
 </style>
 </head>
 <body>
@@ -780,8 +810,8 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1263 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1340 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">29 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -936,6 +966,11 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       <div class="deck-head">
         <h2 id="deckTitle">Verification Deck</h2>
         <small>Self-healing diff, certificate, mutation audit, PR bundle and edge-case probes, at full width.</small>
+        <span id="seedBar" class="seed-bar" hidden>
+          <span id="seedChip" class="seed-chip" title="The fast-check seed behind this proof. The same seed replays the same inputs.">Seed: <b id="seedValue">-</b></span>
+          <button id="reseedBtn" type="button" class="reseed-btn" aria-describedby="seedNote">Re-Verify New Seed</button>
+          <span id="seedNote" class="seed-note" role="status" aria-live="polite"></span>
+        </span>
       </div>
       <div class="deck-wide">
         <!-- 5-Pill Proof Strip: one scannable row for the five proof pillars of the run, each pill opens its detail -->
@@ -1042,6 +1077,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
             </div>
             <div class="probe-actions">
               <button id="probeBtn" type="button" class="primary">RUN PROBE</button>
+              <button id="gauntletBtn" type="button" class="gauntlet-btn" aria-controls="gauntletResults">Run 12-Case Edge Gauntlet</button>
               <span id="probeStatus" class="muted">Run RESURRECT SPECIMEN, then try your own adversarial input. Fields accept JSON plus NaN, -0, Infinity and undefined.</span>
             </div>
             <div id="probeResults" class="probe-results" hidden>
@@ -1050,6 +1086,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
               <div class="probe-side" id="probeModernSide"><h4>Lazarus Proven</h4><code class="val" id="probeModernVal"></code><span class="meta" id="probeModernMeta"></span></div>
             </div>
             <div id="probeVerdict" class="verdict" hidden></div>
+            <div id="gauntletResults" class="gauntlet" role="region" aria-label="12-Case Edge Gauntlet scorecard" aria-live="polite" hidden></div>
           </div>
         </div>
       </div>
@@ -1380,7 +1417,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
             legacyCode: legacyCode.value,
             schema: parsedSchema,
             fuzzRuns: 100,
-            seed: 1337,
+            ...(window.lazarusSeedOverride !== undefined ? { seed: window.lazarusSeedOverride } : {}),
             simulateBuggyFirstDraft: simulateBug.checked,
             provenance: window.lazarusProvenance
           }),
@@ -1634,6 +1671,14 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     schema: '{"list": "json", "factor": "integer"}',
     bug: false
   });
+  extraPresets.push({
+    value: "legacyUnsafeMerge",
+    label: "Preset 15: Prototype-Pollution Merge (unguarded key-copy loop -> proto-pollution-guard + live exploit probe)",
+    name: "legacyUnsafeMerge",
+    code: "// ES5 deep merge: copies every key of source onto target and recurses into nested objects\nfunction legacyUnsafeMerge(target, source) {\n  if (Array.isArray(target) || Array.isArray(source)) {\n    return source;\n  }\n  for (var key in source) {\n    if (typeof source[key] === \"object\" && source[key] !== null) {\n      if (typeof target[key] !== \"object\" || target[key] === null) {\n        target[key] = {};\n      }\n      legacyUnsafeMerge(target[key], source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n\nmodule.exports = legacyUnsafeMerge;",
+    schema: '{"target": "json", "source": "json"}',
+    bug: false
+  });
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -1721,6 +1766,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
         modernCode: modernText,
         specMarkdown: specOut.textContent || "# Synthesized Kiro Spec",
         fuzzRuns: window.lastFuzzRuns || 100,
+        seed: window.lastProofSeed,
         healed: Boolean(simulateBug && simulateBug.checked),
         schema: parsedSchema,
         functions: (window.lastModuleFunctions || []).map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
@@ -2411,13 +2457,18 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
   }
   /** The signed bytes: the payload as JSON in the fixed key order of cert-crypto.ts. */
   function lzCanonicalPayload(p) {
-    return JSON.stringify({ legacySha256: p.legacySha256, resurrectedSha256: p.resurrectedSha256, paritySummary: p.paritySummary, mutantsKilled: p.mutantsKilled, tscStrictErrors: p.tscStrictErrors, issuedAt: p.issuedAt });
+    var canonical = { legacySha256: p.legacySha256, resurrectedSha256: p.resurrectedSha256, paritySummary: p.paritySummary, mutantsKilled: p.mutantsKilled, tscStrictErrors: p.tscStrictErrors, issuedAt: p.issuedAt };
+    // V19: the proof seed is signed too, appended last and only when present (certificates signed without one keep their bytes).
+    if (p.proofSeed !== undefined) canonical.proofSeed = p.proofSeed;
+    return JSON.stringify(canonical);
   }
   /** The payload shape the Studio signs (same rules as the server's schema). */
   function lzPayloadOk(p) {
     if (p === null || typeof p !== "object" || Array.isArray(p)) return false;
     var keys = Object.keys(p).sort().join(",");
-    if (keys !== "issuedAt,legacySha256,mutantsKilled,paritySummary,resurrectedSha256,tscStrictErrors") return false;
+    var seeded = keys === "issuedAt,legacySha256,mutantsKilled,paritySummary,proofSeed,resurrectedSha256,tscStrictErrors";
+    if (keys !== "issuedAt,legacySha256,mutantsKilled,paritySummary,resurrectedSha256,tscStrictErrors" && !seeded) return false;
+    if (seeded && !(typeof p.proofSeed === "number" && p.proofSeed % 1 === 0 && p.proofSeed >= -2147483648 && p.proofSeed <= 2147483647)) return false;
     var hex = /^[0-9a-f]{64}$/;
     var count = function (n) { return n === null || (typeof n === "number" && n >= 0 && n % 1 === 0); };
     return hex.test(p.legacySha256) && hex.test(p.resurrectedSha256) && typeof p.paritySummary === "string" && p.paritySummary.length >= 1 && p.paritySummary.length <= 300 &&
@@ -4407,7 +4458,7 @@ function lzHealthGuard(deps) {
     var p = r && r.purityProof;
     var leaks = p ? p.globalLeaksDetected.length : 0;
     pills.push({ id: "purity", label: "Purity / Zero Leaks", tone: !r ? "idle" : p ? (p.proven ? "ok" : "bad") : "idle",
-      value: !r ? "-" : p ? (p.proven ? (leaks > 0 ? "Fixed " + leaks + " leak" + (leaks === 1 ? "" : "s") : "Zero leaks") : "NOT PROVEN") : (r.asyncCallback || r.module ? "n/a (async / module)" : "not measured"),
+      value: !r ? "-" : p ? (p.proven ? (leaks > 0 ? "Fixed " + leaks + " leak" + (leaks === 1 ? "" : "s") : p.protoPollutionBlocked ? "Proto-Pollution Blocked" : "Zero leaks") : "NOT PROVEN") : (r.asyncCallback || r.module ? "n/a (async / module)" : "not measured"),
       title: "No global leak, untouched prototypes, identical input state. Click for details." });
     var m = c.mutation;
     pills.push({ id: "mutants", label: "Mutants Killed", tone: m ? (m.killed === m.total ? "ok" : "warn") : "idle",
@@ -4561,7 +4612,7 @@ function lzHealthGuard(deps) {
             ["globalLeaksEliminated", p.globalLeaksEliminated ? "Leaks eliminated: the resurrected code runs under \"use strict\" and adds nothing to globalThis" : "Leaks NOT eliminated", p.globalLeaksEliminated],
             ["prototypeSafe", p.prototypeSafe ? "Object.prototype and Array.prototype are untouched" : "A built-in prototype was polluted", p.prototypeSafe],
             ["inputMutationParity", p.inputMutationParity ? "Input mutation parity: identical post-call input state" + (p.legacyMutatesInput ? " (the legacy code mutates its input; so does the resurrected code, identically)" : "") : "Input state differs after the calls", p.inputMutationParity]
-          ].forEach((row) => ul.append(el("li", row[2] ? "yes" : "no", row[1])));
+          ].concat(p.protoPollutionBlocked === undefined ? [] : [["protoPollutionBlocked", p.protoPollutionBlocked ? "Proto-Pollution Blocked: JSON.parse('{\"__proto__\":{\"polluted\":true}}') leaves ({}).polluted === undefined on the resurrected code" : "Proto-Pollution NOT blocked: the exploit payload polluted Object.prototype", p.protoPollutionBlocked]]).forEach((row) => ul.append(el("li", row[2] ? "yes" : "no", row[1])));
           box.append(ul);
         }
       }
@@ -4871,6 +4922,129 @@ function lzHealthGuard(deps) {
     window.LazarusSarif = { run: run, report: () => report };
   }
 })();
+</script>
+<script>
+/* lz-v19:start */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const text = (tag, cls, value) => { const n = document.createElement(tag); if (cls) n.className = cls; n.textContent = value; return n; };
+
+  // ---- 12-Case Edge Gauntlet: Legacy | Naive AI | Lazarus Proven, exact Object.is ------------------------------
+  const gBtn = $("gauntletBtn"), gBox = $("gauntletResults");
+  let gCtl = null, gToken = 0;
+  function gauntletTarget() {
+    const modernOut = $("modernOut"), legacy = $("legacyCode"), schemaJson = $("schemaJson");
+    let schema;
+    try { schema = JSON.parse(schemaJson.value || "{}"); } catch (e) { return { error: "Fix the Input Fuzz Schema JSON first." }; }
+    if (schema === null || typeof schema !== "object" || Array.isArray(schema)) return { error: "Fix the Input Fuzz Schema JSON first." };
+    let modern = (modernOut.textContent || "").trim(), functionName;
+    const nested = Object.keys(schema).length > 0 && Object.keys(schema).every((k) => schema[k] && typeof schema[k] === "object");
+    if (nested) {
+      const picker = $("probeFn"), fns = window.lastModuleFunctions || [];
+      const name = picker && schema[picker.value] ? picker.value : Object.keys(schema)[0];
+      const fn = fns.find((f) => f.exportedAs === name);
+      schema = schema[name]; functionName = name;
+      if (fn && fn.modernCode) modern = fn.modernCode;
+    }
+    if (!modern || modern.startsWith("// Modernized code will appear")) return { error: "Run RESURRECT SPECIMEN first, so there is resurrected code to attack." };
+    return { body: Object.assign({ legacyCode: legacy.value, modernCode: modern, schema: schema }, functionName ? { functionName: functionName } : {}) };
+  }
+  function renderGauntlet(data) {
+    gBox.textContent = "";
+    const total = data.total, lp = data.lazarusPassed, np = data.naivePassed;
+    const traps = data.rows.filter((r) => !r.naiveMatch && r.lazarusMatch);
+    const score = text("div", "gauntlet-score", "");
+    score.append(text("span", "g-lazarus", "Lazarus: " + lp + "/" + total + (lp === total ? " Exact Parity" : " Exact Parity (" + (total - lp) + " MISMATCH)")));
+    score.append(text("span", "g-naive" + (np === total ? " clean" : ""), "Naive AI: " + np + "/" + total));
+    gBox.append(score);
+    const trapLine = text("p", "gauntlet-traps", traps.length > 0
+      ? "Naive AI diverges from Legacy on " + traps.length + " trap" + (traps.length === 1 ? "" : "s") + " where Lazarus holds exact parity: " + traps.map((r) => r.label).join(", ")
+      : data.naiveApplies === false ? "No naive-trap pattern in this specimen: the naive rewrite leaves it as it is, so every case matches." : "Naive AI matched Legacy on every case of this specimen.");
+    gBox.append(trapLine);
+    const wrap = text("div", "gauntlet-scroll", ""), table = document.createElement("table"), head = document.createElement("tr");
+    ["Edge input", "Legacy", "Naive AI", "Lazarus Proven"].forEach((h) => head.append(text("th", "", h)));
+    const thead = document.createElement("thead"); thead.append(head); table.append(thead);
+    const body = document.createElement("tbody");
+    data.rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      if (!r.naiveMatch && r.lazarusMatch) tr.className = "g-trap";
+      const first = document.createElement("td"); first.append(text("code", "", r.label));
+      if (r.inputDisplay && r.inputDisplay !== r.label) first.title = r.inputDisplay;
+      if (!r.naiveMatch && r.lazarusMatch) first.append(text("span", "g-tag", "TRAP"));
+      const legacy = document.createElement("td"); legacy.append(text("code", "", r.legacyOut));
+      const naive = document.createElement("td"); naive.className = r.naiveMatch ? "g-ok" : "g-bad"; naive.append(text("code", "", (r.naiveMatch ? "\u2713 " : "\u2717 ") + r.naiveOut));
+      const laz = document.createElement("td"); laz.className = r.lazarusMatch ? "g-ok" : "g-bad"; laz.append(text("code", "", (r.lazarusMatch ? "\u2713 " : "\u2717 ") + r.lazarusOut));
+      tr.append(first, legacy, naive, laz); body.append(tr);
+    });
+    table.append(body); wrap.append(table); gBox.append(wrap);
+    gBox.hidden = false;
+  }
+  function gauntletMessage(message) { gBox.textContent = ""; gBox.append(text("p", "gauntlet-traps", message)); gBox.hidden = false; }
+  async function runGauntlet() {
+    const target = gauntletTarget();
+    if (target.error) { gauntletMessage(target.error); return null; }
+    if (gCtl) gCtl.abort();
+    const controller = new AbortController();
+    gCtl = controller;
+    const mine = ++gToken;
+    gBtn.disabled = true; gBtn.setAttribute("aria-busy", "true");
+    gauntletMessage("Running the 12 edge cases through Legacy, Naive AI and Lazarus in the sandbox...");
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 30000);
+    try {
+      const res = await fetch("/api/edge-gauntlet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(target.body), signal: controller.signal });
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (mine !== gToken) return null;
+      if (!res.ok || !data || !Array.isArray(data.rows)) { gauntletMessage("Edge gauntlet failed: " + (data && data.error ? data.error : "HTTP " + res.status)); return null; }
+      renderGauntlet(data);
+      document.dispatchEvent(new CustomEvent("lazarus:gauntlet", { detail: data }));
+      return data;
+    } catch (err) {
+      if (mine !== gToken) return null;
+      gauntletMessage(timedOut ? "Edge gauntlet timed out." : "Edge gauntlet failed: " + (err && err.message ? err.message : err));
+      return null;
+    } finally {
+      clearTimeout(timer);
+      if (mine === gToken) { gCtl = null; gBtn.disabled = false; gBtn.removeAttribute("aria-busy"); }
+    }
+  }
+  gBtn.addEventListener("click", () => { runGauntlet(); });
+  // A new resurrection invalidates the scorecard of the previous one.
+  document.addEventListener("lazarus:run-start", () => { gToken++; if (gCtl) gCtl.abort(); gCtl = null; gBtn.disabled = false; gBox.hidden = true; gBox.textContent = ""; });
+  window.LazarusGauntlet = { run: runGauntlet };
+
+  // ---- Seed Replay: the proof seed of the run, and a fresh one on demand ------------------------------------------
+  const bar = $("seedBar"), val = $("seedValue"), reseed = $("reseedBtn"), note = $("seedNote");
+  function freshSeed(previous) {
+    const buf = new Uint32Array(1);
+    let n = previous;
+    for (let i = 0; i < 8 && n === previous; i++) { crypto.getRandomValues(buf); n = buf[0] % (2147483648 - 16); }
+    return n;
+  }
+  document.addEventListener("lazarus:result", (e) => {
+    const r = e.detail;
+    if (!r || typeof r.proofSeed !== "number") return;
+    window.lastProofSeed = r.proofSeed;
+    val.textContent = String(r.proofSeed);
+    bar.hidden = false;
+    note.className = "seed-note " + (r.success ? "ok" : "bad");
+    note.textContent = r.success ? "Parity held over " + r.numRuns + " runs with this seed." : "Divergence under this seed: replay it to reproduce.";
+  });
+  document.addEventListener("lazarus:run-start", () => { reseed.disabled = true; });
+  document.addEventListener("lazarus:run-end", () => { reseed.disabled = false; });
+  reseed.addEventListener("click", async () => {
+    if (!window.LazarusRun) return;
+    const previous = window.lastProofSeed;
+    const next = freshSeed(previous);
+    window.lazarusSeedOverride = next;
+    note.className = "seed-note"; note.textContent = "Re-verifying with seed " + next + "...";
+    try { await window.LazarusRun.start(); } finally { window.lazarusSeedOverride = undefined; }
+  });
+  window.LazarusSeed = { freshSeed: freshSeed };
+})();
+/* lz-v19:end */
 </script>
 <script>
 /* lz-stale:start */

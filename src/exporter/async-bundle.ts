@@ -17,6 +17,8 @@ export interface AsyncBundleInput {
   readonly entry: ErrorFirstFunction;
   readonly schema: Record<string, string>;
   readonly fuzzRuns: number;
+  /** The fast-check seed of the proof; the exported suite replays it. */
+  readonly seed?: number;
   readonly attempts: number;
   readonly specMarkdown: string;
 }
@@ -55,7 +57,7 @@ export function legacyModuleFile(source: string, entry: ErrorFirstFunction): str
   return `${source.trim()}\n\n// Added by Lazarus: the error-first entry point the parity suite calls.\nmodule.exports.__lazarusEntry = ${entry.ref};\n`;
 }
 
-export function renderAsyncParityTest(name: string, entry: ErrorFirstFunction, schema: Record<string, string>, fuzzRuns: number): string {
+export function renderAsyncParityTest(name: string, entry: ErrorFirstFunction, schema: Record<string, string>, fuzzRuns: number, seed?: number): string {
   const params = entry.params;
   const arbitraries = params.map((p) => ARBITRARY[schema[p] ?? "string"] ?? ARBITRARY["string"]).join(", ");
   const list = params.join(", ");
@@ -126,7 +128,7 @@ export function renderAsyncParityTest(name: string, entry: ErrorFirstFunction, s
     `      fc.asyncProperty(${arbitraries || "fc.constant(undefined)"}, async (${list || "_unused"}) => {`,
     `        expect(same(await runModern(${list}), await runLegacy(${list}))).toBe(true);`,
     `      }),`,
-    `      { numRuns: ${fuzzRuns} }`,
+    `      { numRuns: ${fuzzRuns}${seed !== undefined ? `, seed: ${seed}` : ""} }`,
     `    );`,
     `  });`,
     `});`,
@@ -193,7 +195,7 @@ export async function generateAsyncVerifiedBundle(input: AsyncBundleInput, certi
     files: {
       [TS_FILE]: attempt.ts.endsWith("\n") ? attempt.ts : `${attempt.ts}\n`,
       "SPEC.md": spec,
-      "resurrected.test.ts": renderAsyncParityTest(name, input.entry, input.schema, input.fuzzRuns),
+      "resurrected.test.ts": renderAsyncParityTest(name, input.entry, input.schema, input.fuzzRuns, input.seed),
       [WORKFLOW_PATH]: renderWorkflow(),
       "legacy.cjs": legacyFile,
     },

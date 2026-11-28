@@ -63,6 +63,8 @@ export interface ExportReportArgs {
   /** The verified `resurrected.ts` of the bundle. */
   readonly resurrectedTs: string;
   readonly fuzzRuns: number;
+  /** The proof seed of the run (V19), when the Studio sent one. */
+  readonly seed?: number;
   readonly attempts: number;
   readonly healed: boolean;
   readonly typecheck: TypecheckReport;
@@ -101,7 +103,7 @@ export async function buildExportReport(args: ExportReportArgs): Promise<string>
     kind: args.shape === "async" ? "async" : "single",
     legacyCode: args.legacyCode,
     modernCode: args.resurrectedTs,
-    fuzz: { runs: args.fuzzRuns, attempts: args.attempts, healed: args.healed, exact: true },
+    fuzz: { runs: args.fuzzRuns, attempts: args.attempts, healed: args.healed, exact: true, ...(args.seed !== undefined ? { seed: args.seed } : {}) },
     typecheck: {
       passed: args.typecheck.passed,
       errorCount: args.typecheck.errorCount,

@@ -1,0 +1,11 @@
+# Tasks: V19 Gauntlet and Security
+- [x] 1. Spec: requirements, design and tasks for `v19-gauntlet-and-security`.
+- [x] 2. `src/crew/edge-gauntlet.ts` and `POST /api/edge-gauntlet`.
+- [x] 3. `src/crew/security-exorcist.ts`: proto-pollution and loose-equality analysis, live exploit probe.
+- [x] 4. Necromancer rule `proto-pollution-guard` (ladders, order, certificate and blame entries).
+- [x] 5. Purity proof `protoPollutionBlocked`, preset `legacyUnsafeMerge`, `LAZ009` and `LAZ010` in `cli-audit.ts`.
+- [x] 6. Seeds: `proofSeed` and `numRuns` on `/api/resurrect`, the signed certificate, the offline report and the exported Vitest suite.
+- [x] 7. Tab 1 UI: Run 12-Case Edge Gauntlet scorecard, legacyUnsafeMerge preset, Seed chip and Re-Verify New Seed.
+- [x] 8. Tests: edge-gauntlet, security-exorcist, seed-replay, studio-ui, kiro-dna, kiro-power, async-callback; 29 Kiro Specs; Tab 3 hashes.
+- [x] 9. E2E: Run 12-Case Edge Gauntlet, legacyUnsafeMerge and Re-Verify New Seed.
+- [x] 10. Verify: `npx tsc --noEmit`, `npx vitest run`, `npm run test:e2e`, badges, temp-file cleanup.

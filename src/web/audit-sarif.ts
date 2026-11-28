@@ -18,6 +18,8 @@ export const AuditSarifBodySchema = z
     code: z.string().min(1, "code must not be empty").max(AUDIT_SARIF_MAX_CODE_CHARS).optional(),
     /** A directory name under examples/ (checked against the real listing). */
     example: z.string().min(1).max(100).optional(),
+    /** Also report loose-equality comparisons (LAZ010). Off by default so every existing report stays identical. */
+    security: z.boolean().optional(),
   })
   .strict()
   .refine((b) => (b.code === undefined) !== (b.example === undefined), "give exactly one of `code` or `example`");
@@ -111,7 +113,7 @@ export function runAuditSarif(body: AuditSarifBody, examplesDir: string): AuditS
     directory = `examples/${name}`;
     source = { kind: "example", name };
   }
-  const report = auditSources(sources, skipped, directory);
+  const report = auditSources(sources, skipped, directory, body.security === true ? { security: true } : {});
   const sarif = renderSarif(report);
   const run = sarif.runs[0];
   const rules = run?.tool.driver.rules ?? SARIF_RULES;

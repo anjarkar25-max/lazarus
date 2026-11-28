@@ -10,6 +10,7 @@ import { buildRecordArbitrary } from "../fuzzer/differential.js";
 import type { InputSchema } from "../fuzzer/types.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { analyze, lineOf, positionOf, type Analysis, type Reference } from "./ast-scope.js";
+import { probeProtoPollution, scanSecurity } from "./security-exorcist.js";
 
 // ---------------------------------------------------------------------------
 // Static analysis
@@ -146,7 +147,9 @@ export interface PurityProof {
   readonly legacyLeakedGlobals: string[];
   /** Sandboxed samples behind the proof. */
   readonly samples: number;
-  /** All three pillars hold. */
+  /** V19: the live exploit probe `JSON.parse('{"__proto__":{"polluted":true}}')` left `({}).polluted === undefined` on the resurrected code. Absent when the legacy code has no unguarded key-copy loop. */
+  readonly protoPollutionBlocked?: boolean;
+  /** All pillars hold. */
   readonly proven: boolean;
   /** One short line per finding, for the Studio and the report. */
   readonly details: string[];
@@ -290,6 +293,14 @@ export async function auditPurity(input: PurityAuditInput): Promise<PurityProof 
   details.push(legacyMutates ? (mutationParity ? "the legacy code mutates its input, and the resurrected code leaves it in the identical state" : "the resurrected code leaves its inputs in a different state than the legacy code") : mutationParity ? "neither version changes its inputs" : "the inputs differ after the calls");
   details.push(protoSafe ? "Object.prototype, Array.prototype, Function.prototype and String.prototype are untouched" : "a built-in prototype changed during a run");
   for (const note of strictNotes) details.push(`strict-mode run threw: ${note}`.slice(0, 160));
+  // V19: only specimens with an unguarded key-copy loop are exploit-probed.
+  let exploit: Awaited<ReturnType<typeof probeProtoPollution>>;
+  if (scanSecurity(input.legacyCode).pollution.length > 0) {
+    exploit = await probeProtoPollution({ legacyCode: input.legacyCode, modernCode: input.modernCode, schema: input.schema, executor: input.executor });
+    if (exploit === undefined) return undefined;
+    if (exploit.attempted) details.push(exploit.detail);
+  }
+  const protoOk = exploit === undefined || !exploit.attempted || exploit.blocked;
   return {
     globalLeaksDetected: detected,
     globalLeaksEliminated: eliminated,
@@ -298,7 +309,8 @@ export async function auditPurity(input: PurityAuditInput): Promise<PurityProof 
     legacyMutatesInput: legacyMutates,
     legacyLeakedGlobals: [...legacyLeaked].sort(),
     samples: inputs.length,
-    proven: eliminated && protoSafe && mutationParity,
+    ...(exploit !== undefined && exploit.attempted ? { protoPollutionBlocked: exploit.blocked } : {}),
+    proven: eliminated && protoSafe && mutationParity && protoOk,
     details,
   };
 }
