@@ -1,4 +1,4 @@
-﻿# Lazarus — Autonomous Legacy & Dead-Dependency Resurrection Engine
+# Lazarus — Autonomous Legacy & Dead-Dependency Resurrection Engine
 
 > **Kiroween Hackathon 2026 (Frankenstein Category)** | **Live Studio:** [lazarus-yf0a.onrender.com](https://lazarus-yf0a.onrender.com) | **Companion Kiro Crew App:** [lazarus-kiro-crew](https://github.com/anjarkar25-max/lazarus-kiro-crew) | **MIT License**
 >
@@ -30,6 +30,7 @@ npm run audit -- ./examples/legacy-circular-ledger                         # Sca
 npm run audit -- ./examples/legacy-circular-ledger --sarif --out out.sarif # Export GitHub Code Scanning SARIF 2.1.0 report
 npm run verify -- ./out/resurrection-bundle.zip                            # Verify an Ed25519 signed Resurrection Certificate bundle
 npm run benchmark                                                          # Run live parity & tsc --strict benchmark across all presets
+npm run test:e2e                                                            # Live headless Edge/Chrome smoke test of the real Studio (skips cleanly when no browser is installed)
 npm run resurrect -- ./examples/legacy-quantize.cjs --out ./out            # Resurrect a single file via CLI
 npm run resurrect -- ./examples/legacy-circular-ledger --out ./out-project # Resurrect a circular multi-file CJS graph via CLI
 ```

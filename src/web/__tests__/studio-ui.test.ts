@@ -981,10 +981,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 26-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 27-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1324,7 +1324,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(26);
+    expect(body["specs"]).toBe(27);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1357,8 +1357,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 26 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+  it("shows 27 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
   });
 });
 
@@ -1595,8 +1595,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 26 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    it("shows 27 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
     });
   });
 });
@@ -1784,14 +1784,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 26 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 27 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2104,7 +2104,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 26 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 27 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2116,7 +2116,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
@@ -2443,7 +2443,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
-    it("keeps Tab 3 Red-Team byte-identical, shows 26 Kiro Specs and adds no dependency", () => {
+    it("keeps Tab 3 Red-Team byte-identical, shows 27 Kiro Specs and adds no dependency", () => {
       const between = (a: string, b: string): string => {
         const s = html.indexOf(a);
         const e = html.indexOf(b, s + a.length);
@@ -2455,9 +2455,283 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
       const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
+    });
+  });
+});
+
+describe("V17 UX polish: one drawer at a time, Escape, focus return, focus trap, busy states (shipped scripts, minimal DOM)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  type Drawers = { register(name: string, api: { isOpen(): boolean; close(restore: boolean): void }): void; opening(name: string): void; active(): string | null; escape(): boolean; trap(shift: boolean): boolean };
+  type Focusable = { name: string; focus(): void };
+  const makeDrawers = (env: { expanded?: () => Array<{ click(): void; focus?(): void }>; focusables?: (n: string) => Focusable[]; active?: () => unknown }): Drawers => {
+    const make = runInlineScript(`${regionOf("lz-drawers")}; lzMakeDrawers`, {}) as (e: unknown) => Drawers;
+    return make({ expanded: () => [], focusables: () => [], active: () => null, ...env });
+  };
+  /** A drawer stand-in that records how it was closed. */
+  const fakeDrawer = (log: string[], name: string): { open: boolean; api: { isOpen(): boolean; close(restore: boolean): void } } => {
+    const state = { open: false, api: { isOpen: () => state.open, close: (restore: boolean) => { state.open = false; log.push(`close ${name} restore=${restore}`); } } };
+    return state;
+  };
+
+  describe("lzMakeDrawers (pure)", () => {
+    it("closes every other open drawer, without focus return, when one opens", () => {
+      const log: string[] = [];
+      const m = makeDrawers({});
+      const [dna, verify, sarif] = [fakeDrawer(log, "dna"), fakeDrawer(log, "verify"), fakeDrawer(log, "sarif")];
+      m.register("dna", dna.api);
+      m.register("verify", verify.api);
+      m.register("sarif", sarif.api);
+      dna.open = true;
+      m.opening("verify");
+      verify.open = true;
+      expect(log).toEqual(["close dna restore=false"]);
+      expect(m.active()).toBe("verify");
+      m.opening("sarif");
+      sarif.open = true;
+      expect(log).toEqual(["close dna restore=false", "close verify restore=false"]);
+      expect([dna.open, verify.open, sarif.open]).toEqual([false, false, true]);
+      expect(m.active()).toBe("sarif");
+    });
+    it("Escape closes the open drawer with focus return, and reports false when there is nothing to close", () => {
+      const log: string[] = [];
+      const m = makeDrawers({});
+      const d = fakeDrawer(log, "dna");
+      m.register("dna", d.api);
+      expect(m.escape()).toBe(false);
+      d.open = true;
+      expect(m.escape()).toBe(true);
+      expect(log).toEqual(["close dna restore=true"]);
+      expect(m.escape()).toBe(false);
+    });
+    it("with no drawer open, Escape collapses the first expanded popover and focuses it; a drawer wins over a popover", () => {
+      const calls: string[] = [];
+      const pop = (n: string) => ({ click: () => calls.push(`click ${n}`), focus: () => calls.push(`focus ${n}`) });
+      const log: string[] = [];
+      const m = makeDrawers({ expanded: () => [pop("shrink"), pop("autopsy")] });
+      const d = fakeDrawer(log, "sarif");
+      m.register("sarif", d.api);
+      expect(m.escape()).toBe(true);
+      expect(calls).toEqual(["click shrink", "focus shrink"]);
+      d.open = true;
+      expect(m.escape()).toBe(true);
+      expect(calls).toHaveLength(2);
+      expect(log).toEqual(["close sarif restore=true"]);
+    });
+    it("keeps Tab inside an open drawer: wraps forward at the last control and backward at the first", () => {
+      const focused: string[] = [];
+      const mk = (name: string): Focusable => ({ name, focus: () => focused.push(name) });
+      const [a, b, c] = [mk("a"), mk("b"), mk("c")];
+      let current: unknown = c;
+      const m = makeDrawers({ focusables: () => [a, b, c], active: () => current });
+      expect(m.trap(false)).toBe(false);
+      const d = fakeDrawer([], "verify");
+      m.register("verify", d.api);
+      expect(m.trap(false)).toBe(false);
+      d.open = true;
+      expect(m.trap(false)).toBe(true);
+      current = a;
+      expect(m.trap(true)).toBe(true);
+      current = b;
+      expect(m.trap(false)).toBe(false);
+      expect(m.trap(true)).toBe(false);
+      current = { outside: true };
+      expect(m.trap(false)).toBe(true);
+      expect(m.trap(true)).toBe(true);
+      expect(focused).toEqual(["a", "c", "a", "c"]);
+    });
+    it("does nothing for Tab when the drawer has no focusable control", () => {
+      const m = makeDrawers({ focusables: () => [] });
+      const d = fakeDrawer([], "dna");
+      m.register("dna", d.api);
+      d.open = true;
+      expect(m.trap(false)).toBe(false);
+    });
+  });
+
+  describe("the real header drawers, wired through the manager", () => {
+    type El = FakeElement & { focus: () => void; focused: number };
+    const rig = () => {
+      const doc = new FakeDocument();
+      const els: Record<string, El> = {};
+      const mk = (tag: string, id: string): El => {
+        const e = doc.element(tag, id) as El;
+        e.focused = 0;
+        e.focus = () => { e.focused++; };
+        els[id] = e;
+        return e;
+      };
+      for (const [tag, id] of [["button", "verifyBtn"], ["aside", "verifyDrawer"], ["div", "verifyScrim"], ["button", "verifyClose"], ["label", "verifyDrop"], ["input", "verifyFiles"], ["div", "verifyResult"], ["button", "sarifBtn"], ["aside", "sarifDrawer"], ["div", "sarifScrim"], ["button", "sarifClose"], ["select", "sarifSource"], ["button", "sarifRun"], ["button", "sarifDownload"], ["div", "sarifSummary"], ["div", "sarifChips"], ["div", "sarifList"], ["textarea", "legacyCode"]] as const) mk(tag, id);
+      for (const id of ["verifyDrawer", "verifyScrim", "sarifDrawer", "sarifScrim"]) els[id]!.hidden = true;
+      els["sarifDownload"]!.disabled = true;
+      const win: Record<string, unknown> = {};
+      const globals = { document: doc, window: win, fetch: () => new Promise<Response>(() => undefined), Blob, URL, Array, Uint8Array };
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-drawers:start")) ?? "", globals);
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-bundle:start")) ?? "", globals);
+      // A third drawer standing in for Kiro DNA, registered the way the shipped script does.
+      let dnaOpen = false;
+      const dnaBtn = mk("button", "dnaBtn");
+      (win["LazarusDrawers"] as Drawers).register("dna", { isOpen: () => dnaOpen, close: (restore: boolean) => { dnaOpen = false; if (restore) dnaBtn.focus(); } });
+      const openDna = (): void => { (win["LazarusDrawers"] as Drawers).opening("dna"); dnaOpen = true; };
+      const key = (k: string): boolean => {
+        let prevented = false;
+        doc.dispatchEvent({ type: "keydown", key: k, preventDefault: () => { prevented = true; } });
+        return prevented;
+      };
+      return { els, key, openDna, isDnaOpen: () => dnaOpen, win };
+    };
+    it("opening SARIF Audit while Verify Bundle is open closes Verify Bundle first (no stacked drawers or scrims)", () => {
+      const r = rig();
+      r.els["verifyBtn"]!.click();
+      expect([r.els["verifyDrawer"]!.hidden, r.els["verifyScrim"]!.hidden]).toEqual([false, false]);
+      r.els["sarifBtn"]!.click();
+      expect([r.els["verifyDrawer"]!.hidden, r.els["verifyScrim"]!.hidden]).toEqual([true, true]);
+      expect([r.els["sarifDrawer"]!.hidden, r.els["sarifScrim"]!.hidden]).toEqual([false, false]);
+      expect(r.els["verifyBtn"]!.getAttribute("aria-expanded")).toBe("false");
+      expect(r.els["sarifBtn"]!.getAttribute("aria-expanded")).toBe("true");
+      expect(r.els["verifyBtn"]!.focused).toBe(0);
+      r.openDna();
+      expect([r.els["sarifDrawer"]!.hidden, r.els["sarifScrim"]!.hidden, r.isDnaOpen()]).toEqual([true, true, true]);
+      expect((r.win["LazarusDrawers"] as Drawers).active()).toBe("dna");
+    });
+    it("Escape closes only the open drawer, returns focus to the button that opened it and is consumed once", () => {
+      const r = rig();
+      r.els["sarifBtn"]!.click();
+      expect(r.els["sarifClose"]!.focused).toBe(1);
+      expect(r.key("Escape")).toBe(true);
+      expect([r.els["sarifDrawer"]!.hidden, r.els["sarifScrim"]!.hidden]).toEqual([true, true]);
+      expect(r.els["sarifBtn"]!.focused).toBe(1);
+      expect(r.els["sarifBtn"]!.getAttribute("aria-expanded")).toBe("false");
+      expect(r.key("Escape")).toBe(false);
+      expect(r.els["sarifBtn"]!.focused).toBe(1);
+      r.els["verifyBtn"]!.click();
+      expect(r.key("Escape")).toBe(true);
+      expect(r.els["verifyBtn"]!.focused).toBe(1);
+      expect(r.els["sarifBtn"]!.focused).toBe(1);
+      r.openDna();
+      expect(r.key("Escape")).toBe(true);
+      expect(r.isDnaOpen()).toBe(false);
+      expect(r.els["dnaBtn"]!.focused).toBe(1);
+    });
+    it("the scrim and the Close button still close a drawer, and the header button toggles it", () => {
+      const r = rig();
+      r.els["verifyBtn"]!.click();
+      r.els["verifyClose"]!.click();
+      expect(r.els["verifyDrawer"]!.hidden).toBe(true);
+      r.els["sarifBtn"]!.click();
+      r.els["sarifScrim"]!.click();
+      expect(r.els["sarifDrawer"]!.hidden).toBe(true);
+      r.els["sarifBtn"]!.click();
+      r.els["sarifBtn"]!.click();
+      expect(r.els["sarifDrawer"]!.hidden).toBe(true);
+    });
+  });
+
+  describe("busy and disabled states on the async buttons", () => {
+    it("Run SARIF Audit shows aria-busy while the request is in flight and clears it afterwards", async () => {
+      const doc = new FakeDocument();
+      const els: Record<string, FakeElement & { focus?: () => void }> = {};
+      for (const [tag, id] of [["button", "sarifBtn"], ["aside", "sarifDrawer"], ["div", "sarifScrim"], ["button", "sarifClose"], ["select", "sarifSource"], ["button", "sarifRun"], ["button", "sarifDownload"], ["div", "sarifSummary"], ["div", "sarifChips"], ["div", "sarifList"], ["textarea", "legacyCode"]] as const) {
+        const e = doc.element(tag, id) as FakeElement & { focus?: () => void };
+        e.focus = () => undefined;
+        els[id] = e;
+      }
+      els["sarifSource"]!.value = "code";
+      els["legacyCode"]!.value = "var h = (n / 2) | 0;";
+      let answer: (r: Response) => void = () => undefined;
+      const win: Record<string, unknown> = {};
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-sarif:start")) ?? "", { document: doc, window: win, fetch: () => new Promise<Response>((resolve) => { answer = resolve; }), Blob, URL, Array, Uint8Array });
+      els["sarifRun"]!.click();
+      expect(els["sarifRun"]!.getAttribute("aria-busy")).toBe("true");
+      expect(els["sarifRun"]!.disabled).toBe(true);
+      answer(new Response(JSON.stringify({ error: "nope" }), { status: 400 }));
+      for (let i = 0; i < 40 && els["sarifRun"]!.disabled; i++) await new Promise((r) => setTimeout(r, 10));
+      expect(els["sarifRun"]!.getAttribute("aria-busy")).toBeNull();
+      expect(els["sarifRun"]!.disabled).toBe(false);
+      expect(els["sarifSummary"]!.textContent).toContain("Audit rejected");
+    });
+    it("Simulate 1-Byte Tamper is busy while its verification runs, then stays disabled with Restore shown", async () => {
+      const block = signCertificate({ legacySource: "function f(n) { return n; }", resurrectedSource: "export const f = (n: number) => n;\n", paritySummary: "100/100", issuedAt: "2025-01-01T00:00:00.000Z" });
+      const doc = new FakeDocument();
+      let release: (r: Response) => void = () => undefined;
+      let calls = 0;
+      const fetchImpl = (): Promise<Response> => {
+        calls++;
+        if (calls === 1) return Promise.resolve(new Response(JSON.stringify({ valid: true, reason: "ok", expectedDigest: "e", actualDigest: "e", keyId: block.keyId }), { status: 200 }));
+        return new Promise<Response>((resolve) => { release = resolve; });
+      };
+      const win = { lastResurrectedCode: "export const f = (n: number) => n;\n" };
+      const regionSrc = html.slice(html.indexOf("/* lz-sig:start */"), html.indexOf("/* lz-sig:end */"));
+      const signatureRow = runInlineScript(`${regionSrc}; signatureRow`, { document: doc, window: win, fetch: fetchImpl, Uint8Array }) as (sig: unknown) => FakeElement;
+      const row = signatureRow({ payload: block.payload, signatureB64: block.signatureB64, publicKeyPem: block.publicKeyPem, keyId: block.keyId });
+      const find = (id: string): FakeElement => {
+        const walk = (el: FakeElement): FakeElement | undefined => (el.id === id ? el : el.children.map(walk).find((x) => x !== undefined));
+        const hit = walk(row);
+        if (hit === undefined) throw new Error(`no #${id}`);
+        return hit;
+      };
+      for (let i = 0; i < 40 && find("certSigBadge").textContent.includes("VERIFYING"); i++) await new Promise((r) => setTimeout(r, 10));
+      expect(find("certTamperBtn").getAttribute("aria-busy")).toBeNull();
+      find("certTamperBtn").click();
+      expect(find("certTamperBtn").getAttribute("aria-busy")).toBe("true");
+      expect(find("certTamperBtn").disabled).toBe(true);
+      release(new Response(JSON.stringify({ valid: false, reason: "Digest mismatch", expectedDigest: "e", actualDigest: "f", keyId: block.keyId }), { status: 200 }));
+      for (let i = 0; i < 40 && find("certTamperBtn").getAttribute("aria-busy") === "true"; i++) await new Promise((r) => setTimeout(r, 10));
+      expect(find("certTamperBtn").getAttribute("aria-busy")).toBeNull();
+      expect(find("certTamperBtn").disabled).toBe(true);
+      expect(find("certRestoreBtn").hidden).toBe(false);
+      expect(find("certSigBadge").textContent).toBe("TAMPER DETECTED (Digest / Signature Mismatch)");
+    });
+    it("Compare vs. Naive AI and RUN PROBE set aria-busy next to disabled and clear it in every exit path", () => {
+      const naive = html.slice(html.indexOf("async function compare()"), html.indexOf('btn.addEventListener("click", compare);'));
+      expect(naive).toContain('btn.disabled = true; btn.setAttribute("aria-busy", "true");');
+      expect(naive).toContain('btn.removeAttribute("aria-busy")');
+      const reset = html.slice(html.indexOf("function reset() {\n    if (ctl) ctl.abort();"), html.indexOf("let pendingSource = null"));
+      expect(reset).toContain('btn.removeAttribute("aria-busy")');
+      const probe = html.slice(html.indexOf("async function runProbe()"), html.indexOf("window.LazarusProbe = {"));
+      expect(probe).toContain('probeBtn.setAttribute("aria-busy", "true");');
+      expect(probe).toContain('probeBtn.removeAttribute("aria-busy");');
+      expect(html).toContain('probeBtn.disabled = false; probeBtn.removeAttribute("aria-busy"); }');
+    });
+  });
+
+  describe("markup and CSS", () => {
+    it("labels the SARIF run button Run SARIF Audit and registers the three drawers with the manager", () => {
+      expect(html).toContain('<button type="button" class="primary" id="sarifRun">Run SARIF Audit</button>');
+      expect(html).toContain('window.LazarusDrawers.register("dna"');
+      expect(html).toContain('wireDrawer("verify", verifyBtn');
+      expect(html).toContain('wireDrawer("sarif", sarifBtn');
+      expect(html).toContain('window.LazarusDrawers.opening("dna");');
+      expect(html.indexOf("lz-drawers:start")).toBeLessThan(html.indexOf('const btn = $("dnaBtn")'));
+      expect(html.indexOf("lz-drawers:start")).toBeLessThan(html.indexOf("lz-bundle:start"));
+    });
+    it("has the V17 focus-visible, disabled, busy and narrow-screen rules, after the Red-Team CSS and outside it", () => {
+      const css = html.slice(html.indexOf("/* ---- V17: UX polish"), html.indexOf("</style>"));
+      expect(css.length).toBeGreaterThan(500);
+      for (const s of [":focus-visible { outline: 2px solid var(--violet)", "button.primary):focus-visible { outline-color: var(--emerald)", 'button[aria-busy="true"]::after', "pointer-events: none", "@keyframes lzSpin", "prefers-reduced-motion: reduce", ".dna-drawer { max-width: 100vw; overflow-x: hidden; }", "button:disabled:not(.primary)"]) expect(css, s).toContain(s);
+      expect(html.indexOf("/* ---- V17: UX polish")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
+      expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    });
+    it("keeps the three Tab 3 SHA-256 invariants and the unique-id rule", () => {
+      const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
+      const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+      const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+      expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
   });
 });

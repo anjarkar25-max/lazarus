@@ -83,13 +83,13 @@ describe("readKiroDna (live repository)", () => {
     expect(["/repo/.kiro/specs/sandbox/tasks.md", ".kiro\\specs\\x\\design.md"].every((f) => specs.test(f))).toBe(true);
     expect(specs.test(".kiro/steering/architecture.md")).toBe(false);
   });
-  it("counts 26 specs, including the V12 autopsy-and-audit spec with all three documents", () => {
-    expect(dna.specCount).toBe(26);
+  it("counts 27 specs, including the V12 autopsy-and-audit spec with all three documents", () => {
+    expect(dna.specCount).toBe(27);
     const v12 = dna.specs.find((s) => s.name === "v12-grandmaster-autopsy-and-audit");
     expect(v12).toMatchObject({ title: "V12 Grandmaster Autopsy and Audit", documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
     expect(v12?.taskCount).toBe(8);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
   });
   it("includes the V13 finisher spec with all three documents and every task ticked", () => {
     const v13 = dna.specs.find((s) => s.name === "v13-grand-prize-finisher");
@@ -97,7 +97,7 @@ describe("readKiroDna (live repository)", () => {
     expect(v13?.taskCount).toBe(10);
     expect(v13?.tasksDone).toBe(v13?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
   });
   it("includes the V14 final-boss spec with all three documents and every task ticked", () => {
     const v14 = dna.specs.find((s) => s.name === "v14-final-boss");
@@ -105,7 +105,7 @@ describe("readKiroDna (live repository)", () => {
     expect(v14?.taskCount).toBe(9);
     expect(v14?.tasksDone).toBe(v14?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
   });
   it("includes the V15 compiler-depth spec with all three documents and every task ticked", () => {
     const v15 = dna.specs.find((s) => s.name === "v15-compiler-depth");
@@ -113,14 +113,20 @@ describe("readKiroDna (live repository)", () => {
     expect(v15?.taskCount).toBe(10);
     expect(v15?.tasksDone).toBe(v15?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
-    expect(dna.specCount).toBe(26);
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    expect(dna.specCount).toBe(27);
   });
   it("includes the V16 zero-trust-and-sarif spec with all three documents and every task ticked", () => {
     const v16 = dna.specs.find((s) => s.name === "v16-zero-trust-and-sarif");
     expect(v16).toMatchObject({ documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
     expect(v16?.taskCount).toBe(10);
     expect(v16?.tasksDone).toBe(v16?.taskCount);
+  });
+  it("includes the V17 ux-and-e2e-audit spec with all three documents and every task ticked", () => {
+    const v17 = dna.specs.find((s) => s.name === "v17-ux-and-e2e-audit");
+    expect(v17).toMatchObject({ documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 3 });
+    expect(v17?.taskCount).toBe(8);
+    expect(v17?.tasksDone).toBe(v17?.taskCount);
   });
   it("keeps the static header badge in sync with .kiro/specs (what kiro-dna-sync-check runs)", () => {
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");

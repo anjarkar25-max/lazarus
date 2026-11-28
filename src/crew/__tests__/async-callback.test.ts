@@ -350,7 +350,7 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
   });

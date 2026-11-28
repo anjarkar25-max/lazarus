@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
   <title>LAZARUS — Autonomous Legacy Resurrection Engine</title>
   <style>
     :root {
@@ -714,6 +715,20 @@ button.xray-chip[aria-pressed="true"] { box-shadow: 0 0 0 2px currentColor; font
 .stale-hint[hidden] { display: none; }
 .lz-stale { opacity: 0.45; filter: grayscale(0.6); transition: opacity 0.2s; }
 button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
+/* ---- V17: UX polish (focus-visible, busy and disabled states, narrow-screen fit) --------------- */
+:where(button, select, input, textarea, a[href], summary, [tabindex]:not([tabindex="-1"])):focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+:where(button.primary):focus-visible { outline-color: var(--emerald); }
+button:disabled { cursor: not-allowed; }
+button:disabled:not(.primary):not([aria-busy="true"]) { opacity: 0.55; }
+button[aria-busy="true"] { cursor: progress; pointer-events: none; opacity: 0.85; }
+button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 8px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: lzSpin 0.7s linear infinite; }
+@keyframes lzSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { button[aria-busy="true"]::after { animation: none; border-right-color: currentColor; } }
+.dna-drawer { max-width: 100vw; overflow-x: hidden; }
+.dna-body { overflow-x: hidden; overflow-wrap: anywhere; }
+.dna-head h2 { min-width: 0; }
+@media (max-width: 1440px) { .dna-drawer { width: min(680px, 100vw); } .studio-header { row-gap: 8px; } }
+@media (max-width: 720px) { .dna-drawer { width: 100vw; border-left: 0; } }
 </style>
 </head>
 <body>
@@ -726,8 +741,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1194 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1209 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -1098,7 +1113,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
         <option value="example:legacy-invoice-engine">examples/legacy-invoice-engine</option>
         <option value="example:legacy-text-pipeline">examples/legacy-text-pipeline</option>
       </select>
-      <button type="button" class="primary" id="sarifRun">Run audit</button>
+      <button type="button" class="primary" id="sarifRun">Run SARIF Audit</button>
       <button type="button" class="hdr-btn" id="sarifDownload" disabled>Download .sarif</button>
     </div>
     <div class="sarif-summary" id="sarifSummary" role="status" aria-live="polite">Pick what to audit and run it. Files are parsed, never executed.</div>
@@ -2049,6 +2064,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     probeInputs.querySelectorAll("input").forEach((i) => { context[i.dataset.key] = parseInput(i.value); });
     busy = true;
     probeBtn.disabled = true;
+    probeBtn.setAttribute("aria-busy", "true");
     setStatus("Probing both sides in the sandbox...");
     if (probeCtl) probeCtl.abort();
     const controller = new AbortController();
@@ -2083,6 +2099,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
         probeCtl = null;
         busy = false;
         probeBtn.disabled = false;
+        probeBtn.removeAttribute("aria-busy");
         document.dispatchEvent(new CustomEvent("lazarus:probe-end"));
       }
     }
@@ -2096,7 +2113,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       first.value = value;
       return runProbe();
     },
-    abort() { if (probeCtl) probeCtl.abort(); probeCtl = null; probeToken++; busy = false; probeBtn.disabled = false; }
+    abort() { if (probeCtl) probeCtl.abort(); probeCtl = null; probeToken++; busy = false; probeBtn.disabled = false; probeBtn.removeAttribute("aria-busy"); }
   };
   $("probeChips").querySelectorAll(".probe-chip").forEach((chipButton) => {
     chipButton.addEventListener("click", () => {
@@ -2394,6 +2411,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       const mine = ++seq;
       show("pending", "Ed25519 Signed \u00b7 VERIFYING...");
       offline.hidden = true;
+      if (tampered) tamperBtn.setAttribute("aria-busy", "true");
       try {
         const { verdict: v, method } = await verifyPreferOffline(sig, code);
         if (mine !== seq) return;
@@ -2406,6 +2424,8 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
         if (mine !== seq) return;
         show("pending", "Ed25519 Signed \u00b7 verifier unreachable", err && err.message ? err.message : String(err));
         tamperBtn.disabled = false;
+      } finally {
+        if (mine === seq) tamperBtn.removeAttribute("aria-busy");
       }
     }
     tamperBtn.addEventListener("click", () => {
@@ -3580,6 +3600,65 @@ function lzDecodeSpecimen(hash) {
 })();
 </script>
 <script>
+/* Drawer manager: one top-level drawer at a time (Kiro DNA, Verify Bundle, SARIF Audit), Escape with focus return, focus trap. */
+(function () {
+  "use strict";
+  /* lz-drawers:start */
+  /**
+   * Which drawer is open and what Escape and Tab do. All DOM access goes through `env`, so the logic runs unchanged in tests:
+   * `env.expanded()` lists expanded popover controls outside the drawers, `env.focusables(name)` the visible controls of a
+   * drawer, `env.active()` the focused element.
+   */
+  function lzMakeDrawers(env) {
+    var drawers = {};
+    function names() { return Object.keys(drawers); }
+    function openName() { var open = names().filter(function (n) { return drawers[n].isOpen(); }); return open.length ? open[0] : null; }
+    return {
+      register: function (name, api) { drawers[name] = api; },
+      /** Called by a drawer just before it opens: every other open drawer closes first, without moving focus. */
+      opening: function (name) { names().forEach(function (n) { if (n !== name && drawers[n].isOpen()) drawers[n].close(false); }); },
+      active: openName,
+      /** Escape: close the open drawer (focus returns to its button), else collapse the first expanded popover. */
+      escape: function () {
+        var n = openName();
+        if (n !== null) { drawers[n].close(true); return true; }
+        var open = env.expanded();
+        if (open.length === 0) return false;
+        open[0].click();
+        if (typeof open[0].focus === "function") open[0].focus();
+        return true;
+      },
+      /** Tab / Shift+Tab inside an open drawer wraps at the ends; true when it moved focus itself. */
+      trap: function (shift) {
+        var n = openName();
+        if (n === null) return false;
+        var list = env.focusables(n);
+        if (list.length === 0) return false;
+        var first = list[0], last = list[list.length - 1], cur = env.active();
+        var inside = list.indexOf(cur) >= 0;
+        if (shift && (cur === first || !inside)) { last.focus(); return true; }
+        if (!shift && (cur === last || !inside)) { first.focus(); return true; }
+        return false;
+      }
+    };
+  }
+  /* lz-drawers:end */
+  const ids = { dna: "dnaDrawer", verify: "verifyDrawer", sarif: "sarifDrawer" };
+  const FOCUSABLE = 'button:not(:disabled), select:not(:disabled), input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+  const manager = lzMakeDrawers({
+    expanded: () => Array.from(document.querySelectorAll('[aria-expanded="true"]')).filter((n) => !n.closest(".dna-drawer") && !n.classList.contains("hdr-btn") && n.getClientRects().length > 0),
+    focusables: (name) => Array.from(document.getElementById(ids[name]).querySelectorAll(FOCUSABLE)).filter((n) => !n.hidden && n.getClientRects().length > 0),
+    active: () => document.activeElement
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented) return;
+    if (e.key === "Escape") { if (manager.escape()) e.preventDefault(); }
+    else if (e.key === "Tab") { if (manager.trap(e.shiftKey)) e.preventDefault(); }
+  });
+  window.LazarusDrawers = manager;
+})();
+</script>
+<script>
 /* Kiro DNA drawer, smart paste, lab audio. Live data only; textContent only. */
 (function () {
   "use strict";
@@ -3746,20 +3825,22 @@ function lzDecodeSpecimen(hash) {
     }
   }
   function open() {
+    if (window.LazarusDrawers) window.LazarusDrawers.opening("dna");
     drawer.hidden = false; scrim.hidden = false;
     btn.setAttribute("aria-expanded", "true");
     closeBtn.focus();
     load();
   }
-  function close() {
+  function close(restore) {
     drawer.hidden = true; scrim.hidden = true;
     btn.setAttribute("aria-expanded", "false");
-    btn.focus();
+    if (restore !== false) btn.focus();
   }
   btn.addEventListener("click", open);
   closeBtn.addEventListener("click", close);
   scrim.addEventListener("click", close);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
+  if (window.LazarusDrawers) window.LazarusDrawers.register("dna", { isOpen: () => !drawer.hidden, close: close });
+  else document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
   // Keep the header badge honest without opening the drawer.
   fetch("/api/kiro-dna").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && typeof d.specCount === "number") $("badgeSpecs").textContent = d.specCount + " Kiro Specs"; }).catch(() => undefined);
   window.LazarusDna = { open: open, close: close };
@@ -3965,7 +4046,7 @@ function lzDecodeSpecimen(hash) {
     if (ctl) ctl.abort();
     ctl = null; token++;
     proven = null; hide(); card.textContent = "";
-    btn.hidden = true; btn.disabled = false; btn.textContent = "Compare vs. Naive AI";
+    btn.hidden = true; btn.disabled = false; btn.removeAttribute("aria-busy"); btn.textContent = "Compare vs. Naive AI";
   }
   let pendingSource = null, pendingSchema = null;
   document.addEventListener("lazarus:run-start", (e) => {
@@ -4026,7 +4107,7 @@ function lzDecodeSpecimen(hash) {
     const mine = ++token;
     ctl = new AbortController();
     const timer = setTimeout(() => ctl && ctl.abort(), 30000);
-    btn.disabled = true; btn.textContent = "Running naive rewrite through the Exorcist...";
+    btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.textContent = "Running naive rewrite through the Exorcist...";
     try {
       const res = await fetch("/api/compare-naive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacyCode: proven.source, schema: proven.schema, seed: 1337 }), signal: ctl.signal });
       let data = null;
@@ -4048,7 +4129,7 @@ function lzDecodeSpecimen(hash) {
       card.hidden = false; shown = true;
     } finally {
       clearTimeout(timer);
-      if (mine === token) { ctl = null; btn.disabled = false; btn.textContent = "Compare vs. Naive AI"; }
+      if (mine === token) { ctl = null; btn.disabled = false; btn.removeAttribute("aria-busy"); btn.textContent = "Compare vs. Naive AI"; }
     }
   }
   btn.addEventListener("click", compare);
@@ -4216,13 +4297,15 @@ function lzHealthGuard(deps) {
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 
   /** Opens/closes a drawer like the Kiro DNA one: scrim, Escape, focus in and back out. */
-  function wireDrawer(btn, drawer, scrim, closeBtn, onOpen) {
-    function open() { drawer.hidden = false; scrim.hidden = false; btn.setAttribute("aria-expanded", "true"); closeBtn.focus(); if (onOpen) onOpen(); }
-    function close() { drawer.hidden = true; scrim.hidden = true; btn.setAttribute("aria-expanded", "false"); btn.focus(); }
+  function wireDrawer(name, btn, drawer, scrim, closeBtn, onOpen) {
+    const mgr = window.LazarusDrawers;
+    function open() { if (mgr) mgr.opening(name); drawer.hidden = false; scrim.hidden = false; btn.setAttribute("aria-expanded", "true"); closeBtn.focus(); if (onOpen) onOpen(); }
+    function close(restore) { drawer.hidden = true; scrim.hidden = true; btn.setAttribute("aria-expanded", "false"); if (restore !== false) btn.focus(); }
     btn.addEventListener("click", () => (drawer.hidden ? open() : close()));
     closeBtn.addEventListener("click", close);
     scrim.addEventListener("click", close);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
+    if (mgr) mgr.register(name, { isOpen: () => !drawer.hidden, close: close });
+    else document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
     return { open: open, close: close };
   }
 
@@ -4316,7 +4399,7 @@ function lzHealthGuard(deps) {
         showError("Could not verify: " + (err && err.message ? err.message : err));
       }
     }
-    wireDrawer(verifyBtn, $("verifyDrawer"), $("verifyScrim"), $("verifyClose"));
+    wireDrawer("verify", verifyBtn, $("verifyDrawer"), $("verifyScrim"), $("verifyClose"));
     picker.addEventListener("change", () => { const list = Array.from(picker.files || []); picker.value = ""; verifyFiles(list); });
     drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } });
     ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; drop.classList.add("over"); }));
@@ -4393,7 +4476,7 @@ function lzHealthGuard(deps) {
     }
     async function run() {
       const mine = ++token;
-      runBtn.disabled = true; dlBtn.disabled = true;
+      runBtn.disabled = true; dlBtn.disabled = true; runBtn.setAttribute("aria-busy", "true");
       summary.textContent = "Auditing...";
       try {
         const res = await fetch("/api/audit-sarif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lzAuditRequest(sourceSel.value, $("legacyCode") ? $("legacyCode").value : "")) });
@@ -4404,7 +4487,7 @@ function lzHealthGuard(deps) {
       } catch (err) {
         if (mine === token) summary.textContent = "Audit failed: " + (err && err.message ? err.message : err);
       } finally {
-        if (mine === token) runBtn.disabled = false;
+        if (mine === token) { runBtn.disabled = false; runBtn.removeAttribute("aria-busy"); }
       }
     }
     runBtn.addEventListener("click", run);
@@ -4416,7 +4499,7 @@ function lzHealthGuard(deps) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     });
-    wireDrawer(sarifBtn, $("sarifDrawer"), $("sarifScrim"), $("sarifClose"));
+    wireDrawer("sarif", sarifBtn, $("sarifDrawer"), $("sarifScrim"), $("sarifClose"));
     window.LazarusSarif = { run: run, report: () => report };
   }
 })();
