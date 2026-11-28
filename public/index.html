@@ -768,6 +768,60 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
 #dnaMap .dm-title { fill: #e2e8f0; font: 700 12px system-ui, sans-serif; }
 #dnaMap .dm-sub { fill: #94a3b8; font: 10px ui-monospace, Consolas, monospace; }
 #dnaMap .dm-flow { fill: none; stroke: var(--violet); stroke-width: 1.6; }
+/* ---- Time-Travel and Adoption (spec v20): Time-Travel Stepper, proof permalink, Debt Scorecard, CI gate, badge ----- */
+.tt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #1e293b; background: #0b1120; }
+.tt-bar[hidden] { display: none; }
+.tt-btn { padding: 2px 10px; border: 1px solid #475569; border-radius: 6px; background: #111827; color: #e2e8f0; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.tt-btn:hover:not(:disabled) { border-color: var(--violet); color: #fff; }
+.tt-btn:disabled { opacity: .45; cursor: default; }
+.tt-play[aria-pressed="true"] { border-color: var(--emerald); color: #a7f3d0; }
+.tt-pills { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.tt-pill { padding: 1px 9px; border-radius: 999px; border: 1px solid #334155; background: #0f172a; color: #94a3b8; font: inherit; font-size: 11px; cursor: pointer; }
+.tt-pill.on { border-color: var(--violet); background: rgba(139, 92, 246, 0.2); color: #fff; }
+.tt-pill.tt-rollback.on { border-color: var(--crimson); background: rgba(239, 68, 68, 0.18); }
+.tt-pill.tt-security-guards.on { border-color: var(--amber); background: rgba(245, 158, 11, 0.16); }
+.tt-pill.tt-verified.on { border-color: var(--emerald); background: rgba(16, 185, 129, 0.16); }
+.tt-note { flex: 1 1 260px; min-width: 200px; color: #cbd5e1; font-size: 11px; }
+.proof-link-btn, .badge-btn { background: #1e1b4b; color: #e9d5ff; border: 1px solid #8b5cf6; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700; }
+.badge-btn { background: #052e22; color: #a7f3d0; border-color: var(--emerald); }
+.proof-link-btn.done, .badge-btn.done { border-color: var(--emerald); color: #a7f3d0; }
+.proof-link-btn.err, .badge-btn.err { border-color: var(--crimson); color: #fecaca; }
+.badge-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 6px 0; padding: 6px 8px; border: 1px dashed #334155; border-radius: 6px; font-size: 11px; color: #cbd5e1; }
+.badge-preview[hidden] { display: none; }
+.badge-preview img { height: 20px; }
+.proof-replay-pill { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--violet); background: rgba(139, 92, 246, 0.14); color: #ddd6fe; font-size: 11px; font-weight: 700; }
+.proof-replay-pill.bad { border-color: var(--crimson); background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+.proof-replay-pill[hidden] { display: none; }
+.debt-card { margin: 10px 0; padding: 10px; border: 1px solid #334155; border-radius: 10px; background: #0b1120; }
+.debt-card[hidden] { display: none; }
+.debt-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.debt-head h3 { margin: 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--emerald); }
+.debt-score { font: 700 24px ui-monospace, Consolas, monospace; color: #fff; }
+.debt-grade { padding: 1px 10px; border-radius: 6px; border: 1px solid #475569; font-weight: 800; }
+.debt-grade.A, .debt-grade.B { border-color: var(--emerald); color: #a7f3d0; background: rgba(16, 185, 129, 0.12); }
+.debt-grade.C, .debt-grade.D { border-color: var(--amber); color: #fde68a; background: rgba(245, 158, 11, 0.12); }
+.debt-grade.F { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
+.debt-hint { color: var(--muted); font-size: 11px; }
+.debt-row { display: grid; grid-template-columns: 120px 1fr 150px; align-items: center; gap: 8px; margin: 3px 0; font-size: 11px; }
+.debt-track { height: 8px; border-radius: 4px; background: #1e293b; overflow: hidden; }
+.debt-fill { display: block; height: 100%; background: var(--emerald); }
+.debt-fill.warn { background: var(--amber); }
+.debt-fill.bad { background: var(--crimson); }
+.debt-ci-btn { margin-top: 8px; }
+.ci-gate { margin-top: 8px; display: grid; gap: 8px; }
+.ci-gate[hidden] { display: none; }
+.ci-run { border: 1px solid #1e293b; border-radius: 6px; overflow: hidden; }
+.ci-run h4 { margin: 0; padding: 4px 8px; font: 700 12px ui-monospace, Consolas, monospace; background: #111827; }
+.ci-run.FAIL h4 { color: #fecaca; border-left: 3px solid var(--crimson); }
+.ci-run.PASS h4 { color: #a7f3d0; border-left: 3px solid var(--emerald); }
+.ci-run.PENDING h4 { color: #fde68a; border-left: 3px solid var(--amber); }
+.ci-run pre { margin: 0; padding: 6px 8px; max-height: 220px; overflow: auto; background: #020617; font: 11px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.ci-run pre .grp { color: #93c5fd; }
+.ci-run pre .cmd { color: #e2e8f0; font-weight: 700; }
+.ci-run pre .err { color: #fca5a5; }
+.ci-run pre .warn { color: #fde68a; }
+.ci-run pre .ok { color: #6ee7b7; }
+@media (max-width: 760px) { .debt-row { grid-template-columns: 90px 1fr; } .debt-row span:last-child { grid-column: 1 / -1; } }
 /* ---- V20: Famous npm Classics, Graph Node Inspector and the Public API Contract badge ------------------ */
 .gy-classics { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #334155; }
 .gy-classics-title { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #c4b5fd; font-weight: 700; margin-right: 4px; }
@@ -849,8 +903,8 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1428 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1533 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -1018,6 +1072,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
           <button id="reseedBtn" type="button" class="reseed-btn" aria-describedby="seedNote">Re-Verify New Seed</button>
           <span id="seedNote" class="seed-note" role="status" aria-live="polite"></span>
         </span>
+        <span id="proofReplayPill" class="proof-replay-pill" role="status" aria-live="polite" hidden></span>
       </div>
       <div class="deck-wide">
         <!-- 5-Pill Proof Strip: one scannable row for the five proof pillars of the run, each pill opens its detail -->
@@ -1066,6 +1121,13 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
         </div>
         <div class="diff-block" id="legacyDiffBlock" hidden>
           <div class="diff-head"><span>Legacy specimen (&minus;) vs resurrected code (+)</span><span class="diff-stats" id="legacyDiffStats"></span></div>
+          <div class="tt-bar" id="ttBar" role="group" aria-label="Time-Travel Stepper: scrub through the real pipeline stages" hidden>
+            <button type="button" class="tt-btn" id="ttPrev" aria-label="Previous stage">Prev</button>
+            <button type="button" class="tt-btn tt-play" id="ttPlay" aria-pressed="false" aria-label="Play or pause the stage animation">Play</button>
+            <button type="button" class="tt-btn" id="ttNext" aria-label="Next stage">Next</button>
+            <span class="tt-pills" id="ttPills"></span>
+            <span class="tt-note" id="ttNote" role="status" aria-live="polite"></span>
+          </div>
           <div class="diff-view" id="legacyDiff" role="table" aria-label="Line diff from the legacy specimen to the resurrected code"></div>
         </div>
         <div class="trap-card" id="trapCard" aria-live="polite" hidden></div>
@@ -1104,9 +1166,12 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
                 <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
                 <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
                 <button id="prPreviewBtn" type="button" class="pr-preview-btn" aria-haspopup="dialog" aria-controls="prDrawer" aria-expanded="false" title="A GitHub-style preview of the pull request this bundle opens" style="background:#1e1b4b;color:#e9d5ff;border:1px solid #8b5cf6;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Preview</button>
+                <button id="copyProofLinkBtn" type="button" class="proof-link-btn" title="Copy a stateless permalink (#proof=...) that replays this exact resurrection with its proof seed">Copy Proof Link</button>
+                <button id="copyBadgeBtn" type="button" class="badge-btn" title="Preview and copy the Lazarus Verified shield as a self-contained SVG">Copy Badge SVG</button>
                 <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
               </div>
             </div>
+            <div class="badge-preview" id="badgePreview" role="status" aria-live="polite" hidden></div>
             <pre id="bundleOut" style="max-height:210px;overflow:auto;font-size:11px;background:#020617;padding:10px;border-radius:6px;border:1px solid #38bdf8;margin:0;"></pre>
           </div>
           <!-- Probe Custom Edge Case: judge-driven Object.is parity against the sandbox -->
@@ -1261,6 +1326,17 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       <button type="button" class="hdr-btn" id="sarifDownload" disabled>Download .sarif</button>
     </div>
     <div class="sarif-summary" id="sarifSummary" role="status" aria-live="polite">Pick what to audit and run it. Files are parsed, never executed.</div>
+    <section class="debt-card" id="debtCard" aria-labelledby="debtTitle" hidden>
+      <div class="debt-head">
+        <h3 id="debtTitle">Legacy Debt Scorecard</h3>
+        <span class="debt-score" id="debtScoreVal"></span>
+        <span class="debt-grade" id="debtGrade"></span>
+        <span class="debt-hint" id="debtHint"></span>
+      </div>
+      <div class="debt-bars" id="debtBars"></div>
+      <button type="button" class="hdr-btn debt-ci-btn" id="ciToggle" aria-expanded="false" aria-controls="ciLog">Simulate GitHub CI Gate</button>
+      <div class="ci-gate" id="ciLog" role="region" aria-label="GitHub Actions CI gate, before and after the resurrection" hidden></div>
+    </section>
     <div class="sarif-chips" id="sarifChips"></div>
     <div id="sarifList"></div>
   </div>
@@ -3700,6 +3776,114 @@ function lzDecodeSpecimen(hash) {
   window.LazarusXray = xray;
   document.addEventListener("lazarus:run-start", () => xray.setBlame([]));
   document.addEventListener("lazarus:result", (e) => { const r = e.detail || {}; xray.setBlame(r.success ? r.ruleBlame : []); });
+  // ---- Time-Travel Stepper: scrub or animate the real stages of the run in the diff card ----
+  /* lz-timetravel:start */
+  /**
+   * The stepper over `pipelineStages`. The last stage is the final verified diff, which is what the card shows before anything is clicked:
+   * loading stages never redraws the diff. `env` carries the DOM pieces and the timers, so the same code runs unchanged in tests.
+   */
+  function lzMakeStepper(env) {
+    var stages = [], index = -1, playing = false, timer = null, pills = [];
+    function last() { return stages.length - 1; }
+    function baseText(stage) {
+      if (stage.compareTo === null) return stage.code;
+      if (stage.compareTo === "legacy") return env.legacyText();
+      var base = stages.filter(function (s) { return s.id === stage.compareTo; })[0];
+      return base ? base.code : env.legacyText();
+    }
+    function paint() {
+      pills.forEach(function (p, i) { p.setAttribute("aria-pressed", i === index ? "true" : "false"); p.className = "tt-pill tt-" + stages[i].id + (i === index ? " on" : ""); });
+      env.prev.disabled = index <= 0;
+      env.next.disabled = index >= last();
+      env.play.textContent = playing ? "Pause" : "Play";
+      env.play.setAttribute("aria-pressed", playing ? "true" : "false");
+      var s = stages[index];
+      env.note.textContent = s ? "Stage " + s.stage + " \u00b7 " + s.label + ": " + s.summary : "";
+    }
+    function stopTimer() { if (timer !== null) { env.clearTimer(timer); timer = null; } }
+    function draw(stage) {
+      if (index === last()) { env.showDefault(); return; }
+      env.renderDiff(env.diffEl, baseText(stage).trim(), stage.code.trim(), env.statsEl);
+    }
+    function select(i, quiet) {
+      if (stages.length === 0 || i < 0 || i > last()) return false;
+      index = i;
+      if (quiet !== true) draw(stages[i]);
+      paint();
+      return true;
+    }
+    function pause() { playing = false; stopTimer(); if (stages.length > 0) paint(); }
+    function userSelect(i) { pause(); return select(i); }
+    function tick() {
+      timer = null;
+      if (!playing) return;
+      if (index >= last()) { pause(); return; }
+      select(index + 1);
+      if (index >= last()) pause(); else timer = env.setTimer(tick, env.delayMs);
+    }
+    function play() {
+      if (stages.length < 2) return;
+      if (playing) { pause(); return; }
+      playing = true;
+      if (index >= last()) select(0);
+      else paint();
+      stopTimer();
+      timer = env.setTimer(tick, env.delayMs);
+    }
+    function setStages(list) {
+      pause();
+      stages = Array.isArray(list) ? list.filter(function (s) { return s && typeof s.code === "string" && typeof s.id === "string"; }) : [];
+      pills = [];
+      env.pills.textContent = "";
+      env.bar.hidden = stages.length < 2;
+      if (stages.length < 2) { index = -1; env.note.textContent = ""; return; }
+      stages.forEach(function (s, i) {
+        var b = env.createEl("button");
+        b.type = "button";
+        b.dataset.stage = String(s.stage);
+        b.dataset.id = s.id;
+        b.textContent = s.stage + " \u00b7 " + s.label;
+        b.title = s.summary;
+        b.addEventListener("click", function () { userSelect(i); });
+        env.pills.append(b);
+        pills.push(b);
+      });
+      index = last();
+      paint();
+    }
+    return {
+      setStages: setStages,
+      select: userSelect,
+      next: function () { return userSelect(index + 1); },
+      prev: function () { return userSelect(index - 1); },
+      play: play,
+      pause: pause,
+      /** Back on the final stage without touching the diff (another control took over the diff). */
+      settle: function () { if (stages.length < 2) return; pause(); index = last(); paint(); },
+      reset: function () { setStages([]); },
+      index: function () { return index; },
+      count: function () { return stages.length; },
+      playing: function () { return playing; }
+    };
+  }
+  /* lz-timetravel:end */
+  const stepper = lzMakeStepper({
+    bar: $("ttBar"), pills: $("ttPills"), note: $("ttNote"), prev: $("ttPrev"), next: $("ttNext"), play: $("ttPlay"),
+    diffEl: $("legacyDiff"), statsEl: $("legacyDiffStats"), delayMs: 1500,
+    legacyText: () => legacyCode.value.trim(),
+    showDefault: () => refreshLegacyDiff(),
+    renderDiff: renderDiff,
+    createEl: (tag) => document.createElement(tag),
+    setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (id) => clearTimeout(id)
+  });
+  $("ttPrev").addEventListener("click", () => stepper.prev());
+  $("ttNext").addEventListener("click", () => stepper.next());
+  $("ttPlay").addEventListener("click", () => stepper.play());
+  $("xrayChips").addEventListener("click", () => stepper.settle());
+  toggle.addEventListener("click", () => stepper.settle());
+  document.addEventListener("lazarus:run-start", () => stepper.reset());
+  document.addEventListener("lazarus:result", (e) => { const r = e.detail || {}; stepper.setStages(r.success && Array.isArray(r.pipelineStages) ? r.pipelineStages : []); });
+  window.LazarusStepper = stepper;
   // ---- Guided Judge Tour: real live API calls only ----
   const tourBtn = $("tourBtn"), tourCancel = $("tourCancel"), hud = $("tourHud");
   const stepEl = $("tourStep"), textEl = $("tourText"), bar = $("tourBar"), actions = $("tourActions");
@@ -5087,13 +5271,14 @@ function lzHealthGuard(deps) {
         list.append(section);
       });
       dlBtn.disabled = false;
+      if (window.LazarusDebt) window.LazarusDebt.render(data);
     }
     async function run() {
       const mine = ++token;
       runBtn.disabled = true; dlBtn.disabled = true; runBtn.setAttribute("aria-busy", "true");
       summary.textContent = "Auditing...";
       try {
-        const res = await fetch("/api/audit-sarif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lzAuditRequest(sourceSel.value, $("legacyCode") ? $("legacyCode").value : "")) });
+        const res = await fetch("/api/audit-sarif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign(lzAuditRequest(sourceSel.value, $("legacyCode") ? $("legacyCode").value : ""), window.LazarusDebt ? window.LazarusDebt.verificationFor(sourceSel.value, $("legacyCode") ? $("legacyCode").value : "") : {})) });
         const data = await res.json();
         if (mine !== token) return;
         if (!res.ok) { summary.textContent = "Audit rejected: " + (data && data.error ? data.error : "HTTP " + res.status); return; }
@@ -5240,6 +5425,269 @@ function lzHealthGuard(deps) {
   window.LazarusSeed = { freshSeed: freshSeed };
 })();
 /* lz-v19:end */
+</script>
+<script>
+/* lz-v20:start */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const text = (tag, cls, value) => { const n = document.createElement(tag); if (cls) n.className = cls; n.textContent = value; return n; };
+  async function copyText(value) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(value); return true; } } catch (e) { /* fall back */ }
+    const ta = document.createElement("textarea"); ta.value = value; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  function feedback(btn, label, ok, rest) {
+    if (btn.dataset.label === undefined) { btn.dataset.label = btn.textContent; btn.dataset.base = btn.className; }
+    btn.textContent = label; btn.className = btn.dataset.base + (ok ? " done" : " err");
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.textContent = btn.dataset.label; btn.className = btn.dataset.base; }, rest || 2200);
+  }
+
+  // ---- Stateless Judge Proof Permalink: #proof=<base64url JSON>, at most LZ_PROOF_MAX characters ----------------
+  /* lz-proof-link:start */
+  var LZ_PROOF_MAX = 8192;
+  var LZ_PROOF_KINDS = ["integer", "number", "string", "boolean", "json"];
+  var LZ_PROOF_KEYS = ["v", "p", "c", "s", "n", "seed"];
+  function lzProofName(k) { return /^[A-Za-z_$][\w$]{0,63}$/.test(k) && k !== "__proto__" && k !== "constructor" && k !== "prototype"; }
+  /** A flat schema { param: kind } or a module schema { fn: { param: kind } }, small and made of known kinds only. */
+  function lzProofSchemaOk(s) {
+    function flat(o) {
+      if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+      var keys = Object.keys(o);
+      return keys.length <= 16 && keys.every(function (k) { return lzProofName(k) && LZ_PROOF_KINDS.indexOf(o[k]) >= 0; });
+    }
+    if (!s || typeof s !== "object" || Array.isArray(s)) return false;
+    if (flat(s)) return true;
+    var names = Object.keys(s);
+    return names.length > 0 && names.length <= 16 && names.every(function (k) { return lzProofName(k) && flat(s[k]); });
+  }
+  function lzProofSeedOk(n) { return typeof n === "number" && n % 1 === 0 && n >= -2147483648 && n <= 2147483647; }
+  /** { presetId? | code + name, schema, seed } -> { ok, hash, length } or { ok: false, error }. Never throws. */
+  function lzEncodeProof(state) {
+    try {
+      if (!state || !lzProofSeedOk(state.seed)) return { ok: false, error: "There is no proof seed yet: run RESURRECT SPECIMEN first." };
+      if (!lzProofSchemaOk(state.schema)) return { ok: false, error: "The input schema is not a valid { parameter: kind } object." };
+      var data = { v: 1 };
+      if (typeof state.presetId === "string" && state.presetId !== "") data.p = state.presetId;
+      else {
+        if (typeof state.code !== "string" || state.code.trim() === "") return { ok: false, error: "There is no code to share." };
+        data.c = state.code;
+        data.n = String(state.name || "");
+      }
+      data.s = state.schema;
+      data.seed = state.seed;
+      var bytes = new TextEncoder().encode(JSON.stringify(data));
+      var bin = "";
+      for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      var hash = "#proof=" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      if (hash.length > LZ_PROOF_MAX) return { ok: false, length: hash.length, error: "This proof needs a " + hash.length + "-character link; the limit is " + LZ_PROOF_MAX + ". Share a preset or shorten the code." };
+      return { ok: true, hash: hash, length: hash.length };
+    } catch (err) {
+      return { ok: false, error: "The proof could not be encoded." };
+    }
+  }
+  /** "#proof=..." -> { ok, presetId | code + name, schema, seed } or { ok: false, error }. Never throws; presetIds limits which preset ids are accepted. */
+  function lzDecodeProof(hash, presetIds) {
+    if (typeof hash !== "string" || hash.indexOf("#proof=") !== 0) return { ok: false, error: "no proof in the link" };
+    if (hash.length > LZ_PROOF_MAX) return { ok: false, error: "the link is longer than " + LZ_PROOF_MAX + " characters" };
+    var b64 = hash.slice("#proof=".length);
+    if (!/^[A-Za-z0-9_-]+$/.test(b64)) return { ok: false, error: "the link is not valid base64url" };
+    try {
+      var bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64.length + 3) % 4));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      if (!data || typeof data !== "object" || Array.isArray(data) || data.v !== 1) return { ok: false, error: "unknown link version" };
+      if (Object.keys(data).some(function (k) { return LZ_PROOF_KEYS.indexOf(k) < 0; })) return { ok: false, error: "the link has unknown fields" };
+      if (!lzProofSeedOk(data.seed)) return { ok: false, error: "the link has no valid proof seed" };
+      if (!lzProofSchemaOk(data.s)) return { ok: false, error: "the link has an invalid input schema" };
+      var hasPreset = data.p !== undefined, hasCode = data.c !== undefined;
+      if (hasPreset === hasCode) return { ok: false, error: "the link must carry either a preset or code" };
+      if (hasPreset) {
+        if (typeof data.p !== "string" || !/^[A-Za-z0-9_:.-]{1,60}$/.test(data.p)) return { ok: false, error: "the link has an invalid preset" };
+        if (Array.isArray(presetIds) && presetIds.indexOf(data.p) < 0) return { ok: false, error: "the preset " + data.p + " does not exist here" };
+        return { ok: true, presetId: data.p, schema: data.s, seed: data.seed };
+      }
+      if (typeof data.c !== "string" || data.c.trim() === "") return { ok: false, error: "the link has no code" };
+      if (typeof data.n !== "string" || !/^[A-Za-z0-9_$.-]{0,80}$/.test(data.n)) return { ok: false, error: "the link has an invalid module name" };
+      return { ok: true, code: data.c, name: data.n, schema: data.s, seed: data.seed };
+    } catch (err) {
+      return { ok: false, error: "the link could not be decoded" };
+    }
+  }
+  /* lz-proof-link:end */
+  const legacyCode = $("legacyCode"), modName = $("modName"), schemaJson = $("schemaJson"), presetSelect = $("presetSelect");
+  const proofBtn = $("copyProofLinkBtn"), replayPill = $("proofReplayPill");
+  const isStale = () => !!(window.LazarusStale && window.LazarusStale.isStale && window.LazarusStale.isStale());
+  const presetIds = () => Array.from(presetSelect ? presetSelect.options : []).map((o) => o.value);
+  /** The state a proof link captures: the preset when the code is still the preset's, else the code itself. */
+  function currentProofState() {
+    let schema = null;
+    try { schema = JSON.parse(schemaJson.value); } catch (e) { schema = null; }
+    const prov = window.lazarusProvenance || {};
+    const pristine = prov.kind === "preset" && presetSelect && prov.label === presetSelect.value && presetIds().indexOf(presetSelect.value) >= 0;
+    return Object.assign({ schema: schema, seed: window.lastProofSeed }, pristine ? { presetId: presetSelect.value } : { code: legacyCode.value, name: modName.value });
+  }
+  if (proofBtn) proofBtn.addEventListener("click", async () => {
+    if (isStale()) { feedback(proofBtn, "Resurrect again first", false); return; }
+    const enc = lzEncodeProof(currentProofState());
+    if (!enc.ok) { feedback(proofBtn, enc.length !== undefined ? "Link too large" : "Resurrect first", false, 3500); proofBtn.title = enc.error; window.lastProofLinkError = enc.error; return; }
+    const link = location.origin + location.pathname + enc.hash;
+    window.lastProofLink = link;
+    try { history.replaceState(null, "", enc.hash); } catch (e) { /* the link is still copied */ }
+    const ok = await copyText(link);
+    proofBtn.title = enc.length + " of " + LZ_PROOF_MAX + " characters";
+    feedback(proofBtn, ok ? "Proof Link Copied" : "Copy blocked: link is in the address bar", ok);
+  });
+  function showReplay(textValue, bad) { if (!replayPill) return; replayPill.hidden = false; replayPill.className = "proof-replay-pill" + (bad ? " bad" : ""); replayPill.textContent = textValue; }
+  /** Loads the preset or the snippet of a proof link and replays the resurrection with its seed. */
+  async function replayProof(dec) {
+    if (window.LazarusStudio) window.LazarusStudio.switchTab("single");
+    if (dec.presetId !== undefined) {
+      presetSelect.value = dec.presetId;
+      presetSelect.dispatchEvent(new Event("change"));
+    } else {
+      legacyCode.value = dec.code;
+      if (dec.name) modName.value = dec.name;
+      legacyCode.dispatchEvent(new Event("input"));
+      window.lazarusProvenance = { kind: "paste", label: "proof permalink" };
+    }
+    schemaJson.value = JSON.stringify(dec.schema);
+    schemaJson.dispatchEvent(new Event("input"));
+    window.lazarusSeedOverride = dec.seed;
+    showReplay("Replaying the proof permalink (seed " + dec.seed + ")...", false);
+    let result = null;
+    try { result = window.LazarusRun ? await window.LazarusRun.start() : null; } finally { window.lazarusSeedOverride = undefined; }
+    if (result && result.success && result.proofSeed === dec.seed) showReplay("Replayed from Proof Permalink (Seed " + dec.seed + ")", false);
+    else showReplay("Proof Permalink replay did not verify (Seed " + dec.seed + ")" + (result && !result.success ? ": a counterexample was found" : ""), true);
+  }
+  function openProofFromHash() {
+    if (location.hash.indexOf("#proof=") !== 0) return false;
+    const dec = lzDecodeProof(location.hash, presetIds());
+    if (!dec.ok) { showReplay("Proof link ignored: " + dec.error + ".", true); return false; }
+    replayProof(dec);
+    return true;
+  }
+  setTimeout(openProofFromHash, 0);
+  window.LazarusProof = { encode: lzEncodeProof, decode: lzDecodeProof, open: openProofFromHash, state: currentProofState };
+
+  // ---- Lazarus Verified shield: the same SVG as src/crew/debt-score.ts renderVerifiedBadgeSvg (a test checks the two agree) ----
+  /* lz-badge:start */
+  function lzEscapeXml(value) {
+    return String(value).replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function lzBadgeWhole(n, fallback) { return typeof n === "number" && isFinite(n) ? Math.trunc(n) : fallback; }
+  function lzBadgeSvg(input) {
+    var label = String(input.label === undefined ? "Lazarus Verified" : input.label).replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, "").trim().slice(0, 32) || "Lazarus Verified";
+    var parity = Math.max(0, Math.min(100, lzBadgeWhole(input.parity, 0)));
+    var errors = Math.max(0, lzBadgeWhole(input.tscErrors, 0));
+    var message = parity + "% Parity \u00b7 tsc " + errors;
+    var color = parity === 100 && errors === 0 ? "#059669" : parity === 100 ? "#d97706" : "#dc2626";
+    var seed = typeof input.seed === "number" && input.seed % 1 === 0 ? " \u00b7 seed " + input.seed : "";
+    var width = function (s) { return Math.round(s.length * 6.4 + 14); };
+    var left = width(label), right = width(message), total = left + right;
+    var title = lzEscapeXml(label + ": " + message + seed);
+    return [
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + total + '" height="20" viewBox="0 0 ' + total + ' 20" role="img" aria-label="' + title + '">',
+      "<title>" + title + "</title>",
+      '<rect width="' + left + '" height="20" fill="#111827"/>',
+      '<rect x="' + left + '" width="' + right + '" height="20" fill="' + color + '"/>',
+      '<g fill="#ffffff" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" text-anchor="middle">',
+      '<text x="' + Math.round(left / 2) + '" y="14">' + lzEscapeXml(label) + "</text>",
+      '<text x="' + (left + Math.round(right / 2)) + '" y="14">' + lzEscapeXml(message) + "</text>",
+      "</g>",
+      "</svg>",
+      ""
+    ].join("\n");
+  }
+  /* lz-badge:end */
+  let lastResult = null;
+  document.addEventListener("lazarus:run-start", () => { lastResult = null; window.lazarusVerification = null; if (replayPill && window.lazarusSeedOverride === undefined) replayPill.hidden = true; const pv = $("badgePreview"); if (pv) { pv.hidden = true; pv.textContent = ""; } });
+  document.addEventListener("lazarus:result", (e) => {
+    const r = e.detail || {};
+    lastResult = r;
+    const sig = r.success && r.certificate ? r.certificate.signature : null;
+    window.lazarusVerification = sig ? { legacyCode: legacyCode.value, payload: sig.payload, signatureB64: sig.signatureB64, publicKeyPem: sig.publicKeyPem, resurrectedCode: r.modernCode } : null;
+  });
+  const badgeBtn = $("copyBadgeBtn"), badgePreview = $("badgePreview");
+  if (badgeBtn) badgeBtn.addEventListener("click", async () => {
+    const r = lastResult;
+    if (!r || !r.success || !r.typecheck) { feedback(badgeBtn, "Resurrect first", false); return; }
+    if (isStale()) { feedback(badgeBtn, "Resurrect again first", false); return; }
+    const svg = lzBadgeSvg({ parity: r.fuzzReport && r.fuzzReport.passed ? 100 : 0, tscErrors: r.typecheck.errorCount, seed: r.proofSeed });
+    window.lastBadgeSvg = svg;
+    const ok = await copyText(svg);
+    badgePreview.textContent = "";
+    const img = document.createElement("img");
+    img.alt = "Lazarus Verified shield";
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    badgePreview.append(img, text("span", "", (ok ? "Copied " : "Not copied (blocked by the browser): ") + svg.length + " bytes of self-contained SVG, no script and no external resource."));
+    badgePreview.hidden = false;
+    feedback(badgeBtn, ok ? "Badge SVG Copied" : "Copy blocked", ok);
+  });
+  window.LazarusBadge = { svg: lzBadgeSvg };
+
+  // ---- Legacy Debt Scorecard and the Simulate GitHub CI Gate toggle (the SARIF Audit drawer) ----------------
+  /* lz-debt-ui:start */
+  /** Colour class of a category score. */
+  function lzDebtTone(score) { return score >= 75 ? "" : score >= 40 ? "warn" : "bad"; }
+  /** A CI log line to its CSS class: group headers, commands, errors, warnings and the passing result. */
+  function lzCiLineClass(line) {
+    if (line.indexOf("##[group]") === 0 || line.indexOf("##[endgroup]") === 0) return "grp";
+    if (line.indexOf("::error") === 0 || line.indexOf("##[error]") === 0) return "err";
+    if (line.indexOf("::warning") === 0 || line.indexOf("##[warning]") === 0) return "warn";
+    if (line.indexOf("\u2713") === 0) return "ok";
+    if (line.indexOf("> ") === 0) return "cmd";
+    return "";
+  }
+  /** The two CI runs of a gate as [{ title, status, headline, lines: [{ cls, text }] }]. */
+  function lzCiBlocks(gate) {
+    return [["Pre-Resurrection", gate.before], ["Post-Resurrection", gate.after]].map(function (pair) {
+      return { title: pair[0], status: pair[1].status, headline: pair[1].headline, lines: pair[1].text.split("\n").map(function (l) { return { cls: lzCiLineClass(l), text: l }; }) };
+    });
+  }
+  /** The proof a verified resurrection hands the audit: only when the editor still holds the code that was resurrected. */
+  function lzVerificationFor(source, code, verification) {
+    if (source !== "code" || !verification || verification.legacyCode !== code) return {};
+    return { verification: { payload: verification.payload, signatureB64: verification.signatureB64, publicKeyPem: verification.publicKeyPem, resurrectedCode: verification.resurrectedCode } };
+  }
+  /* lz-debt-ui:end */
+  const debtCard = $("debtCard"), ciToggle = $("ciToggle"), ciLog = $("ciLog");
+  function renderDebt(data) {
+    if (!debtCard || !data || !data.debtScore) return;
+    const d = data.debtScore;
+    debtCard.hidden = false;
+    $("debtScoreVal").textContent = d.score + "/100";
+    const grade = $("debtGrade"); grade.textContent = "Grade " + d.grade; grade.className = "debt-grade " + d.grade;
+    $("debtHint").textContent = "higher = healthier \u00b7 debt " + d.debtScore + " \u00b7 " + d.summary;
+    const bars = $("debtBars"); bars.textContent = "";
+    d.breakdown.forEach((c) => {
+      const row = text("div", "debt-row", ""); row.dataset.category = c.id;
+      const track = text("span", "debt-track", ""); const fill = text("i", "debt-fill " + lzDebtTone(c.score), ""); fill.style.width = c.score + "%"; track.append(fill);
+      row.append(text("span", "", c.label), track, text("span", "", c.score + "/100 \u00b7 " + c.findings + " finding" + (c.findings === 1 ? "" : "s")));
+      bars.append(row);
+    });
+    ciLog.textContent = "";
+    lzCiBlocks(data.ciGate).forEach((b) => {
+      const run = text("div", "ci-run " + b.status, ""); run.append(text("h4", "", b.title + " \u00b7 " + b.headline));
+      const pre = document.createElement("pre");
+      b.lines.forEach((l, i) => { if (i > 0) pre.append("\n"); pre.append(text("span", l.cls, l.text)); });
+      run.append(pre); ciLog.append(run);
+    });
+    ciLog.hidden = ciToggle.getAttribute("aria-expanded") !== "true";
+  }
+  if (ciToggle) ciToggle.addEventListener("click", () => {
+    const open = ciToggle.getAttribute("aria-expanded") !== "true";
+    ciToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    ciLog.hidden = !open;
+  });
+  window.LazarusDebt = { render: renderDebt, verificationFor: (source, code) => lzVerificationFor(source, code, window.lazarusVerification) };
+})();
+/* lz-v20:end */
 </script>
 <script>
 /* lz-stale:start */

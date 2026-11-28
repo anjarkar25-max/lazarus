@@ -7,6 +7,9 @@ import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { z } from "zod";
 import { SARIF_RULES, auditSources, readAuditSources, renderSarif, type SarifLevel, type SarifLog } from "../cli-audit.js";
+import { computeDebtScore, simulateCiGate, type AfterVerified, type CiGate, type DebtFinding, type DebtScore } from "../crew/debt-score.js";
+import { verifyCertificate } from "../exporter/cert-crypto.js";
+import { sha256Hex } from "../exporter/certificate.js";
 
 export const AUDIT_SARIF_MAX_CODE_CHARS = 64_000;
 /** The file name pasted code is audited under (it appears in SARIF `uri`s). */
@@ -20,9 +23,23 @@ export const AuditSarifBodySchema = z
     example: z.string().min(1).max(100).optional(),
     /** Also report loose-equality comparisons (LAZ010). Off by default so every existing report stays identical. */
     security: z.boolean().optional(),
+    /**
+     * The Ed25519 certificate of a resurrection of `code` and the code it signs. The server verifies the signature and ties it to `code`; the
+     * post-resurrection CI gate is built from what it proves, never from a client claim.
+     */
+    verification: z
+      .object({
+        payload: z.record(z.string(), z.unknown()),
+        signatureB64: z.string().min(1).max(200),
+        publicKeyPem: z.string().min(1).max(2000),
+        resurrectedCode: z.string().max(AUDIT_SARIF_MAX_CODE_CHARS),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
-  .refine((b) => (b.code === undefined) !== (b.example === undefined), "give exactly one of `code` or `example`");
+  .refine((b) => (b.code === undefined) !== (b.example === undefined), "give exactly one of `code` or `example`")
+  .refine((b) => b.verification === undefined || b.code !== undefined, "`verification` goes with `code`");
 export type AuditSarifBody = z.infer<typeof AuditSarifBodySchema>;
 
 export class AuditSarifError extends Error {
@@ -77,6 +94,50 @@ export interface AuditSarifResult {
     readonly cycles: string[][];
   };
   readonly findings: SarifFindingView[];
+  /** Legacy Migration Debt Score (0 to 100, higher is healthier) with its 4-category breakdown (additive). */
+  readonly debtScore: DebtScore;
+  /** The GitHub Actions gate before and after the resurrection (additive). The after side is PENDING without a verified certificate. */
+  readonly ciGate: CiGate;
+}
+
+/** The debt score and the CI gate of a set of files (the Tab 2 graph): the same audit, rules and weights as the Risk Explorer. */
+export function debtOfSources(files: Readonly<Record<string, string>>, directory: string, after: AfterVerified | undefined): { readonly debtScore: DebtScore; readonly ciGate: CiGate } {
+  const log = renderSarif(auditSources(new Map(Object.entries(files)), [], directory));
+  const run = log.runs[0];
+  const findings: DebtFinding[] = (run?.results ?? []).map((r) => {
+    const rule = run?.tool.driver.rules[r.ruleIndex];
+    const location = r.locations[0]?.physicalLocation;
+    return { ruleId: r.ruleId, level: r.level, file: location?.artifactLocation.uri ?? "", line: location?.region.startLine ?? 1, message: r.message.text.split(". Fix: ")[0] ?? r.message.text, ruleName: rule?.name ?? r.ruleId };
+  });
+  return { debtScore: computeDebtScore(findings), ciGate: simulateCiGate(findings, after) };
+}
+
+/** SARIF findings as the debt score reads them. */
+export function toDebtFindings(findings: readonly SarifFindingView[]): DebtFinding[] {
+  return findings.map((f) => ({ ruleId: f.ruleId, level: f.level, file: f.uri, line: f.line, message: f.message, ruleName: f.ruleName }));
+}
+
+/** What a certificate proves about `code`: its Ed25519 signature verifies, it names this exact code, and it records parity and a strict compile. */
+export function afterVerifiedFrom(code: string, v: NonNullable<AuditSarifBody["verification"]>): AfterVerified {
+  const verdict = verifyCertificate({ payload: v.payload, signatureB64: v.signatureB64, publicKeyPem: v.publicKeyPem, resurrectedCode: v.resurrectedCode });
+  const payload = v.payload;
+  const summary = typeof payload["paritySummary"] === "string" ? payload["paritySummary"] : "";
+  const tsc = typeof payload["tscStrictErrors"] === "number" ? payload["tscStrictErrors"] : null;
+  const names = payload["legacySha256"] === sha256Hex(code);
+  const parity = /^exact Object\.is parity/.test(summary);
+  const runs = /(\d+) fuzz runs/.exec(summary)?.[1];
+  const seed = typeof payload["proofSeed"] === "number" ? payload["proofSeed"] : undefined;
+  const reason = !verdict.valid ? "signature does not verify" : !names ? "the certificate is for different code" : !parity ? "no exact parity recorded" : tsc !== 0 ? "tsc --strict is not clean" : undefined;
+  return {
+    verified: reason === undefined,
+    parity: verdict.valid && names && parity,
+    tscErrors: verdict.valid ? tsc : null,
+    signed: verdict.valid,
+    keyId: verdict.keyId,
+    ...(runs !== undefined ? { runs: Number(runs) } : {}),
+    ...(seed !== undefined ? { seed } : {}),
+    ...(reason !== undefined ? { reason } : {}),
+  };
 }
 
 const clip = (text: string, max = 200): string => (text.length > max ? `${text.slice(0, max - 3)}...` : text);
@@ -144,6 +205,8 @@ export function runAuditSarif(body: AuditSarifBody, examplesDir: string): AuditS
   });
 
   const byRule: RuleCount[] = rules.map((rule) => ({ id: rule.id, name: rule.name, title: rule.shortDescription.text, level: rule.defaultConfiguration.level, count: findings.filter((f) => f.ruleId === rule.id).length }));
+  const debtFindings = toDebtFindings(findings);
+  const after = body.verification !== undefined && body.code !== undefined ? afterVerifiedFrom(body.code, body.verification) : undefined;
   return {
     source,
     sarif,
@@ -159,5 +222,7 @@ export function runAuditSarif(body: AuditSarifBody, examplesDir: string): AuditS
       cycles: report.graph.cycles,
     },
     findings,
+    debtScore: computeDebtScore(debtFindings),
+    ciGate: simulateCiGate(debtFindings, after),
   };
 }

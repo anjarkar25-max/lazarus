@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MAX_LCS_CELLS, diffLines, diffStats, splitLines, type DiffLine } from "../line-diff.js";
 import { analyzeGraph } from "../../crew/graph-resurrector.js";
 import { FakeDocument, FakeElement, runInlineScript } from "./fake-dom.js";
+import { computeDebtScore, renderVerifiedBadgeSvg, simulateCiGate } from "../../crew/debt-score.js";
 import { signCertificate, verifyCertificate, type SignatureBlock } from "../../exporter/cert-crypto.js";
 import { createZip, readZip } from "../../exporter/zip.js";
 import { createWebServer } from "../server.js";
@@ -981,10 +982,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 30-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 31-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1324,7 +1325,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(30);
+    expect(body["specs"]).toBe(31);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1357,8 +1358,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 30 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+  it("shows 31 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
 });
 
@@ -1596,8 +1597,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 30 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    it("shows 31 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     });
   });
 });
@@ -1785,14 +1786,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 30 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 31 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2105,7 +2106,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 30 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 31 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2117,7 +2118,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
@@ -2444,7 +2445,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
-    it("keeps Tab 3 Red-Team byte-identical, shows 30 Kiro Specs and adds no dependency", () => {
+    it("keeps Tab 3 Red-Team byte-identical, shows 31 Kiro Specs and adds no dependency", () => {
       const between = (a: string, b: string): string => {
         const s = html.indexOf(a);
         const e = html.indexOf(b, s + a.length);
@@ -2456,7 +2457,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
       const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
     });
@@ -2730,7 +2731,7 @@ describe("V17 UX polish: one drawer at a time, Escape, focus return, focus trap,
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
@@ -2976,14 +2977,14 @@ describe("V18 5-Pill Proof Strip, PR Preview drawer and Kiro Ecosystem Map (ship
       expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
       expect(html.indexOf("/* ---- V18:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
     });
-    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 30 Kiro Specs", () => {
+    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 31 Kiro Specs", () => {
       const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
       const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
       expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
       expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
@@ -3105,14 +3106,14 @@ describe("V19 Edge Gauntlet, Seed Replay and the legacyUnsafeMerge preset", () =
     expect(v19()).toContain('fetch("/api/edge-gauntlet"');
   });
 
-  it("keeps the three Tab 3 SHA-256 invariants, unique ids and 30 Kiro Specs", () => {
+  it("keeps the three Tab 3 SHA-256 invariants, unique ids and 31 Kiro Specs", () => {
     const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
     const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
     expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     for (const id of ["gauntletBtn", "gauntletResults", "seedBar", "seedChip", "seedValue", "reseedBtn", "seedNote"]) expect(ids.filter((x) => x === id), id).toHaveLength(1);
@@ -3400,7 +3401,7 @@ describe("V19 Famous npm Classics, Module Inspector and Public API Contract badg
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
       const tab3 = html.slice(html.indexOf('<div class="studio-pane" id="pane-redteam"'), html.indexOf('<div class="dna-scrim"'));
       expect(tab3).not.toMatch(/classicChips|moduleInspector|graphApiPill|graveyard|apiContract/i);
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
@@ -3586,6 +3587,794 @@ describe("V19 Famous npm Classics, Module Inspector and Public API Contract badg
     it("exposes LazarusNpm for the page", () => {
       const t = rig(() => json(SNAP("left-pad@1.3.0")));
       expect(typeof (t.win["LazarusNpm"] as { importNpm: unknown }).importNpm).toBe("function");
+    });
+  });
+});
+// ---------------------------------------------------------------------------
+// V20 Time-Travel and Adoption: the Time-Travel Stepper, the #proof= permalink, the Debt Scorecard, the CI gate and the shield
+// ---------------------------------------------------------------------------
+describe("V20 Time-Travel Stepper, #proof= permalink, Debt Scorecard + CI Gate and Copy Badge SVG", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+  const v20Script = (): string => regionOf("lz-v20");
+
+  describe("markup, CSS and script placement", () => {
+    it("puts the stepper bar in the legacy diff card, between its head and the diff, hidden until a run", () => {
+      const card = html.slice(html.indexOf('<div class="diff-block" id="legacyDiffBlock" hidden>'), html.indexOf('<div class="trap-card" id="trapCard"'));
+      expect(card.indexOf('class="diff-head"')).toBeLessThan(card.indexOf('id="ttBar"'));
+      expect(card.indexOf('id="ttBar"')).toBeLessThan(card.indexOf('id="legacyDiff"'));
+      expect(card).toContain('<div class="tt-bar" id="ttBar" role="group" aria-label="Time-Travel Stepper: scrub through the real pipeline stages" hidden>');
+      for (const [id, label] of [["ttPrev", "Prev"], ["ttPlay", "Play"], ["ttNext", "Next"]]) expect(card).toMatch(new RegExp(`<button type="button" class="tt-btn[^"]*" id="${id}"[^>]*>${label}</button>`));
+      expect(card).toContain('<span class="tt-pills" id="ttPills"></span>');
+      expect(card).toContain('<span class="tt-note" id="ttNote" role="status" aria-live="polite"></span>');
+      expect(card).toContain('id="ttPlay" aria-pressed="false"');
+    });
+
+    it("puts Copy Proof Link and Copy Badge SVG right beside PR Preview, and keeps PR Preview right after the .zip button", () => {
+      expect(html).toMatch(/id="downloadZipBtn"[^\n]*Download \.zip PR Archive<\/button>\n\s*<button id="prPreviewBtn" type="button"[^\n]*>PR Preview<\/button>\n\s*<button id="copyProofLinkBtn" type="button" class="proof-link-btn"[^\n]*>Copy Proof Link<\/button>\n\s*<button id="copyBadgeBtn" type="button" class="badge-btn"[^\n]*>Copy Badge SVG<\/button>\n\s*<button id="downloadBundleBtn"/);
+      expect(html).toContain('<div class="badge-preview" id="badgePreview" role="status" aria-live="polite" hidden></div>');
+      expect(html).toContain('<span id="proofReplayPill" class="proof-replay-pill" role="status" aria-live="polite" hidden></span>');
+    });
+
+    it("puts the Debt Scorecard and the CI gate toggle in the SARIF Audit drawer", () => {
+      const drawer = html.slice(html.indexOf('<aside class="dna-drawer" id="sarifDrawer"'), html.indexOf('<div class="dna-scrim" id="prScrim"'));
+      expect(drawer.indexOf('id="sarifSummary"')).toBeLessThan(drawer.indexOf('id="debtCard"'));
+      expect(drawer.indexOf('id="debtCard"')).toBeLessThan(drawer.indexOf('id="sarifChips"'));
+      expect(drawer).toContain('<h3 id="debtTitle">Legacy Debt Scorecard</h3>');
+      expect(drawer).toContain('<button type="button" class="hdr-btn debt-ci-btn" id="ciToggle" aria-expanded="false" aria-controls="ciLog">Simulate GitHub CI Gate</button>');
+      expect(drawer).toContain('<div class="ci-gate" id="ciLog" role="region"');
+      expect(drawer).toContain("hidden></div>");
+    });
+
+    it("loads one new script before the stale-proof script, adds no tab, and keeps its CSS outside the Red-Team region", () => {
+      expect(html.indexOf("/* lz-v20:start */")).toBeGreaterThan(html.indexOf("/* lz-v19:end */"));
+      expect(html.indexOf("/* lz-v20:end */")).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+      expect(html.lastIndexOf("<script>")).toBeLessThan(html.indexOf("/* lz-stale:start */"));
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+      const css = html.slice(html.indexOf("/* ---- Time-Travel and Adoption (spec v20)"), html.indexOf("/* ---- V20:"));
+      for (const s of [".tt-bar", ".tt-pill.on", ".tt-pill.tt-rollback.on", ".proof-link-btn", ".badge-btn", ".badge-preview", ".proof-replay-pill", ".debt-card", ".debt-grade.A", ".debt-fill.bad", ".ci-run.FAIL h4", ".ci-run.PASS h4", ".ci-run pre .err"]) expect(css, s).toContain(s);
+      expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
+      expect(html.indexOf("/* ---- Time-Travel and Adoption (spec v20)")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
+      expect(v20Script()).not.toMatch(/redteam|redTeam|rtLog|rtButtons|rt-btn/i);
+      // The only network traffic of the new script is none: the link is client-side and the shield is built in the page.
+      expect(v20Script()).not.toContain("fetch(");
+    });
+
+    it("keeps the three Tab 3 SHA-256 invariants, unique ids and 31 Kiro Specs", () => {
+      const sha = (x: string): string => createHash("sha256").update(x).digest("hex");
+      const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
+      const tab3 = html.slice(html.indexOf('<div class="studio-pane" id="pane-redteam"'), html.indexOf('<div class="dna-scrim"'));
+      expect(tab3).not.toMatch(/ttBar|copyProofLinkBtn|copyBadgeBtn|debtCard|proofReplayPill|#proof=|pipelineStages/i);
+      const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+      expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+      for (const id of ["ttBar", "ttPrev", "ttPlay", "ttNext", "ttPills", "ttNote", "copyProofLinkBtn", "copyBadgeBtn", "badgePreview", "proofReplayPill", "debtCard", "debtScoreVal", "debtGrade", "debtBars", "ciToggle", "ciLog"]) expect(ids.filter((x) => x === id), id).toHaveLength(1);
+      expect(html).toMatch(/id="badgeTests">\d+ Verified Tests</);
+    });
+  });
+
+  describe("lzMakeStepper (shipped lz-timetravel region, fake timers)", () => {
+    interface Stage { stage: number; id: string; label: string; code: string; compareTo: string | null; summary: string }
+    const STAGES: Stage[] = [
+      { stage: 0, id: "legacy", label: "Legacy", code: "var h = 0;", compareTo: null, summary: "The specimen as written: 1 line." },
+      { stage: 1, id: "candidate", label: "Candidate", code: "let h = Math.trunc(0) || 0;", compareTo: "legacy", summary: "2 AST rewrites." },
+      { stage: 2, id: "rollback", label: "Rollback", code: "let h = 0 | 0;", compareTo: "candidate", summary: "Counterexample n = -0 broke Object.is parity." },
+      { stage: 3, id: "typed", label: "Typed", code: "export function f(n: number): number { return 0 | 0; }", compareTo: "rollback", summary: "tsc --strict: 0 errors." },
+      { stage: 4, id: "verified", label: "Verified", code: "let h = 0 | 0;", compareTo: "legacy", summary: "Verified artifact." },
+    ];
+    function rig() {
+      const doc = new FakeDocument();
+      const el = (tag: string): FakeElement => doc.createElement(tag);
+      const env = { bar: el("div"), pills: el("span"), note: el("span"), prev: el("button"), next: el("button"), play: el("button"), diffEl: el("div"), statsEl: el("span"), delayMs: 1500 };
+      env.bar.hidden = true;
+      const drawn: Array<{ old: string; next: string }> = [];
+      let defaults = 0;
+      const timers = new Map<number, () => void>();
+      let nextId = 1;
+      const full = {
+        ...env,
+        legacyText: () => "var h = 0;\n",
+        showDefault: () => { defaults++; },
+        renderDiff: (_c: unknown, old: string, next: string) => { drawn.push({ old, next }); },
+        createEl: (tag: string) => doc.createElement(tag),
+        setTimer: (fn: () => void) => { const id = nextId++; timers.set(id, fn); return id; },
+        clearTimer: (id: number) => { timers.delete(id); },
+      };
+      type Stepper = { setStages(l: unknown): void; select(i: number): boolean; next(): boolean; prev(): boolean; play(): void; pause(): void; settle(): void; reset(): void; index(): number; count(): number; playing(): boolean };
+      const stepper = (runInlineScript(`${regionOf("lz-timetravel")}; lzMakeStepper`, {}) as (e: typeof full) => Stepper)(full);
+      const fire = (): void => { const [id, fn] = [...timers.entries()][0] ?? []; if (id !== undefined && fn !== undefined) { timers.delete(id); fn(); } };
+      return { env, stepper, drawn, defaults: () => defaults, timers, fire };
+    }
+    const pillState = (t: ReturnType<typeof rig>): string[] => t.env.pills.children.map((c) => `${c.textContent}${c.getAttribute("aria-pressed") === "true" ? "*" : ""}`);
+
+    it("shows one pill per real stage with the last one selected, and does not touch the diff (the default view stays the final verified diff)", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      expect(t.env.bar.hidden).toBe(false);
+      expect(pillState(t)).toEqual(["0 \u00b7 Legacy", "1 \u00b7 Candidate", "2 \u00b7 Rollback", "3 \u00b7 Typed", "4 \u00b7 Verified*"]);
+      expect(t.stepper.index()).toBe(4);
+      expect(t.drawn).toEqual([]);
+      expect(t.defaults()).toBe(0);
+      expect(t.env.note.textContent).toBe("Stage 4 \u00b7 Verified: Verified artifact.");
+      expect(t.env.prev.disabled).toBe(false);
+      expect(t.env.next.disabled).toBe(true);
+      expect(t.env.play.textContent).toBe("Play");
+    });
+
+    it("clicking a pill shows that stage against its base: the previous candidate for a rollback, the legacy text for a candidate", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.env.pills.children[2]?.click();
+      expect(t.drawn.at(-1)).toEqual({ old: "let h = Math.trunc(0) || 0;", next: "let h = 0 | 0;" });
+      expect(t.env.note.textContent).toBe("Stage 2 \u00b7 Rollback: Counterexample n = -0 broke Object.is parity.");
+      expect(pillState(t)[2]).toBe("2 \u00b7 Rollback*");
+      expect(t.env.pills.children[2]?.className).toBe("tt-pill tt-rollback on");
+      t.env.pills.children[1]?.click();
+      expect(t.drawn.at(-1)).toEqual({ old: "var h = 0;", next: "let h = Math.trunc(0) || 0;" });
+      t.env.pills.children[3]?.click();
+      expect(t.drawn.at(-1)).toEqual({ old: "let h = 0 | 0;", next: "export function f(n: number): number { return 0 | 0; }" });
+      t.env.pills.children[0]?.click();
+      expect(t.drawn.at(-1)).toEqual({ old: "var h = 0;", next: "var h = 0;" });
+      expect(t.env.prev.disabled).toBe(true);
+      expect(t.env.next.disabled).toBe(false);
+    });
+
+    it("shows the default diff again on the last stage", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.stepper.select(1);
+      const drawn = t.drawn.length;
+      t.env.pills.children[4]?.click();
+      expect(t.defaults()).toBe(1);
+      expect(t.drawn).toHaveLength(drawn);
+    });
+
+    it("Prev and Next stop at the ends", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      expect(t.stepper.next()).toBe(false);
+      expect(t.stepper.prev()).toBe(true);
+      expect(t.stepper.index()).toBe(3);
+      t.stepper.select(0);
+      expect(t.stepper.prev()).toBe(false);
+      expect(t.stepper.next()).toBe(true);
+      expect(t.stepper.index()).toBe(1);
+      expect(t.stepper.select(9)).toBe(false);
+      expect(t.stepper.select(-1)).toBe(false);
+    });
+
+    it("Play animates the stages in order with a timer and stops on the last; Play again restarts from the first", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.stepper.select(2);
+      t.stepper.play();
+      expect(t.stepper.playing()).toBe(true);
+      expect(t.env.play.textContent).toBe("Pause");
+      expect(t.env.play.getAttribute("aria-pressed")).toBe("true");
+      expect(t.timers.size).toBe(1);
+      t.fire();
+      expect(t.stepper.index()).toBe(3);
+      expect(t.stepper.playing()).toBe(true);
+      t.fire();
+      expect(t.stepper.index()).toBe(4);
+      expect(t.stepper.playing()).toBe(false);
+      expect(t.env.play.textContent).toBe("Play");
+      expect(t.timers.size).toBe(0);
+      t.stepper.play();
+      expect(t.stepper.index()).toBe(0);
+      expect(t.drawn.at(-1)).toEqual({ old: "var h = 0;", next: "var h = 0;" });
+      const visited: number[] = [];
+      while (t.stepper.playing()) { t.fire(); visited.push(t.stepper.index()); }
+      expect(visited).toEqual([1, 2, 3, 4]);
+    });
+
+    it("Pause stops the animation, and choosing a stage while it plays pauses it", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.stepper.select(0);
+      t.stepper.play();
+      t.fire();
+      expect(t.stepper.index()).toBe(1);
+      t.stepper.play();
+      expect(t.stepper.playing()).toBe(false);
+      expect(t.timers.size).toBe(0);
+      expect(t.env.play.textContent).toBe("Play");
+      t.stepper.play();
+      t.stepper.select(3);
+      expect(t.stepper.playing()).toBe(false);
+      expect(t.timers.size).toBe(0);
+      expect(t.stepper.index()).toBe(3);
+    });
+
+    it("settle() puts it back on the last stage without redrawing (another control took over the diff)", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.stepper.select(1);
+      const drawn = t.drawn.length;
+      t.stepper.settle();
+      expect(t.stepper.index()).toBe(4);
+      expect(t.drawn).toHaveLength(drawn);
+      expect(pillState(t)[4]).toBe("4 \u00b7 Verified*");
+    });
+
+    it("hides itself for fewer than two stages, ignores malformed stages, and reset() clears everything", () => {
+      const t = rig();
+      t.stepper.setStages([STAGES[0]]);
+      expect(t.env.bar.hidden).toBe(true);
+      expect(t.stepper.count()).toBe(1);
+      t.stepper.setStages(undefined);
+      expect(t.stepper.count()).toBe(0);
+      t.stepper.setStages([null, 5, { id: "x" }, ...STAGES.slice(0, 2)]);
+      expect(t.stepper.count()).toBe(2);
+      expect(t.env.bar.hidden).toBe(false);
+      t.stepper.setStages(STAGES);
+      t.stepper.select(0);
+      t.stepper.play();
+      t.stepper.reset();
+      expect(t.env.bar.hidden).toBe(true);
+      expect(t.env.pills.children).toHaveLength(0);
+      expect(t.env.note.textContent).toBe("");
+      expect(t.timers.size).toBe(0);
+      expect(t.stepper.playing()).toBe(false);
+      t.stepper.play();
+      expect(t.stepper.playing()).toBe(false);
+    });
+
+    it("loading new stages stops a running animation", () => {
+      const t = rig();
+      t.stepper.setStages(STAGES);
+      t.stepper.select(0);
+      t.stepper.play();
+      t.stepper.setStages(STAGES.slice(0, 3));
+      expect(t.stepper.playing()).toBe(false);
+      expect(t.timers.size).toBe(0);
+      expect(t.stepper.index()).toBe(2);
+    });
+  });
+
+  describe("lzEncodeProof and lzDecodeProof (shipped lz-proof-link region)", () => {
+    const api = runInlineScript(`${regionOf("lz-proof-link")}; ({ enc: lzEncodeProof, dec: lzDecodeProof, max: LZ_PROOF_MAX })`, { btoa, atob }) as {
+      enc: (s: unknown) => { ok: boolean; hash?: string; length?: number; error?: string };
+      dec: (h: unknown, ids?: string[]) => Record<string, unknown>;
+      max: number;
+    };
+    const hashOf = (obj: unknown): string => `#proof=${Buffer.from(JSON.stringify(obj), "utf8").toString("base64url")}`;
+    const SCHEMA = { n: "integer" };
+    const PRESETS = ["bitwise", "es5-string-hash", "legacyLeakyMutator"];
+
+    it("round-trips a preset: id, schema and seed, as URL-safe base64 under 8 KB", () => {
+      const enc = api.enc({ presetId: "es5-string-hash", schema: { text: "string" }, seed: 1375503261 });
+      expect(enc.ok).toBe(true);
+      expect(enc.hash).toMatch(/^#proof=[A-Za-z0-9_-]+$/);
+      expect(enc.length).toBe(enc.hash?.length);
+      expect(enc.length ?? 0).toBeLessThan(200);
+      expect(api.max).toBe(8192);
+      expect(api.dec(enc.hash, PRESETS)).toEqual({ ok: true, presetId: "es5-string-hash", schema: { text: "string" }, seed: 1375503261 });
+    });
+
+    it("round-trips custom code with any characters, a module name and a nested module schema", () => {
+      const code = "// \u00e9\u6f22\ud83d\ude00 </script><b>x</b>\nfunction f(a) { return a | 0; }\nmodule.exports = f;\n";
+      const schema = { clamp: { n: "integer", lo: "integer" }, halve: { n: "integer" } };
+      const enc = api.enc({ code, name: "my.Module-1", schema, seed: -5 });
+      expect(enc.ok).toBe(true);
+      expect(api.dec(enc.hash)).toEqual({ ok: true, code, name: "my.Module-1", schema, seed: -5 });
+    });
+
+    it("matches an independent base64url encoder byte for byte", () => {
+      const enc = api.enc({ presetId: "bitwise", schema: SCHEMA, seed: 7 });
+      expect(enc.hash).toBe(hashOf({ v: 1, p: "bitwise", s: SCHEMA, seed: 7 }));
+    });
+
+    it("refuses a link over the 8192-character budget, with the size and the limit, and accepts one just under it", () => {
+      const big = api.enc({ code: "x".repeat(9000), name: "big", schema: SCHEMA, seed: 1 });
+      expect(big.ok).toBe(false);
+      expect(big.length ?? 0).toBeGreaterThan(8192);
+      expect(big.error).toContain("limit is 8192");
+      const header = api.enc({ code: "", name: "x", schema: SCHEMA, seed: 1 });
+      expect(header.ok).toBe(false);
+      let low = 1, high = 9000;
+      while (low < high) { const mid = Math.ceil((low + high) / 2); if (api.enc({ code: "y".repeat(mid), name: "n", schema: SCHEMA, seed: 1 }).ok) low = mid; else high = mid - 1; }
+      const edge = api.enc({ code: "y".repeat(low), name: "n", schema: SCHEMA, seed: 1 });
+      expect(edge.ok).toBe(true);
+      expect(edge.length ?? 0).toBeLessThanOrEqual(8192);
+      expect(edge.length ?? 0).toBeGreaterThan(8100);
+      expect(api.enc({ code: "y".repeat(low + 1), name: "n", schema: SCHEMA, seed: 1 }).ok).toBe(false);
+      expect(api.dec(edge.hash)["ok"]).toBe(true);
+    });
+
+    it("refuses to encode without a seed, with a bad schema or without code", () => {
+      expect(api.enc({ presetId: "bitwise", schema: SCHEMA }).error).toContain("no proof seed");
+      expect(api.enc({ presetId: "bitwise", schema: SCHEMA, seed: 1.5 }).ok).toBe(false);
+      expect(api.enc({ presetId: "bitwise", schema: SCHEMA, seed: 2 ** 31 }).ok).toBe(false);
+      expect(api.enc({ presetId: "bitwise", schema: { n: "float" }, seed: 1 }).error).toContain("schema");
+      expect(api.enc({ presetId: "bitwise", schema: null, seed: 1 }).ok).toBe(false);
+      expect(api.enc({ code: "   ", name: "n", schema: SCHEMA, seed: 1 }).error).toContain("no code");
+      expect(api.enc(null).ok).toBe(false);
+    });
+
+    it("decodes only what it understands: wrong prefix, alphabet, size, JSON and version are all refused, never thrown", () => {
+      const bad = (hash: unknown, ids?: string[]): string => String((api.dec(hash, ids) as { error?: string }).error);
+      expect(bad("#specimen=abc")).toContain("no proof");
+      expect(bad(undefined)).toContain("no proof");
+      expect(bad("#proof=")).toContain("not valid base64url");
+      expect(bad("#proof=a+b/c=")).toContain("not valid base64url");
+      expect(bad(`#proof=${"A".repeat(9000)}`)).toContain("longer than 8192");
+      expect(bad("#proof=AAAA")).toContain("could not be decoded");
+      expect(bad(`#proof=${Buffer.from([0xff, 0xfe, 0xfd]).toString("base64url")}`)).toContain("could not be decoded");
+      expect(bad(`#proof=${Buffer.from("[1,2]").toString("base64url")}`)).toContain("unknown link version");
+      expect(bad(hashOf({ v: 2, p: "bitwise", s: SCHEMA, seed: 1 }))).toContain("unknown link version");
+      expect(bad(hashOf(null))).toContain("unknown link version");
+    });
+
+    it("validates every field: unknown keys, seed, schema, preset, code and name", () => {
+      const bad = (obj: unknown, ids?: string[]): string => String((api.dec(hashOf(obj), ids) as { error?: string }).error);
+      const base = { v: 1, p: "bitwise", s: SCHEMA, seed: 1 };
+      expect(bad({ ...base, extra: 1 })).toContain("unknown fields");
+      expect(bad({ ...base, __proto__x: 1 })).toContain("unknown fields");
+      expect(bad(JSON.parse('{"v":1,"p":"bitwise","s":{"n":"integer"},"seed":1,"__proto__":{"polluted":true}}'))).toContain("unknown fields");
+      for (const seed of [undefined, 1.5, "7", null, 2 ** 31, -(2 ** 31) - 1, Number.NaN]) expect(bad({ ...base, seed }), String(seed)).toContain("proof seed");
+      for (const s of [undefined, null, [], "x", { n: "float" }, { "bad name": "integer" }, JSON.parse('{"__proto__":"integer"}'), { constructor: "integer" }, Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`p${i}`, "integer"])), { f: { n: "float" } }, { f: "integer", g: { n: "integer" } }]) expect(bad({ ...base, s }), JSON.stringify(s)).toContain("invalid input schema");
+      expect(bad({ v: 1, s: SCHEMA, seed: 1 })).toContain("either a preset or code");
+      expect(bad({ v: 1, p: "bitwise", c: "x", n: "m", s: SCHEMA, seed: 1 })).toContain("either a preset or code");
+      expect(bad({ ...base, p: 5 })).toContain("invalid preset");
+      expect(bad({ ...base, p: "../etc" })).toContain("invalid preset");
+      expect(bad({ ...base, p: "<img src=x onerror=1>" })).toContain("invalid preset");
+      expect(bad({ ...base, p: "unknown-preset" }, PRESETS)).toContain("does not exist here");
+      expect(bad({ v: 1, c: "   ", n: "m", s: SCHEMA, seed: 1 })).toContain("no code");
+      expect(bad({ v: 1, c: 5, n: "m", s: SCHEMA, seed: 1 })).toContain("no code");
+      expect(bad({ v: 1, c: "x", n: "has space", s: SCHEMA, seed: 1 })).toContain("invalid module name");
+      expect(bad({ v: 1, c: "x", n: "<b>", s: SCHEMA, seed: 1 })).toContain("invalid module name");
+      expect(bad({ v: 1, c: "x", n: "a".repeat(81), s: SCHEMA, seed: 1 })).toContain("invalid module name");
+      expect(bad({ v: 1, c: "x", s: SCHEMA, seed: 1 })).toContain("invalid module name");
+      expect((api.dec(hashOf({ ...base }), PRESETS) as { ok: boolean }).ok).toBe(true);
+      expect((api.dec(hashOf({ v: 1, c: "x", n: "", s: {}, seed: 0 })) as { ok: boolean }).ok).toBe(true);
+    });
+  });
+
+  describe("the shield twin (shipped lz-badge region) writes the same SVG as the server", () => {
+    const twin = runInlineScript(`${regionOf("lz-badge")}; lzBadgeSvg`, {}) as (i: unknown) => string;
+    it.each([
+      [{ parity: 100, tscErrors: 0, seed: 1375503261 }],
+      [{ parity: 100, tscErrors: 0 }],
+      [{ parity: 100, tscErrors: 3, seed: -5 }],
+      [{ parity: 97.8, tscErrors: 0 }],
+      [{ label: "Acme Corp", parity: 100, tscErrors: 0, seed: 1 }],
+      [{ label: '<script>alert(1)</script>"&\'', parity: 100, tscErrors: 0, seed: 7 }],
+      [{ label: "  \u0000 spaced\n ", parity: 250, tscErrors: -4 }],
+      [{ label: "x".repeat(60), parity: Number.NaN, tscErrors: Number.POSITIVE_INFINITY }],
+      [{ label: "", parity: 100, tscErrors: 0, seed: 1.5 }],
+    ])("%j", (input) => {
+      expect(twin(input)).toBe(renderVerifiedBadgeSvg(input as Parameters<typeof renderVerifiedBadgeSvg>[0]));
+    });
+  });
+
+  describe("the Debt Scorecard helpers (shipped lz-debt-ui region)", () => {
+    const api = runInlineScript(`${regionOf("lz-debt-ui")}; ({ tone: lzDebtTone, cls: lzCiLineClass, blocks: lzCiBlocks, verification: lzVerificationFor })`, {}) as {
+      tone: (n: number) => string;
+      cls: (l: string) => string;
+      blocks: (g: unknown) => Array<{ title: string; status: string; headline: string; lines: Array<{ cls: string; text: string }> }>;
+      verification: (source: string, code: string, v: unknown) => Record<string, unknown>;
+    };
+    it("colours a category score and a CI log line", () => {
+      expect([100, 75, 74, 40, 39, 0].map(api.tone)).toEqual(["", "", "warn", "warn", "bad", "bad"]);
+      expect(["##[group]Run x", "##[endgroup]", "::error file=a.js::m", "##[error]boom", "::warning file=a.js::m", "##[warning]w", "\u2713 passed", "> lazarus audit", "plain"].map(api.cls)).toEqual(["grp", "grp", "err", "err", "warn", "warn", "ok", "cmd", ""]);
+    });
+    it("turns a real gate into the two blocks the drawer shows", () => {
+      const gate = simulateCiGate([{ ruleId: "LAZ008", level: "warning", file: "specimen.js", line: 3, message: "leak" }], { verified: true, parity: true, tscErrors: 0, signed: true, keyId: "abc", runs: 100, seed: 7 });
+      const blocks = api.blocks(gate);
+      expect(blocks.map((b) => [b.title, b.status, b.headline])).toEqual([["Pre-Resurrection", "FAIL", "FAIL \u00b7 exit 1 \u00b7 1 High Finding"], ["Post-Resurrection", "PASS", "PASS \u00b7 exit 0 \u00b7 0 High Findings \u00b7 Ed25519 Verified"]]);
+      expect(blocks[0]?.lines.some((l) => l.cls === "warn" && l.text.startsWith("::warning file=specimen.js,line=3,title=LAZ008"))).toBe(true);
+      expect(blocks[0]?.lines.at(-1)).toEqual({ cls: "err", text: "##[error]Process completed with exit code 1." });
+      expect(blocks[1]?.lines.some((l) => l.cls === "ok")).toBe(true);
+      expect(blocks.flatMap((b) => b.lines.map((l) => l.text)).join("\n")).toBe(`${gate.before.text}\n${gate.after.text}`);
+    });
+    it("sends the verification only for the editor code and only when it is the code that was resurrected", () => {
+      const v = { legacyCode: "var a = 1;", payload: { x: 1 }, signatureB64: "s", publicKeyPem: "p", resurrectedCode: "let a = 1;" };
+      expect(api.verification("code", "var a = 1;", v)).toEqual({ verification: { payload: { x: 1 }, signatureB64: "s", publicKeyPem: "p", resurrectedCode: "let a = 1;" } });
+      expect(api.verification("code", "var a = 2;", v)).toEqual({});
+      expect(api.verification("example:legacy-text-pipeline", "var a = 1;", v)).toEqual({});
+      expect(api.verification("code", "var a = 1;", null)).toEqual({});
+      expect(api.verification("code", "var a = 1;", undefined)).toEqual({});
+    });
+  });
+
+  describe("the lz-v20 script (shipped, minimal DOM, scripted clipboard)", () => {
+    class FakeEvent { constructor(readonly type: string, readonly detail?: unknown) {} }
+    interface Rig {
+      doc: FakeDocument;
+      els: Record<string, FakeElement>;
+      win: Record<string, unknown>;
+      loc: { hash: string; origin: string; pathname: string };
+      copied: string[];
+      replaced: string[];
+      starts: Array<{ override: unknown }>;
+      changes: string[];
+      inputs: string[];
+    }
+    function rig(options: { hash?: string; stale?: boolean; run?: (override: unknown) => unknown; clipboard?: boolean } = {}): Rig {
+      const doc = new FakeDocument();
+      const els: Record<string, FakeElement> = {};
+      const make = (tag: string, id: string): FakeElement => { els[id] = doc.element(tag, id); return els[id] as FakeElement; };
+      for (const [tag, id] of [["textarea", "legacyCode"], ["input", "modName"], ["textarea", "schemaJson"], ["select", "presetSelect"], ["button", "copyProofLinkBtn"], ["span", "proofReplayPill"], ["button", "copyBadgeBtn"], ["div", "badgePreview"], ["section", "debtCard"], ["span", "debtScoreVal"], ["span", "debtGrade"], ["span", "debtHint"], ["div", "debtBars"], ["button", "ciToggle"], ["div", "ciLog"]] as const) make(tag, id);
+      (els["presetSelect"] as unknown as { options: Array<{ value: string }> }).options = ["selfHeal", "bitwise", "es5-string-hash"].map((value) => ({ value }));
+      els["ciToggle"]?.setAttribute("aria-expanded", "false");
+      els["debtCard"]!.hidden = true;
+      els["proofReplayPill"]!.hidden = true;
+      els["badgePreview"]!.hidden = true;
+      els["ciLog"]!.hidden = true;
+      els["legacyCode"]!.value = "var half = (n / 2) | 0; half;";
+      els["modName"]!.value = "legacy-int-halve";
+      els["schemaJson"]!.value = '{"n": "integer"}';
+      els["presetSelect"]!.value = "bitwise";
+      const copied: string[] = [];
+      const replaced: string[] = [];
+      const starts: Rig["starts"] = [];
+      const changes: string[] = [];
+      const inputs: string[] = [];
+      els["presetSelect"]!.addEventListener("change", () => changes.push(els["presetSelect"]!.value));
+      els["legacyCode"]!.addEventListener("input", () => inputs.push(els["legacyCode"]!.value));
+      const win: Record<string, unknown> = {
+        isSecureContext: true,
+        lazarusProvenance: { kind: "preset", label: "bitwise" },
+        LazarusStale: { isStale: () => options.stale === true },
+        LazarusStudio: { switchTab: () => undefined },
+      };
+      win["LazarusRun"] = { start: () => { starts.push({ override: win["lazarusSeedOverride"] }); return Promise.resolve(options.run === undefined ? { success: true, proofSeed: win["lazarusSeedOverride"] } : options.run(win["lazarusSeedOverride"])); } };
+      const loc = { hash: options.hash ?? "", origin: "https://lazarus.example", pathname: "/studio/" };
+      runInlineScript(v20Script(), {
+        document: doc,
+        window: win,
+        location: loc,
+        history: { replaceState: (_s: unknown, _t: string, url: string) => { replaced.push(url); } },
+        navigator: options.clipboard === false ? {} : { clipboard: { writeText: (x: string) => { copied.push(x); return Promise.resolve(); } } },
+        Event: FakeEvent,
+        btoa,
+        atob,
+        Uint8Array,
+        encodeURIComponent,
+        setTimeout,
+        clearTimeout,
+      });
+      return { doc, els, win, loc, copied, replaced, starts, changes, inputs };
+    }
+    const decodeLink = (link: string): Record<string, unknown> => {
+      const json = Buffer.from(link.slice(link.indexOf("#proof=") + 7), "base64url").toString("utf8");
+      return JSON.parse(json) as Record<string, unknown>;
+    };
+    const result = (extra: Record<string, unknown> = {}): { type: string; detail: Record<string, unknown> } => ({ type: "lazarus:result", detail: { success: true, proofSeed: 77, fuzzReport: { passed: true }, typecheck: { errorCount: 0 }, modernCode: "let half = 0;", certificate: { signature: { payload: { a: 1 }, signatureB64: "sig", publicKeyPem: "pem" } }, ...extra } });
+
+    describe("Copy Proof Link", () => {
+      it("copies a full #proof= URL for an unchanged preset, updates the address bar and says Proof Link Copied", async () => {
+        const t = rig();
+        t.win["lastProofSeed"] = 77;
+        t.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        t.els["copyProofLinkBtn"]!.className = "proof-link-btn";
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(t.copied).toHaveLength(1);
+        expect(t.copied[0]).toMatch(/^https:\/\/lazarus\.example\/studio\/#proof=[A-Za-z0-9_-]+$/);
+        expect(decodeLink(t.copied[0] ?? "")).toEqual({ v: 1, p: "bitwise", s: { n: "integer" }, seed: 77 });
+        expect(t.replaced).toEqual([t.copied[0]?.slice(t.copied[0].indexOf("#"))]);
+        expect(t.els["copyProofLinkBtn"]?.textContent).toBe("Proof Link Copied");
+        expect(t.els["copyProofLinkBtn"]?.className).toBe("proof-link-btn done");
+        expect(t.els["copyProofLinkBtn"]?.title).toMatch(/^\d+ of 8192 characters$/);
+        expect(t.win["lastProofLink"]).toBe(t.copied[0]);
+      });
+
+      it("shares the code itself once it is no longer the preset's (an edit, an import)", async () => {
+        const t = rig();
+        t.win["lastProofSeed"] = 5;
+        t.win["lazarusProvenance"] = { kind: "paste", label: "pasted specimen" };
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(decodeLink(t.copied[0] ?? "")).toEqual({ v: 1, c: "var half = (n / 2) | 0; half;", n: "legacy-int-halve", s: { n: "integer" }, seed: 5 });
+        t.copied.length = 0;
+        t.win["lazarusProvenance"] = { kind: "npm", label: "left-pad" };
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(Object.keys(decodeLink(t.copied[0] ?? "")).sort()).toEqual(["c", "n", "s", "seed", "v"]);
+        t.copied.length = 0;
+        t.win["lazarusProvenance"] = { kind: "preset", label: "selfHeal" };
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect("c" in decodeLink(t.copied[0] ?? "")).toBe(true);
+      });
+
+      it("says Link too large instead of truncating when the code does not fit the 8 KB budget", async () => {
+        const t = rig();
+        t.win["lastProofSeed"] = 1;
+        t.win["lazarusProvenance"] = { kind: "paste", label: "pasted specimen" };
+        t.els["legacyCode"]!.value = `// ${"x".repeat(9000)}\nvar a = 1;`;
+        t.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(t.copied).toEqual([]);
+        expect(t.replaced).toEqual([]);
+        expect(t.els["copyProofLinkBtn"]?.textContent).toBe("Link too large");
+        expect(t.els["copyProofLinkBtn"]?.className).toContain("err");
+        expect(String(t.win["lastProofLinkError"])).toContain("limit is 8192");
+        expect(t.els["copyProofLinkBtn"]?.title).toContain("Share a preset or shorten the code");
+      });
+
+      it("asks for a resurrection first, and for a fresh one when the code changed since the proof", async () => {
+        const t = rig();
+        t.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(t.els["copyProofLinkBtn"]?.textContent).toBe("Resurrect first");
+        expect(t.copied).toEqual([]);
+        const stale = rig({ stale: true });
+        stale.win["lastProofSeed"] = 1;
+        stale.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        stale.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(stale.els["copyProofLinkBtn"]?.textContent).toBe("Resurrect again first");
+        expect(stale.copied).toEqual([]);
+        const badSchema = rig();
+        badSchema.win["lastProofSeed"] = 1;
+        badSchema.els["schemaJson"]!.value = "{nope";
+        badSchema.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        badSchema.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(badSchema.els["copyProofLinkBtn"]?.textContent).toBe("Resurrect first");
+        expect(badSchema.copied).toEqual([]);
+      });
+
+      it("reports a blocked clipboard honestly (the link stays in the address bar)", async () => {
+        const t = rig({ clipboard: false });
+        t.win["lastProofSeed"] = 9;
+        (t.doc as unknown as { body: FakeElement }).body = new FakeElement("body");
+        const make = t.doc.createElement.bind(t.doc);
+        t.doc.createElement = (tag: string): FakeElement => Object.assign(make(tag), { select: () => undefined });
+        t.els["copyProofLinkBtn"]!.textContent = "Copy Proof Link";
+        t.els["copyProofLinkBtn"]!.click();
+        await flush();
+        expect(t.replaced).toHaveLength(1);
+        expect(t.copied).toEqual([]);
+        expect(t.els["copyProofLinkBtn"]?.textContent).toBe("Copy blocked: link is in the address bar");
+        expect(t.els["copyProofLinkBtn"]?.className).toContain("err");
+      });
+    });
+
+    describe("replay on load", () => {
+      const hashOf = (obj: unknown): string => `#proof=${Buffer.from(JSON.stringify(obj), "utf8").toString("base64url")}`;
+
+      it("loads the preset with its exact seed, runs the resurrection with it and shows 'Replayed from Proof Permalink (Seed N)'", async () => {
+        const t = rig({ hash: hashOf({ v: 1, p: "es5-string-hash", s: { text: "string" }, seed: 1375503261 }) });
+        await flush();
+        expect(t.els["presetSelect"]?.value).toBe("es5-string-hash");
+        expect(t.changes).toEqual(["es5-string-hash"]);
+        expect(JSON.parse(t.els["schemaJson"]?.value ?? "")).toEqual({ text: "string" });
+        expect(t.starts).toEqual([{ override: 1375503261 }]);
+        expect(t.win["lazarusSeedOverride"]).toBeUndefined();
+        expect(t.els["proofReplayPill"]?.hidden).toBe(false);
+        expect(t.els["proofReplayPill"]?.textContent).toBe("Replayed from Proof Permalink (Seed 1375503261)");
+        expect(t.els["proofReplayPill"]?.className).toBe("proof-replay-pill");
+      });
+
+      it("loads a custom snippet, its module name and schema, then replays it", async () => {
+        const t = rig({ hash: hashOf({ v: 1, c: "var x = (n * 3) | 0; x;", n: "triple", s: { n: "integer" }, seed: 0 }) });
+        await flush();
+        expect(t.els["legacyCode"]?.value).toBe("var x = (n * 3) | 0; x;");
+        expect(t.els["modName"]?.value).toBe("triple");
+        expect(t.inputs).toEqual(["var x = (n * 3) | 0; x;"]);
+        expect(t.win["lazarusProvenance"]).toEqual({ kind: "paste", label: "proof permalink" });
+        expect(t.starts).toEqual([{ override: 0 }]);
+        expect(t.els["proofReplayPill"]?.textContent).toBe("Replayed from Proof Permalink (Seed 0)");
+      });
+
+      it("does not claim a replay that did not verify under that seed", async () => {
+        const failed = rig({ hash: hashOf({ v: 1, p: "bitwise", s: { n: "integer" }, seed: 5 }), run: () => ({ success: false, proofSeed: 5 }) });
+        await flush();
+        expect(failed.els["proofReplayPill"]?.textContent).toBe("Proof Permalink replay did not verify (Seed 5): a counterexample was found");
+        expect(failed.els["proofReplayPill"]?.className).toBe("proof-replay-pill bad");
+        const other = rig({ hash: hashOf({ v: 1, p: "bitwise", s: { n: "integer" }, seed: 5 }), run: () => ({ success: true, proofSeed: 6 }) });
+        await flush();
+        expect(other.els["proofReplayPill"]?.textContent).toContain("did not verify (Seed 5)");
+        const aborted = rig({ hash: hashOf({ v: 1, p: "bitwise", s: { n: "integer" }, seed: 5 }), run: () => null });
+        await flush();
+        expect(aborted.els["proofReplayPill"]?.className).toContain("bad");
+      });
+
+      it.each([
+        ["garbage", "#proof=!!!", "not valid base64url"],
+        ["an unknown version", hashOf({ v: 9, p: "bitwise", s: {}, seed: 1 }), "unknown link version"],
+        ["an unknown preset", hashOf({ v: 1, p: "no-such-preset", s: {}, seed: 1 }), "does not exist here"],
+        ["a float seed", hashOf({ v: 1, p: "bitwise", s: {}, seed: 1.5 }), "valid proof seed"],
+        ["an injected field", hashOf({ v: 1, p: "bitwise", s: {}, seed: 1, html: "<img src=x onerror=alert(1)>" }), "unknown fields"],
+        ["an invalid schema", hashOf({ v: 1, p: "bitwise", s: { n: "float" }, seed: 1 }), "invalid input schema"],
+        ["a bad module name", hashOf({ v: 1, c: "x", n: "<b>", s: {}, seed: 1 }), "invalid module name"],
+        ["an oversized link", `#proof=${"A".repeat(9000)}`, "longer than 8192"],
+      ])("ignores %s, says why and loads and runs nothing", async (_label, hash, why) => {
+        const t = rig({ hash });
+        await flush();
+        expect(t.starts).toEqual([]);
+        expect(t.changes).toEqual([]);
+        expect(t.inputs).toEqual([]);
+        expect(t.els["legacyCode"]?.value).toBe("var half = (n / 2) | 0; half;");
+        expect(t.els["presetSelect"]?.value).toBe("bitwise");
+        expect(t.win["lazarusSeedOverride"]).toBeUndefined();
+        expect(t.els["proofReplayPill"]?.hidden).toBe(false);
+        expect(t.els["proofReplayPill"]?.className).toBe("proof-replay-pill bad");
+        expect(t.els["proofReplayPill"]?.textContent).toContain("Proof link ignored: ");
+        expect(t.els["proofReplayPill"]?.textContent).toContain(why);
+      });
+
+      it("does nothing for any other hash, and the code from a link is only ever put in .value", async () => {
+        for (const hash of ["", "#single", "#graph", "#specimen=abc", "#proofs=abc"]) {
+          const t = rig({ hash });
+          await flush();
+          expect(t.starts, hash).toEqual([]);
+          expect(t.els["proofReplayPill"]?.hidden, hash).toBe(true);
+        }
+        const evil = "</script><img src=x onerror=alert(1)>";
+        const t = rig({ hash: hashOf({ v: 1, c: evil, n: "m", s: {}, seed: 3 }) });
+        await flush();
+        expect(t.els["legacyCode"]?.value).toBe(evil);
+        expect(t.els["legacyCode"]?.children).toHaveLength(0);
+        expect(t.els["proofReplayPill"]?.textContent).not.toContain("<img");
+      });
+
+      it("round-trips with Copy Proof Link: the link a run produced replays that run", async () => {
+        const first = rig();
+        first.win["lastProofSeed"] = 424242;
+        first.els["copyProofLinkBtn"]!.click();
+        await flush();
+        const link = first.copied[0] ?? "";
+        const second = rig({ hash: link.slice(link.indexOf("#")) });
+        await flush();
+        expect(second.starts).toEqual([{ override: 424242 }]);
+        expect(second.els["presetSelect"]?.value).toBe("bitwise");
+        expect(second.els["proofReplayPill"]?.textContent).toBe("Replayed from Proof Permalink (Seed 424242)");
+      });
+    });
+
+    describe("Copy Badge SVG", () => {
+      it("previews and copies the shield built from the result (100% parity, tsc errors, seed)", async () => {
+        const t = rig();
+        t.doc.dispatchEvent(result());
+        t.els["copyBadgeBtn"]!.textContent = "Copy Badge SVG";
+        t.els["copyBadgeBtn"]!.click();
+        await flush();
+        const expected = renderVerifiedBadgeSvg({ parity: 100, tscErrors: 0, seed: 77 });
+        expect(t.copied).toEqual([expected]);
+        expect(t.win["lastBadgeSvg"]).toBe(expected);
+        const preview = t.els["badgePreview"];
+        expect(preview?.hidden).toBe(false);
+        expect(preview?.children[0]?.tagName).toBe("img");
+        expect((preview?.children[0] as unknown as { src: string }).src).toBe(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(expected)}`);
+        expect(preview?.children[1]?.textContent).toContain(`Copied ${expected.length} bytes of self-contained SVG, no script and no external resource.`);
+        expect(t.els["copyBadgeBtn"]?.textContent).toBe("Badge SVG Copied");
+        expect(t.els["copyBadgeBtn"]?.className).toContain("done");
+      });
+
+      it("shows the tsc error count and a parity below 100 honestly", async () => {
+        const t = rig();
+        t.doc.dispatchEvent(result({ typecheck: { errorCount: 2 } }));
+        t.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(t.copied[0]).toContain("100% Parity \u00b7 tsc 2");
+        const failing = rig();
+        failing.doc.dispatchEvent(result({ fuzzReport: { passed: false } }));
+        failing.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(failing.copied[0]).toContain("0% Parity");
+      });
+
+      it("refuses without a verified result or with stale code, and a new run clears the preview", async () => {
+        const none = rig();
+        none.els["copyBadgeBtn"]!.textContent = "Copy Badge SVG";
+        none.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(none.els["copyBadgeBtn"]?.textContent).toBe("Resurrect first");
+        expect(none.copied).toEqual([]);
+        const failed = rig();
+        failed.doc.dispatchEvent(result({ success: false }));
+        failed.els["copyBadgeBtn"]!.textContent = "Copy Badge SVG";
+        failed.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(failed.els["copyBadgeBtn"]?.textContent).toBe("Resurrect first");
+        const stale = rig({ stale: true });
+        stale.doc.dispatchEvent(result());
+        stale.els["copyBadgeBtn"]!.textContent = "Copy Badge SVG";
+        stale.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(stale.els["copyBadgeBtn"]?.textContent).toBe("Resurrect again first");
+        const t = rig();
+        t.doc.dispatchEvent(result());
+        t.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(t.els["badgePreview"]?.hidden).toBe(false);
+        t.doc.dispatchEvent({ type: "lazarus:run-start" });
+        expect(t.els["badgePreview"]?.hidden).toBe(true);
+        expect(t.els["badgePreview"]?.children).toHaveLength(0);
+        t.els["copyBadgeBtn"]!.textContent = "Copy Badge SVG";
+        t.els["copyBadgeBtn"]!.click();
+        await flush();
+        expect(t.els["copyBadgeBtn"]?.textContent).toBe("Resurrect first");
+      });
+    });
+
+    describe("Legacy Debt Scorecard and Simulate GitHub CI Gate", () => {
+      const audit = (): { debtScore: ReturnType<typeof computeDebtScore>; ciGate: ReturnType<typeof simulateCiGate> } => {
+        const findings = [{ ruleId: "LAZ001", level: "error" as const, file: "specimen.js", line: 1, message: "truncation" }, { ruleId: "LAZ008", level: "warning" as const, file: "specimen.js", line: 4, message: "leak" }, { ruleId: "LAZ002", level: "note" as const }];
+        return { debtScore: computeDebtScore(findings), ciGate: simulateCiGate(findings) };
+      };
+      const api = (t: Rig): { render: (d: unknown) => void; verificationFor: (s: string, c: string) => Record<string, unknown> } => t.win["LazarusDebt"] as never;
+
+      it("renders the score, the grade and the four category bars", () => {
+        const t = rig();
+        const data = audit();
+        api(t).render(data);
+        expect(t.els["debtCard"]?.hidden).toBe(false);
+        expect(t.els["debtScoreVal"]?.textContent).toBe(`${data.debtScore.score}/100`);
+        expect(t.els["debtGrade"]?.textContent).toBe(`Grade ${data.debtScore.grade}`);
+        expect(t.els["debtGrade"]?.className).toBe(`debt-grade ${data.debtScore.grade}`);
+        expect(t.els["debtHint"]?.textContent).toContain(`higher = healthier \u00b7 debt ${data.debtScore.debtScore}`);
+        const rows = t.els["debtBars"]?.children ?? [];
+        expect(rows.map((r) => r.dataset["category"])).toEqual(["bitwise-numeric", "async-callbacks", "security-scope", "module-cycles"]);
+        expect(rows.map((r) => r.children[0]?.textContent)).toEqual(["Bitwise/Numeric", "Async/Callbacks", "Security/Scope", "Module Cycles"]);
+        const bitwise = data.debtScore.breakdown[0];
+        expect(rows[0]?.children[2]?.textContent).toBe(`${bitwise?.score}/100 \u00b7 1 finding`);
+        expect(rows[0]?.children[1]?.children[0]?.style["width"]).toBe(`${bitwise?.score}%`);
+        expect(rows[0]?.children[1]?.children[0]?.className).toBe(`debt-fill ${bitwise !== undefined && bitwise.score >= 75 ? "" : bitwise !== undefined && bitwise.score >= 40 ? "warn" : "bad"}`);
+      });
+
+      it("keeps the CI gate hidden until Simulate GitHub CI Gate is pressed, then shows the pre and post logs; pressing again hides it", () => {
+        const t = rig();
+        api(t).render(audit());
+        expect(t.els["ciLog"]?.hidden).toBe(true);
+        expect(t.els["ciLog"]?.children).toHaveLength(2);
+        t.els["ciToggle"]!.click();
+        expect(t.els["ciToggle"]?.getAttribute("aria-expanded")).toBe("true");
+        expect(t.els["ciLog"]?.hidden).toBe(false);
+        const [pre, post] = t.els["ciLog"]?.children ?? [];
+        expect(pre?.className).toBe("ci-run FAIL");
+        expect(pre?.children[0]?.textContent).toBe("Pre-Resurrection \u00b7 FAIL \u00b7 exit 1 \u00b7 2 High Findings");
+        expect(post?.className).toBe("ci-run PENDING");
+        expect(post?.children[0]?.textContent).toBe("Post-Resurrection \u00b7 PENDING \u00b7 run RESURRECT SPECIMEN");
+        expect(pre?.children[1]?.textContent).toContain("##[group]Run npm run audit -- . --sarif --out lazarus.sarif");
+        t.els["ciToggle"]!.click();
+        expect(t.els["ciToggle"]?.getAttribute("aria-expanded")).toBe("false");
+        expect(t.els["ciLog"]?.hidden).toBe(true);
+      });
+
+      it("renders a fresh audit into an already open gate without closing it", () => {
+        const t = rig();
+        api(t).render(audit());
+        t.els["ciToggle"]!.click();
+        api(t).render(audit());
+        expect(t.els["ciLog"]?.hidden).toBe(false);
+        expect(t.els["ciLog"]?.children).toHaveLength(2);
+        api(t).render({});
+        expect(t.els["ciLog"]?.children).toHaveLength(2);
+      });
+
+      it("sends the verification of the last resurrection only while the editor still holds that code", () => {
+        const t = rig();
+        expect(api(t).verificationFor("code", "var half = (n / 2) | 0; half;")).toEqual({});
+        t.doc.dispatchEvent(result());
+        expect(api(t).verificationFor("code", "var half = (n / 2) | 0; half;")).toEqual({ verification: { payload: { a: 1 }, signatureB64: "sig", publicKeyPem: "pem", resurrectedCode: "let half = 0;" } });
+        expect(api(t).verificationFor("code", "edited")).toEqual({});
+        expect(api(t).verificationFor("example:legacy-text-pipeline", "var half = (n / 2) | 0; half;")).toEqual({});
+        t.doc.dispatchEvent({ type: "lazarus:run-start" });
+        expect(api(t).verificationFor("code", "var half = (n / 2) | 0; half;")).toEqual({});
+        t.doc.dispatchEvent(result({ success: false }));
+        expect(api(t).verificationFor("code", "var half = (n / 2) | 0; half;")).toEqual({});
+      });
     });
   });
 });

@@ -83,13 +83,13 @@ describe("readKiroDna (live repository)", () => {
     expect(["/repo/.kiro/specs/sandbox/tasks.md", ".kiro\\specs\\x\\design.md"].every((f) => specs.test(f))).toBe(true);
     expect(specs.test(".kiro/steering/architecture.md")).toBe(false);
   });
-  it("counts 30 specs, including the V12 autopsy-and-audit spec with all three documents", () => {
-    expect(dna.specCount).toBe(30);
+  it("counts 31 specs, including the V12 autopsy-and-audit spec with all three documents", () => {
+    expect(dna.specCount).toBe(31);
     const v12 = dna.specs.find((s) => s.name === "v12-grandmaster-autopsy-and-audit");
     expect(v12).toMatchObject({ title: "V12 Grandmaster Autopsy and Audit", documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
     expect(v12?.taskCount).toBe(8);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
   it("includes the V13 finisher spec with all three documents and every task ticked", () => {
     const v13 = dna.specs.find((s) => s.name === "v13-grand-prize-finisher");
@@ -97,7 +97,7 @@ describe("readKiroDna (live repository)", () => {
     expect(v13?.taskCount).toBe(10);
     expect(v13?.tasksDone).toBe(v13?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
   it("includes the V14 final-boss spec with all three documents and every task ticked", () => {
     const v14 = dna.specs.find((s) => s.name === "v14-final-boss");
@@ -105,7 +105,7 @@ describe("readKiroDna (live repository)", () => {
     expect(v14?.taskCount).toBe(9);
     expect(v14?.tasksDone).toBe(v14?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
   it("includes the V15 compiler-depth spec with all three documents and every task ticked", () => {
     const v15 = dna.specs.find((s) => s.name === "v15-compiler-depth");
@@ -113,8 +113,8 @@ describe("readKiroDna (live repository)", () => {
     expect(v15?.taskCount).toBe(10);
     expect(v15?.tasksDone).toBe(v15?.taskCount);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
-    expect(dna.specCount).toBe(30);
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
+    expect(dna.specCount).toBe(31);
   });
   it("includes the V16 zero-trust-and-sarif spec with all three documents and every task ticked", () => {
     const v16 = dna.specs.find((s) => s.name === "v16-zero-trust-and-sarif");
@@ -134,23 +134,32 @@ describe("readKiroDna (live repository)", () => {
     expect(v18?.taskCount).toBe(11);
     expect(v18?.tasksDone).toBe(v18?.taskCount);
   });
-  it("includes the V19 gauntlet-and-security spec with all three documents and every task ticked, and shows 30 Kiro Specs", () => {
+  it("includes the V19 gauntlet-and-security spec with all three documents and every task ticked, and shows 31 Kiro Specs", () => {
     const v19 = dna.specs.find((s) => s.name === "v19-gauntlet-and-security");
     expect(v19).toMatchObject({ documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
     expect(v19?.taskCount).toBe(10);
     expect(v19?.tasksDone).toBe(v19?.taskCount);
-    expect(dna.specCount).toBe(30);
+    expect(dna.specCount).toBe(31);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
   it("includes the V19 graveyard-and-graph-studio spec, the 30th, with all three documents and every task ticked", () => {
     const v19 = dna.specs.find((s) => s.name === "v19-graveyard-and-graph-studio");
     expect(v19).toMatchObject({ documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
     expect(v19?.taskCount).toBe(10);
     expect(v19?.tasksDone).toBe(v19?.taskCount);
-    expect(dna.specCount).toBe(30);
+    expect(dna.specCount).toBe(31);
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
+  });
+  it("includes the V20 time-travel-and-adoption spec, the 31st, with all three documents and every task ticked", () => {
+    const v20 = dna.specs.find((s) => s.name === "v20-timetravel-and-adoption");
+    expect(v20).toMatchObject({ documents: { requirements: true, design: true, tasks: true }, requirementStyle: "R-headings", requirementCount: 4 });
+    expect(v20?.taskCount).toBe(10);
+    expect(v20?.tasksDone).toBe(v20?.taskCount);
+    expect(dna.specCount).toBe(31);
+    const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
   });
   it("keeps the static header badge in sync with .kiro/specs (what kiro-dna-sync-check runs)", () => {
     const html = fs.readFileSync(nodePath.join(repoRoot, "public", "index.html"), "utf8");

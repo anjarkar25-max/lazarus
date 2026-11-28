@@ -13,13 +13,14 @@ import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
 import { GRAVEYARD_CLASSICS, summarizeClassic } from "../crew/graveyard-classics.js";
+import { completePipeline } from "../crew/pipeline-stages.js";
 import { EdgeGauntletBodySchema, EdgeGauntletError, prepareEdgeGauntlet, runEdgeGauntlet } from "../crew/edge-gauntlet.js";
 import { buildExportReport, parseReportExtras } from "../exporter/export-report.js";
 import { REPORT_FILE } from "../exporter/html-report.js";
 import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
 import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
 import { buildPromiseHarness, detectPromiseChain } from "../crew/es5-idioms.js";
-import { AuditSarifBodySchema, AuditSarifError, runAuditSarif } from "./audit-sarif.js";
+import { AuditSarifBodySchema, AuditSarifError, debtOfSources, runAuditSarif } from "./audit-sarif.js";
 import { generateAsyncVerifiedBundle } from "../exporter/async-bundle.js";
 import { renderType, type TypeSignature } from "../crew/type-alchemist.js";
 import { formatInputs, formatOutcome } from "../crew/exact-format.js";
@@ -528,6 +529,15 @@ function summarizeGraph(result: GraphResurrectionResult, bundleId: string | unde
     })),
     ...(result.typecheck !== undefined ? { typecheck: result.typecheck } : {}),
     ...(result.apiContract !== undefined ? { apiContract: result.apiContract } : {}),
+    ...(result.success
+      ? debtOfSources(Object.fromEntries(result.files.map((f) => [f.path, f.legacyCode])), result.name, {
+          verified: result.parity?.passed === true && result.typecheck?.errorCount === 0 && (result.apiContract?.breakingChanges ?? 0) === 0,
+          parity: result.parity?.passed === true,
+          tscErrors: result.typecheck?.errorCount ?? null,
+          signed: null,
+          ...(result.parity !== undefined ? { runs: result.parity.totalRuns } : {}),
+        })
+      : {}),
     parity:
       result.parity === undefined
         ? undefined
@@ -691,6 +701,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         exact: true,
         collectObservations: true,
         purityAudit: true,
+        recordPipeline: true,
         onEvent: (event: CrewEvent) => {
           res.write(`data: ${JSON.stringify({ kind: "event", event })}\n\n`);
         },
@@ -833,12 +844,32 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           // If tsc rejected the observed return type, the exported (and displayed) signature is the widened one.
           const typeSignature = observed !== undefined && verified?.typecheck.widenedReturn === true ? widenReturn(observed) : observed;
           if (verified !== undefined) traceTypecheck(verified.typecheck);
+          const certified = certificateFor(resurrected, toEsmModule(body.legacyCode).complete, verified?.typecheck);
+          const signature = certified.certificate?.signature;
+          // Time-Travel Stepper: the stages the run really went through, completed with the strict TypeScript and what the run proved.
+          const pipelineStages =
+            verified !== undefined && resurrected.pipelineStages !== undefined
+              ? completePipeline(resurrected.pipelineStages, {
+                  legacySource: body.legacyCode,
+                  typedCode: verified.bundle.files["resurrected.ts"],
+                  typecheck: { passed: verified.typecheck.passed, errorCount: verified.typecheck.errorCount, filesChecked: verified.typecheck.filesChecked, tsVersion: verified.typecheck.tsVersion, adjustments: verified.typecheck.adjustments },
+                  finalCode: resurrected.modernCode,
+                  pillars: {
+                    parity: { runs: resurrected.fuzzReport.totalRuns, exact: resurrected.fuzzReport.exact === true },
+                    purity: resurrected.purityProof === undefined ? null : { proven: resurrected.purityProof.proven },
+                    mutants: null,
+                    ed25519: signature === undefined ? null : { keyId: signature.keyId, resurrectedSha256: signature.payload.resurrectedSha256 },
+                    seed: proofSeed,
+                  },
+                })
+              : undefined;
           const result = {
             ...resurrected,
             events: [...serverTraces.slice(0, 1), ...resurrected.events, ...serverTraces.slice(1)],
             proofSeed,
             numRuns: resurrected.fuzzReport.totalRuns,
-            ...certificateFor(resurrected, toEsmModule(body.legacyCode).complete, verified?.typecheck),
+            ...certified,
+            ...(pipelineStages !== undefined ? { pipelineStages } : {}),
             ...(verified !== undefined ? { typecheck: verified.typecheck } : {}),
             ...(typeSignature !== undefined ? { typeSignature, typeSignatureText: renderSignature(typeSignature, sanitizeIdentifier(request.name)) } : {}),
           };

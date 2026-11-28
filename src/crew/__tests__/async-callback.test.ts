@@ -315,6 +315,8 @@ describe("HTTP: /api/resurrect, /api/export-zip and /api/mutation-audit for lega
     expect(resurrected["certificate"]).toBeDefined();
     // V19: the async pass replays the seed it was given, and the signed certificate carries it.
     expect(resurrected["proofSeed"]).toBe(1337);
+    // V20: an error-first callback is lifted by its own pass, which has no AST candidate stages, so it carries no Time-Travel pipeline.
+    expect(resurrected).not.toHaveProperty("pipelineStages");
     expect(resurrected["numRuns"]).toBe((resurrected["fuzzReport"] as { totalRuns: number }).totalRuns);
     expect((resurrected["certificate"] as { signature: { payload: Record<string, unknown> } }).signature.payload["proofSeed"]).toBe(1337);
     const a = resurrected["asyncCallback"] as { outcomes: { resolved: number; rejected: number } };
@@ -363,13 +365,17 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">30 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">31 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
     // V19: the Edge Gauntlet and Seed Replay controls live in Tab 1 only.
     expect(tab3).not.toMatch(/gauntlet|seedBar|reseedBtn|proofSeed|legacyUnsafeMerge/i);
     // V19 Graveyard: the Famous npm Classics and the Tab 2 inspector never reach Tab 3, and an async preset is not a classic.
     expect(tab3).not.toMatch(/classicChips|moduleInspector|graphApiPill|apiContract|graveyard/i);
+    // V20: the Time-Travel Stepper, the proof permalink, the Debt Scorecard and the badge never reach Tab 3.
+    expect(tab3).not.toMatch(/ttBar|copyProofLinkBtn|copyBadgeBtn|debtCard|proofReplayPill|#proof=|pipelineStages/i);
+    expect(pageHtml.indexOf('id="ttBar"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
+    expect(pageHtml.indexOf('id="copyProofLinkBtn"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
     expect(pageHtml.indexOf('id="classicChips"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
     expect(pageHtml.indexOf('id="moduleInspector"')).toBeGreaterThan(pageHtml.indexOf('<div class="studio-pane" id="pane-graph"'));
     expect(pageHtml.indexOf('id="moduleInspector"')).toBeLessThan(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'));

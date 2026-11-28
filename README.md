@@ -2,7 +2,7 @@
 
 > **Kiroween Hackathon 2026 (Frankenstein Category)** | **Live Studio:** [lazarus-yf0a.onrender.com](https://lazarus-yf0a.onrender.com) | **Companion Kiro Crew App:** [lazarus-kiro-crew](https://github.com/anjarkar25-max/lazarus-kiro-crew) | **MIT License**
 >
-> **1,428 verified tests** (`1,564` combined with `lazarus-kiro-crew`'s 136 tests) · **Live Headless Browser E2E Suite (`0` errors)** · **30 `.kiro/specs/` suites** · **Installable Kiro Power (`power-lazarus/`)** · **4 `.kiro/hooks/`** · **4-Agent Kiro Crew** · **Custom `lazarus-sandbox` MCP Server** · **5-Pillar Proof + Offline WebCrypto Ed25519** · **SARIF 2.1.0 (`LAZ001`–`LAZ010`)** · **`tsc --strict: 0 errors`**
+> **1,533 verified tests** (`1,669` combined with `lazarus-kiro-crew`'s 136 tests) · **Live Headless Browser E2E Suite (`0` errors)** · **31 `.kiro/specs/` suites** · **Installable Kiro Power (`power-lazarus/`)** · **4 `.kiro/hooks/`** · **4-Agent Kiro Crew** · **Custom `lazarus-sandbox` MCP Server** · **5-Pillar Proof + Offline WebCrypto Ed25519** · **SARIF 2.1.0 (`LAZ001`–`LAZ010`)** · **`tsc --strict: 0 errors`**
 
 Lazarus ingests unmaintained legacy ES5/CommonJS JavaScript—single files, **undeclared global leaks & input mutators**, **ES5 prototype inheritance / `arguments` / `.apply()`**, **Node.js error-first `(err, res)` callbacks**, **Promise `.then().catch()` chains**, **multi-file & circular `require()` dependency graphs** (drag-and-drop upload or live **GitHub Folder URL**), zero-config pastes, packages from the **npm Graveyard**, or local directories via **CLI**—and autonomously resurrects them into strict ES2022/TypeScript backed by **5-pillar mathematical & cryptographic proof**:
 
@@ -29,7 +29,7 @@ flowchart TD
 
 ```bash
 npm install
-npm test                                                                   # 1,428 verified unit & integration tests
+npm test                                                                   # 1,533 verified unit & integration tests
 npm run test:e2e                                                           # Live headless browser E2E suite (0 errors)
 npm start                                                                  # Launch Lazarus Studio on http://localhost:3000
 npm run mcp                                                                # Start stdio MCP server (lazarus-sandbox)
@@ -62,6 +62,12 @@ npm run resurrect -- ./examples/legacy-circular-ledger --out ./out-project # Res
 | `legacy-invoice-engine` | 3-file CommonJS `require('./...')` graph | Topological leaf-first stitching + whole-graph parity | Typed `.ts` project + SARIF CI |
 | `left-pad@1.3.0` (npm) | Live CDN fetch (`unpkg`/`jsdelivr`) | String coercion, padding boundaries, Ed25519 + SHA-256 provenance | Verified + Signed Certificate |
 
+## Lazarus Studio V20 Time-Travel & Adoption Highlights
+
+- **Time-Travel Stepper:** `POST /api/resurrect` returns an additive `pipelineStages` array built from real execution stages (legacy, candidate or security guards, rollback only when the Exorcist caught a counterexample, typed, verified). Tab 1's diff card has Prev, Play/Pause, Next and stage pills; the default view stays the final verified diff.
+- **`#proof=` permalink:** `Copy Proof Link` encodes the preset or code, schema and seed as base64url (at most 8 KB). Loading the link replays the run with that seed and shows `Replayed from Proof Permalink (Seed N)`.
+- **Debt Score, CI gate and shield (`src/crew/debt-score.ts`):** a 0-100 score, grade and four-category breakdown from LAZ001-LAZ010, a simulated GitHub CI gate (FAIL exit 1 before, PASS exit 0 with Ed25519 Verified after), and `Copy Badge SVG`. `debtScore` and `ciGate` are added to `POST /api/audit-sarif` and to Tab 2 graph results.
+
 ## Lazarus Studio V19 Graveyard & Graph Studio Highlights
 - **Famous npm Classics 1-Click Pack (`src/crew/graveyard-classics.ts`, `GET /api/graveyard-classics`):** Five iconic legacy utilities (`left-pad@1.3.0`, `is-number@3.0.0`, `ms@0.7.1`, `decamelize@1.2.0`, `pad-left@2.1.0`) ship as ES5 CommonJS snapshots with license, provenance and their legacy traps. One click on a chip in Tab 1's npm Graveyard imports the snapshot and runs the full resurrection and 5-pillar proof (`100% Exact Parity`, `tsc --strict: 0 errors`, Ed25519). `POST /api/import/npm` takes `source`: `live` (default), `snapshot` (no network) or `auto` (live CDN first, clean fallback to the snapshot on a timeout, rate limit or outage). Two snapshots inline a one-line dependency (`kind-of`, `repeat-string`); that is listed as a modification, never hidden.
 - **Public API Contract Guard (`src/crew/api-contract.ts`):** Every graph resurrection compares the exported names, forms (named/default), kinds (function/class/value) and parameter counts of each original CommonJS module with the stitched ES module, both loaded in the sandbox, and returns an additive `apiContract` (`breakingChanges`, `totalExports`, `preservedExports`, per-module detail).
@@ -78,5 +84,5 @@ npm run resurrect -- ./examples/legacy-circular-ledger --out ./out-project # Res
 - **Live `fast-check` Shrink Trace & Clickable Rule Blame X-Ray (`public/index.html`):** Expand the counterexample shrinking waterfall inside the Causal Rollback Strip and click any AST rule chip to highlight exact modified or rolled-back diff lines.
 - **Zero-Trust Offline WebCrypto Ed25519 & Drop-a-Bundle Verifier (`src/exporter/cert-crypto.ts`, `POST /api/verify-bundle`):** Verifies Ed25519 certificates directly in the browser via `crypto.subtle`, includes live `Simulate 1-Byte Tamper`, and validates dropped `.zip` PR archives.
 - **Interactive SARIF 2.1.0 Risk Explorer & Circular CJS Cycle Resolver (`POST /api/audit-sarif`, `examples/legacy-circular-ledger/`):** Inspect clickable `LAZ001`–`LAZ008` findings and download `.sarif` directly from Studio, resolve mutual CommonJS `require()` cycles with amber SVG edges, and bundle drop-in GitHub Actions Code Scanning CI.
-- **Kiro DNA Ecosystem Map, Installable Kiro Power & 4 v1 Hooks (`GET /api/kiro-dna`, `scripts/e2e-smoke.mjs`):** Visually maps all **30 `.kiro/specs/`**, 4 Crew personas, 4 hooks, 3 steering docs, `lazarus-sandbox` MCP, `power-lazarus/`, and `lazarus-kiro-crew` live from disk, verified by automated headless browser E2E checks.
+- **Kiro DNA Ecosystem Map, Installable Kiro Power & 4 v1 Hooks (`GET /api/kiro-dna`, `scripts/e2e-smoke.mjs`):** Visually maps all **31 `.kiro/specs/`**, 4 Crew personas, 4 hooks, 3 steering docs, `lazarus-sandbox` MCP, `power-lazarus/`, and `lazarus-kiro-crew` live from disk, verified by automated headless browser E2E checks.
 

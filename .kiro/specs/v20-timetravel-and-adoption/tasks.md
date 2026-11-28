@@ -1,0 +1,11 @@
+# Tasks: V20 Time-Travel and Adoption
+- [x] 1. Spec: requirements, design and tasks for `v20-timetravel-and-adoption` (the 31st spec).
+- [x] 2. `src/crew/pipeline-stages.ts`, the Orchestrator's attempt log and `pipelineStages` on `POST /api/resurrect`.
+- [x] 3. Tab 1: the Time-Travel Stepper in the diff card.
+- [x] 4. Tab 1: `#proof=` permalink, Copy Proof Link and the replay pill.
+- [x] 5. `src/crew/debt-score.ts`: debt score, CI gate simulator and the verified shield.
+- [x] 6. `debtScore` and `ciGate` on `POST /api/audit-sarif` and on Tab 2 graph results.
+- [x] 7. SARIF Audit drawer: Legacy Debt Scorecard and Simulate GitHub CI Gate; Tab 1: Copy Badge SVG.
+- [x] 8. Tests: debt-score, pipeline-stages, studio-ui, kiro-dna, kiro-power, async-callback; 31 Kiro Specs; Tab 3 hashes.
+- [x] 9. E2E: the stepper on stringHash32, a reloaded `#proof=` link, the Debt Score and CI gate, Copy Badge SVG.
+- [x] 10. Verify: `npx tsc --noEmit`, `npx vitest run`, `npm run test:e2e`, badges, temp-file cleanup.

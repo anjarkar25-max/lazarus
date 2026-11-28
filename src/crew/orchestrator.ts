@@ -1,3 +1,4 @@
+import { buildDraftStages, type AttemptRecord } from "./pipeline-stages.js";
 import * as fc from "fast-check";
 import { DifferentialFuzzer, buildRecordArbitrary } from "../fuzzer/differential.js";
 import type { CounterexampleReport, FuzzTrace } from "../fuzzer/types.js";
@@ -214,6 +215,8 @@ export class ResurrectionOrchestrator {
     const maxAttempts = request.maxHealingAttempts ?? 3;
     const fuzzRuns = request.fuzzRuns ?? 20;
     let modernCode = "";
+    /** Every candidate with the counterexample that ended it, for the Time-Travel Stepper (pipeline-stages.ts). */
+    const attemptLog: AttemptRecord[] = [];
     /** The Exorcist's counterexamples in order: the n-th one ended attempt n (Rule Blame links rollbacks to them). */
     const counterexamples: CounterexampleReport[] = [];
     const blame = (): { ruleBlame: ReturnType<typeof computeRuleBlame> } => ({ ruleBlame: computeRuleBlame(request.legacyCode, modernCode, counterexamples) });
@@ -248,6 +251,7 @@ export class ResurrectionOrchestrator {
         ...(attempt > 1 && lastReport.counterexample ? { counterexample: lastReport.counterexample } : {}),
       });
 
+      attemptLog.push({ attempt, code: modernCode });
       emit("necromancer", "code_synthesized", `Produced candidate build #${attempt}`, {
         attempt,
         modernCode,
@@ -291,9 +295,14 @@ export class ResurrectionOrchestrator {
           ...(request.collectObservations === true ? { observations: observed } : {}),
           ...(purityProof !== undefined ? { purityProof } : {}),
           ...blame(),
+          ...(request.recordPipeline === true ? { pipelineStages: buildDraftStages({ legacyCode: request.legacyCode, attempts: attemptLog, finalCode: modernCode, inputs: Object.keys(request.schema), ruleBlame: blame().ruleBlame }) } : {}),
         };
       }
-      if (lastReport.counterexample !== undefined) counterexamples.push(lastReport.counterexample);
+      if (lastReport.counterexample !== undefined) {
+        counterexamples.push(lastReport.counterexample);
+        const logged = attemptLog[attemptLog.length - 1];
+        if (logged !== undefined) logged.counterexample = lastReport.counterexample;
+      }
 
       emit(
         "exorcist",

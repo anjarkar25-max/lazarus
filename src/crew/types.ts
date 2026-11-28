@@ -1,6 +1,7 @@
 import type { CounterexampleReport, FuzzReport, FuzzTrace, InputSchema } from "../fuzzer/types.js";
 import type { PurityProof } from "./purity-audit.js";
 import type { RuleBlameEntry } from "./rule-blame.js";
+import type { PipelineStage } from "./pipeline-stages.js";
 
 export type AgentRole = "archaeologist" | "architect" | "necromancer" | "exorcist";
 
@@ -37,6 +38,8 @@ export interface ResurrectionRequest {
   collectObservations?: boolean;
   /** Also run the purity audit (global leaks, prototype safety, input mutation) on a proven resurrection. Off unless asked. */
   purityAudit?: boolean;
+  /** Keep the stages of the run (legacy, candidate, rollback) for the Time-Travel Stepper. Off unless asked. */
+  recordPipeline?: boolean;
   onEvent?: (event: CrewEvent) => void;
 }
 
@@ -70,4 +73,6 @@ export interface ResurrectionResult {
   ruleBlame?: RuleBlameEntry[];
   /** The fifth proof pillar, measured in the sandbox (only with `purityAudit` and a proven resurrection). */
   purityProof?: PurityProof;
+  /** Stages 0 to 2 of the pipeline, from what really happened (only with `recordPipeline` and a proven resurrection). */
+  pipelineStages?: PipelineStage[];
 }

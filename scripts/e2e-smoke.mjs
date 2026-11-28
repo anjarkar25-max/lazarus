@@ -510,7 +510,28 @@ async function main() {
       await key("Escape", "Escape", 27);
       await waitFor(`document.getElementById("sarifDrawer").hidden`, "the SARIF drawer to close", 5_000);
     });
-    await step("PR Preview: the report is in the bundle, and the drawer opens, stays single-active and closes on Escape", async () => {
+    await step("SARIF Audit shows the Legacy Debt Scorecard and Simulate GitHub CI Gate: FAIL exit 1 before, PASS exit 0 with Ed25519 Verified after", async () => {
+      await evaluate(`document.getElementById("sarifBtn").click(); true`);
+      await waitFor(`!document.getElementById("sarifDrawer").hidden`, "the SARIF drawer", 5_000);
+      check((await evaluate(`document.getElementById("debtCard").hidden || document.getElementById("debtCard").hidden === false`)) === true, "the debt card is missing");
+      await evaluate(`document.getElementById("sarifRun").click(); true`);
+      await waitFor(`!document.getElementById("debtCard").hidden && document.getElementById("sarifRun").getAttribute("aria-busy") === null`, "the Debt Scorecard", 20_000);
+      const card = await evaluate(`({ score: document.getElementById("debtScoreVal").textContent, grade: document.getElementById("debtGrade").textContent, hint: document.getElementById("debtHint").textContent, rows: Array.from(document.querySelectorAll("#debtBars .debt-row")).map((r) => r.firstChild.textContent).join("|"), ciHidden: document.getElementById("ciLog").hidden, expanded: document.getElementById("ciToggle").getAttribute("aria-expanded"), label: document.getElementById("ciToggle").textContent })`);
+      check(/^\d+\/100$/.test(card.score) && Number(card.score.split("/")[0]) < 100, `debt score: ${card.score}`);
+      check(/^Grade [A-F]$/.test(card.grade), `grade: ${card.grade}`);
+      check(/higher = healthier/.test(card.hint), `hint: ${card.hint}`);
+      check(card.rows === "Bitwise/Numeric|Async/Callbacks|Security/Scope|Module Cycles", `categories: ${card.rows}`);
+      check(card.label === "Simulate GitHub CI Gate" && card.ciHidden === true && card.expanded === "false", `the CI gate is not collapsed: ${JSON.stringify(card)}`);
+      await evaluate(`document.getElementById("ciToggle").click(); true`);
+      await waitFor(`!document.getElementById("ciLog").hidden`, "the CI gate log", 5_000);
+      const ci = await evaluate(`({ heads: Array.from(document.querySelectorAll("#ciLog .ci-run h4")).map((h) => h.textContent), classes: Array.from(document.querySelectorAll("#ciLog .ci-run")).map((r) => r.className).join("|"), pre: document.querySelector("#ciLog .ci-run pre").textContent, expanded: document.getElementById("ciToggle").getAttribute("aria-expanded") })`);
+      check(/^Pre-Resurrection \u00b7 FAIL \u00b7 exit 1 \u00b7 \d+ High Findings?$/.test(ci.heads[0]), `pre-resurrection gate: ${ci.heads[0]}`);
+      check(ci.heads[1] === "Post-Resurrection \u00b7 PASS \u00b7 exit 0 \u00b7 0 High Findings \u00b7 Ed25519 Verified", `post-resurrection gate: ${ci.heads[1]}`);
+      check(ci.classes === "ci-run FAIL|ci-run PASS" && ci.expanded === "true", `gate classes: ${ci.classes}`);
+      check(/LAZ008 UndeclaredGlobalLeak/.test(ci.pre) && /##\[error\]Process completed with exit code 1\./.test(ci.pre) && /::warning file=specimen\.js/.test(ci.pre), `the pre-resurrection log is not a GitHub Actions log: ${ci.pre.slice(0, 300)}`);
+      await key("Escape", "Escape", 27);
+      await waitFor(`document.getElementById("sarifDrawer").hidden`, "the SARIF drawer to close", 5_000);
+    });    await step("PR Preview: the report is in the bundle, and the drawer opens, stays single-active and closes on Escape", async () => {
       await evaluate(`document.getElementById("exportBtn").click(); true`);
       await waitFor(`document.getElementById("bundlePanel") && document.getElementById("bundlePanel").style.display === "block"`, "the PR bundle panel", 60_000);
       const bundle = await evaluate(`window.LazarusBundle.build().then((b) => ({ report: b.reportHtml || "", files: Object.keys(b.files), signed: !!b.signature }))`);
@@ -616,7 +637,7 @@ async function main() {
       await waitFor(`/^\\d+ Specs$/.test(document.getElementById("dmSpecs").textContent)`, "the map to load the specs count", 20_000);
       const m = await evaluate(`({ specs: document.getElementById("dmSpecs").textContent, agents: document.getElementById("dmAgents").textContent, hooks: document.getElementById("dmHooks").textContent, steering: document.getElementById("dmSteering").textContent, power: document.getElementById("dmPower").textContent, nodes: document.querySelectorAll("#dnaMap .dm-node").length, badge: document.getElementById("badgeSpecs").textContent })`);
       check(m.nodes === 7, `the map has ${m.nodes} nodes`);
-      check(m.specs === "30 Specs" && m.badge === "30 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
+      check(m.specs === "31 Specs" && m.badge === "31 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
       check(m.agents === "4 Crew Agents" && m.hooks === "4 Hooks" && m.steering === "3 Steering Docs", `counts: ${m.agents}, ${m.hooks}, ${m.steering}`);
       check(/power-lazarus\/ \u00b7 v/.test(m.power), `power node: ${m.power}`);
       const l = await evaluate(LAYOUT);
@@ -705,6 +726,89 @@ async function main() {
     await step("Tab 2: editing a file clears the inspector and the contract badge", async () => {
       await evaluate(`(() => { const e = document.getElementById("graphEditor"); e.value = e.value + "\\n"; e.dispatchEvent(new Event("input")); return true; })()`);
       await waitFor(`document.getElementById("graphApiPill").hidden && document.getElementById("graphApiPill").textContent === ""`, "the contract badge to clear", 5_000);
+    });    // ---- 5c. V20: the Time-Travel Stepper, the #proof= permalink and Copy Badge SVG on stringHash32 ----
+    let proofSeedBefore = 0;
+    let proofHash = "";
+    await step("Tab 1: the Time-Travel Stepper scrubs and plays the real stages of stringHash32 (rollback of bitor0-trunc included)", async () => {
+      await load(VIEWPORTS[1]);
+      await evaluate(`(() => { const s = document.getElementById("presetSelect"); s.value = "es5-string-hash"; s.dispatchEvent(new Event("change")); document.getElementById("runBtn").click(); return true; })()`);
+      await waitFor(`window.__e2e.results.some((r) => r.name === "stringHash32" && r.success)`, "the stringHash32 result", 90_000);
+      await waitFor(`document.getElementById("tscBadge").textContent === "tsc --strict: 0 errors"`, "tsc --strict: 0 errors", 60_000);
+      await evaluate(`document.getElementById("legacyDiffToggle").click(); true`);
+      await waitFor(`!document.getElementById("legacyDiffBlock").hidden && !document.getElementById("ttBar").hidden`, "the Time-Travel Stepper", 10_000);
+      const start = await evaluate(`({ pills: Array.from(document.querySelectorAll("#ttPills .tt-pill")).map((b) => b.textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : "")).join("|"), note: document.getElementById("ttNote").textContent, diff: document.getElementById("legacyDiff").textContent, prev: document.getElementById("ttPrev").disabled, next: document.getElementById("ttNext").disabled, play: document.getElementById("ttPlay").textContent })`);
+      check(start.pills === "0 \u00b7 Legacy|1 \u00b7 Candidate|2 \u00b7 Rollback|3 \u00b7 Typed|4 \u00b7 Verified*", `stage pills: ${start.pills}`);
+      check(/^Stage 4 \u00b7 Verified: /.test(start.note), `default note: ${start.note}`);
+      check(!start.prev && start.next && start.play === "Play", `controls: ${JSON.stringify(start)}`);
+      check(/\| 0/.test(start.diff) && !/Math\.trunc/.test(start.diff), "the default diff is not the final verified one");
+      const stage = (n) => evaluate(`(() => { document.querySelector('#ttPills [data-stage="${n}"]').click(); return { note: document.getElementById("ttNote").textContent, diff: document.getElementById("legacyDiff").textContent, del: document.querySelectorAll("#legacyDiff .d-row.d-del").length, add: document.querySelectorAll("#legacyDiff .d-row.d-add").length, on: document.querySelector("#ttPills .tt-pill.on").dataset.stage }; })()`);
+      const candidate = await stage(1);
+      check(candidate.on === "1" && /AST rewrites: var-scoping .*bitor0-trunc/.test(candidate.note) && /Math\.trunc/.test(candidate.diff), `candidate stage: ${candidate.note}`);
+      const rollback = await stage(2);
+      check(rollback.on === "2" && /Counterexample text = "0{40}" broke Object\.is parity \(legacy 338917376 vs candidate 7\.22/.test(rollback.note) && /rolled back bitor0-trunc/.test(rollback.note), `rollback stage: ${rollback.note}`);
+      check(rollback.del > 0 && rollback.add > 0 && /Math\.trunc/.test(rollback.diff), "the rollback diff does not show the rejected Math.trunc against the healed code");
+      await evaluate(`document.getElementById("ttNext").click(); true`);
+      const typed = await evaluate(`({ note: document.getElementById("ttNote").textContent, diff: document.getElementById("legacyDiff").textContent, on: document.querySelector("#ttPills .tt-pill.on").dataset.stage })`);
+      check(typed.on === "3" && /tsc --strict: 0 errors/.test(typed.note) && /export function/.test(typed.diff), `typed stage: ${typed.note}`);
+      await evaluate(`document.getElementById("ttPrev").click(); true`);
+      check((await evaluate(`document.querySelector("#ttPills .tt-pill.on").dataset.stage`)) === "2", "Prev did not go back to the rollback stage");
+      await evaluate(`document.querySelector('#ttPills [data-stage="0"]').click(); document.getElementById("ttPlay").click(); true`);
+      check((await evaluate(`document.getElementById("ttPlay").textContent`)) === "Pause", "Play did not start the animation");
+      await waitFor(`document.getElementById("ttPlay").textContent === "Play" && document.querySelector("#ttPills .tt-pill.on").dataset.stage === "4"`, "the animation to reach the verified stage", 25_000);
+      const end = await evaluate(`document.getElementById("legacyDiff").textContent`);
+      check(end === start.diff, "after Play the diff is not the default final diff again");
+    });
+    await step("Tab 1: Copy Proof Link writes a #proof= permalink (<= 8 KB) beside PR Preview, and reloading it replays the same seed", async () => {
+      await evaluate(`document.getElementById("exportBtn").click(); true`);
+      await waitFor(`document.getElementById("bundlePanel").style.display === "block"`, "the action bar", 60_000);
+      const bar = await evaluate(`(() => { const row = (id) => document.getElementById(id).getBoundingClientRect(); const pr = row("prPreviewBtn"), link = row("copyProofLinkBtn"), badge = row("copyBadgeBtn"); return { sameRow: Math.abs(pr.top - link.top) < 40 && Math.abs(pr.top - badge.top) < 40, after: link.left >= pr.right - 2 && badge.left >= link.right - 2, text: document.getElementById("copyProofLinkBtn").textContent + "|" + document.getElementById("copyBadgeBtn").textContent }; })()`);
+      check(bar.sameRow && bar.after && bar.text === "Copy Proof Link|Copy Badge SVG", `the buttons are not beside PR Preview: ${JSON.stringify(bar)}`);
+      proofSeedBefore = await evaluate(`window.lastProofSeed`);
+      check(Number.isInteger(proofSeedBefore), `no proof seed: ${proofSeedBefore}`);
+      await evaluate(`document.getElementById("copyProofLinkBtn").click(); true`);
+      await waitFor(`/Proof Link Copied|Copy blocked/.test(document.getElementById("copyProofLinkBtn").textContent)`, "the proof link feedback", 10_000);
+      const link = await evaluate(`({ hash: location.hash, last: window.lastProofLink || "", text: document.getElementById("copyProofLinkBtn").textContent, title: document.getElementById("copyProofLinkBtn").title })`);
+      proofHash = link.hash;
+      check(/^#proof=[A-Za-z0-9_-]+$/.test(proofHash) && proofHash.length <= 8192, `the address bar has no valid permalink: ${proofHash.slice(0, 80)}`);
+      check(link.last.endsWith(proofHash) && /^https?:\/\//.test(link.last), `the full URL was not built: ${link.last.slice(0, 80)}`);
+      check(/^\d+ of 8192 characters$/.test(link.title), `link size: ${link.title}`);
+      const decoded = JSON.parse(Buffer.from(proofHash.slice(7), "base64url").toString("utf8"));
+      check(decoded.v === 1 && decoded.p === "es5-string-hash" && decoded.seed === proofSeedBefore && decoded.s && decoded.s.text === "string", `payload: ${JSON.stringify(decoded)}`);
+      // A fresh page load of that link replays the preset with that exact seed.
+      await cdp.send("Page.navigate", { url: "about:blank" });
+      await cdp.send("Page.navigate", { url: studio.url + "/" + proofHash });
+      await waitFor(`document.readyState === "complete" && !!window.LazarusProof`, "the permalink page", 20_000);
+      await waitFor(`document.getElementById("proofReplayPill") && !document.getElementById("proofReplayPill").hidden && /^Replayed from Proof Permalink/.test(document.getElementById("proofReplayPill").textContent)`, "the replay pill", 90_000);
+      const replay = await evaluate(`({ pill: document.getElementById("proofReplayPill").textContent, bad: document.getElementById("proofReplayPill").className, preset: document.getElementById("presetSelect").value, name: document.getElementById("modName").value, seed: window.lastProofSeed, chip: document.getElementById("seedValue").textContent, parity: document.getElementById("parityBadge").textContent, override: window.lazarusSeedOverride === undefined })`);
+      check(replay.pill === `Replayed from Proof Permalink (Seed ${proofSeedBefore})`, `replay pill: ${replay.pill}`);
+      check(replay.bad === "proof-replay-pill" && replay.preset === "es5-string-hash" && replay.name === "stringHash32", `replay state: ${JSON.stringify(replay)}`);
+      check(replay.seed === proofSeedBefore && replay.chip === String(proofSeedBefore) && /100% PARITY PROVEN/.test(replay.parity) && replay.override, `the seed was not replayed: ${JSON.stringify(replay)}`);
+    });
+    await step("Tab 1: a malformed #proof= link is ignored with a clear message and loads nothing", async () => {
+      await cdp.send("Page.navigate", { url: "about:blank" });
+      await cdp.send("Page.navigate", { url: studio.url + "/#proof=!!!" });
+      await waitFor(`document.readyState === "complete" && !!window.LazarusProof`, "the page", 20_000);
+      await waitFor(`!document.getElementById("proofReplayPill").hidden`, "the ignored-link pill", 10_000);
+      await sleep(500);
+      const bad = await evaluate(`({ pill: document.getElementById("proofReplayPill").textContent, cls: document.getElementById("proofReplayPill").className, code: document.getElementById("legacyCode").value.slice(0, 20), results: (window.__e2e && window.__e2e.results.length) || 0, parity: document.getElementById("parityBadge").textContent })`);
+      check(/^Proof link ignored: the link is not valid base64url\.$/.test(bad.pill) && bad.cls === "proof-replay-pill bad", `ignored-link pill: ${bad.pill}`);
+      check(!/PARITY PROVEN|RUNNING/.test(bad.parity), `a resurrection ran for a bad link: ${bad.parity}`);
+    });
+    await step("Tab 1: Copy Badge SVG previews and copies the Lazarus Verified shield", async () => {
+      await load(VIEWPORTS[1]);
+      await evaluate(`(() => { const s = document.getElementById("presetSelect"); s.value = "es5-string-hash"; s.dispatchEvent(new Event("change")); document.getElementById("runBtn").click(); return true; })()`);
+      await waitFor(`window.__e2e.results.some((r) => r.name === "stringHash32" && r.success)`, "the stringHash32 result", 90_000);
+      await waitFor(`document.getElementById("tscBadge").textContent === "tsc --strict: 0 errors"`, "tsc --strict: 0 errors", 60_000);
+      await evaluate(`document.getElementById("exportBtn").click(); true`);
+      await waitFor(`document.getElementById("bundlePanel").style.display === "block"`, "the action bar", 60_000);
+      await evaluate(`document.getElementById("copyBadgeBtn").click(); true`);
+      await waitFor(`!document.getElementById("badgePreview").hidden && /Badge SVG Copied|Copy blocked/.test(document.getElementById("copyBadgeBtn").textContent)`, "the badge preview", 10_000);
+      const badge = await evaluate(`({ svg: window.lastBadgeSvg || "", src: document.querySelector("#badgePreview img").src, note: document.querySelector("#badgePreview span").textContent, seed: window.lastProofSeed })`);
+      check(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(badge.svg) && badge.svg.includes(">Lazarus Verified</text>") && badge.svg.includes(">100% Parity \u00b7 tsc 0</text>"), `badge svg: ${badge.svg.slice(0, 160)}`);
+      check(badge.svg.includes(`seed ${badge.seed}`) && !/<script|onload|href|http:\/\/(?!www\.w3\.org)/i.test(badge.svg), "the badge is not self-contained or lacks the seed");
+      check(badge.src.startsWith("data:image/svg+xml;charset=utf-8,") && /self-contained SVG, no script/.test(badge.note), `badge preview: ${badge.src.slice(0, 60)} / ${badge.note}`);
+      const img = await evaluate(`new Promise((resolve) => { const i = document.querySelector("#badgePreview img"); if (i.complete) resolve({ w: i.naturalWidth, h: i.naturalHeight }); else { i.onload = () => resolve({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => resolve({ w: 0, h: 0 }); } })`);
+      check(img.w > 100 && img.h === 20, `the shield did not render as an image: ${JSON.stringify(img)}`);
     });    // ---- 6. Final layout sweep with the results on screen ----
     for (const vp of VIEWPORTS) {
       await step(`result layout ${vp.width}x${vp.height}: no overflow with a finished resurrection on screen`, async () => {
