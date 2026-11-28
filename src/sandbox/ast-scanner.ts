@@ -353,6 +353,11 @@ function inferParamKinds(root: Node, names: string[]): Record<string, ParamKind>
         else if (prop === "length") lengthHint.add(name);
       }
     }
+    // `Array.isArray(x)` says x is a list (or anything else): fuzz it as JSON, not as a string.
+    if (n.type === "CallExpression" && n.callee.type === "MemberExpression" && !n.callee.computed && n.callee.object.type === "Identifier" && n.callee.object.name === "Array" && n.callee.property.type === "Identifier" && n.callee.property.name === "isArray") {
+      const arg = n.arguments[0];
+      if (arg !== undefined && arg.type === "Identifier" && wanted.has(arg.name) && kinds.get(arg.name) !== "string") kinds.set(arg.name, "json");
+    }
     if (n.type === "BinaryExpression" && ["==", "===", "!=", "!=="].includes(n.operator)) {
       const sides: Array<[ESTree.Node, ESTree.Node]> = [[n.left, n.right], [n.right, n.left]];
       for (const [a, b] of sides) {

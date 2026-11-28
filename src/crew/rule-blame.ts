@@ -39,6 +39,7 @@ const WHAT: Record<RuleId, string> = {
   "function-arrow": "a function expression became an arrow function",
   "bitor0-trunc": "`x | 0` became `Math.trunc(x) || 0`",
   "loose-equality": "`==` became `===` where both operand types are provably equal",
+  "global-leak-fix": "an undeclared global that a function assigned became a `let` of that function",
 };
 
 const clip = (text: string, max = 70): string => {

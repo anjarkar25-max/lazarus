@@ -10,6 +10,7 @@ import { walk } from "./crew/ast-scope.js";
 import { analyzeGraph } from "./crew/graph-resurrector.js";
 import { detectErrorFirst, liftErrorFirst } from "./crew/async-callback.js";
 import { detectPromiseChain, inheritanceParentOf } from "./crew/es5-idioms.js";
+import { detectGlobalLeaksInProgram } from "./crew/purity-audit.js";
 import { resolveRelative } from "./sandbox/virtual-fs.js";
 
 export const MAX_AUDIT_FILES = 500;
@@ -17,7 +18,7 @@ export const MAX_AUDIT_FILE_BYTES = 256 * 1024;
 export const IGNORED_DIRS: ReadonlySet<string> = new Set(["node_modules", ".git", "dist"]);
 
 export type Severity = "high" | "medium" | "info";
-export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error" | "inheritance-chain" | "apply-forwarding" | "promise-chain";
+export type FindingKind = "bitwise-truncation" | "prototype-chain" | "var-hoisting" | "arguments-usage" | "error-first-callback" | "require-graph" | "external-require" | "parse-error" | "inheritance-chain" | "apply-forwarding" | "promise-chain" | "global-leak";
 
 export interface Finding {
   readonly kind: FindingKind;
@@ -166,6 +167,14 @@ function scanProgram(ast: ESTree.Program): Scan {
   }
   for (const [owner, p] of protoOwners) {
     findings.push({ kind: "prototype-chain", severity: "medium", line: p.line, message: `constructor ${owner} with ${p.members} prototype member(s): a class rewrite changes enumerability, strict mode and calls without \`new\`` });
+  }
+  for (const leak of detectGlobalLeaksInProgram(ast)) {
+    findings.push({
+      kind: "global-leak",
+      severity: "medium",
+      line: leak.line,
+      message: `\`${leak.name}\` is assigned in ${leak.functionName}() without var, let or const: it leaks onto the global object in sloppy ES5 and throws a ReferenceError in strict ES2022. ${leak.fix !== undefined ? "Lazarus declares it with let because it is private to the function" : `Lazarus keeps it and flags it: ${leak.keptBecause ?? "it may be shared state"}`}`,
+    });
   }
   if (varCount > 0) {
     findings.push({ kind: "var-hoisting", severity: "medium", line: firstVarLine, message: `${varCount} \`var\` binding(s): function-scoped and hoisted; \`let\`/\`const\` change loop closures and use-before-declare behaviour` });
@@ -424,6 +433,13 @@ export const SARIF_RULES: readonly SarifRule[] = [
   rule("LAZ006", "UnparseableFile", "File does not parse", "The file is not valid JavaScript for the parser, so no other rule could be evaluated for it.", "Fix the syntax error, then audit again.", "error"),
   rule("LAZ007", "PromiseChain", "Legacy .then().catch() Promise chain", "A function that returns X.then(h).catch(c) can be written as async/await with try/catch only if the resolved value, the rejection path and a synchronous throw of X are all preserved.", "Resurrect it with Lazarus: it lifts the chain to async/await and proves both settlements with the async differential fuzzer; it keeps the legacy body behind an async wrapper when the chain cannot be lifted exactly.", "warning"),
 ];
+/**
+ * Rules added after LAZ001-LAZ007 shipped. They appear in `tool.driver.rules` only when a result uses them, so the log of a
+ * folder without such a finding is identical to what earlier versions wrote.
+ */
+export const SARIF_EXTENSION_RULES: readonly SarifRule[] = [
+  rule("LAZ008", "UndeclaredGlobalLeak", "Undeclared global assigned inside a function", "A function assigns an identifier that no scope declares. In sloppy ES5 that silently creates a property on the global object (global pollution, state shared between calls); in strict ES2022 and ES modules it throws a ReferenceError, and tsc --strict rejects it.", "Let Lazarus declare it (the global-leak-fix rule turns `total = 0;` into `let total = 0;` when the name is private to the function) and verify with the purity proof, or declare it yourself with let.", "warning"),
+];
 const RULE_OF_KIND: Record<FindingKind, string> = {
   "bitwise-truncation": "LAZ001",
   "error-first-callback": "LAZ002",
@@ -436,6 +452,7 @@ const RULE_OF_KIND: Record<FindingKind, string> = {
   "inheritance-chain": "LAZ003",
   "apply-forwarding": "LAZ004",
   "promise-chain": "LAZ007",
+  "global-leak": "LAZ008",
 };
 const LEVEL_OF_SEVERITY: Record<Severity, SarifLevel> = { high: "error", medium: "warning", info: "note" };
 
@@ -458,12 +475,14 @@ export function renderSarif(report: AuditReport): SarifLog {
     const lines = (inCycle.length > 0 ? inCycle : own).map((e) => report.requireLines[`${e.from}->${e.to}`] ?? 0).filter((n) => n > 0);
     return lines.length > 0 ? Math.min(...lines) : 1;
   };
+  const usedIds = new Set(report.files.flatMap((f) => f.findings.map((x) => RULE_OF_KIND[x.kind])));
+  const activeRules: readonly SarifRule[] = [...SARIF_RULES, ...SARIF_EXTENSION_RULES.filter((r) => usedIds.has(r.id))];
   const results: SarifResult[] = [];
   for (const f of report.files) {
     for (const finding of f.findings) {
       const ruleId = RULE_OF_KIND[finding.kind];
-      const ruleIndex = SARIF_RULES.findIndex((r) => r.id === ruleId);
-      const fix = SARIF_RULES[ruleIndex]?.help.text ?? "";
+      const ruleIndex = activeRules.findIndex((r) => r.id === ruleId);
+      const fix = activeRules[ruleIndex]?.help.text ?? "";
       results.push({
         ruleId,
         ruleIndex,
@@ -486,7 +505,7 @@ export function renderSarif(report: AuditReport): SarifLog {
     version: "2.1.0",
     runs: [
       {
-        tool: { driver: { name: "Lazarus", fullName: "Lazarus Legacy Risk Audit", informationUri: INFORMATION_URI, semanticVersion: SARIF_TOOL_VERSION, rules: SARIF_RULES } },
+        tool: { driver: { name: "Lazarus", fullName: "Lazarus Legacy Risk Audit", informationUri: INFORMATION_URI, semanticVersion: SARIF_TOOL_VERSION, rules: activeRules } },
         columnKind: "utf16CodeUnits",
         results,
       },

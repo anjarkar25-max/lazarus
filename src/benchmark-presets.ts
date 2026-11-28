@@ -57,4 +57,10 @@ export const BENCHMARK_PRESETS: readonly BenchmarkPreset[] = [
     async: true,
     promiseChain: true,
   },
+
+  {
+    name: "legacyLeakyMutator",
+    code: "// ES5 reducer: leaks its accumulator onto the global object and mutates the array it was given\nfunction legacyLeakyMutator(list, factor) {\n  total = 0;\n  if (!Array.isArray(list)) return total;\n  for (var i = 0; i < list.length; i++) {\n    list[i] = list[i] * factor;\n    total = total + list[i];\n  }\n  return total;\n}\n\nmodule.exports = legacyLeakyMutator;",
+    schema: { list: "json", factor: "integer" },
+  },
 ];

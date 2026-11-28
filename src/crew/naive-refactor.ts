@@ -4,9 +4,10 @@
 // happens to be safe over the fuzzed domain, that is reported too.
 import type * as ESTree from "estree";
 import { parseProgram, printProgram } from "./ast-modernizer.js";
-import { walk } from "./ast-scope.js";
+import { analyze, walk } from "./ast-scope.js";
+import { leakSites } from "./purity-audit.js";
 
-export type NaiveRule = "bitor0-floor" | "bitor0-trunc" | "bitor0-dropped" | "shift-trunc" | "double-tilde-trunc" | "strict-equality" | "var-to-let";
+export type NaiveRule = "bitor0-floor" | "bitor0-trunc" | "bitor0-dropped" | "shift-trunc" | "double-tilde-trunc" | "strict-equality" | "var-to-let" | "strict-mode";
 
 export interface NaiveRewrite {
   readonly rule: NaiveRule;
@@ -31,6 +32,7 @@ const WHY: Record<NaiveRule, string> = {
   "double-tilde-trunc": "`~~x` becomes Math.trunc, losing the int32 conversion",
   "strict-equality": "`==` becomes `===`, which stops the type coercion the legacy code relied on",
   "var-to-let": "`var` becomes `let`, which changes hoisting (temporal dead zone) and per-iteration loop bindings",
+  "strict-mode": "the file is modernized to strict ES2022 (\"use strict\") without declaring the variables the legacy code leaked onto the global object, so the first assignment throws a ReferenceError",
 };
 
 type Node = ESTree.Node;
@@ -116,6 +118,13 @@ export function naiveRefactor(code: string): NaiveRefactorResult {
     }
   }
   rewrites.reverse();
+  // A strict-mode refactor that forgets the undeclared globals: the classic hurried ES5 -> ES2022 mistake.
+  const leaks = leakSites(analyze(parsed.ast));
+  const firstLeak = leaks[0];
+  if (firstLeak !== undefined) {
+    parsed.ast.body.unshift({ type: "ExpressionStatement", expression: { type: "Literal", value: "use strict", raw: '"use strict"' }, directive: "use strict" });
+    rewrites.unshift({ rule: "strict-mode", why: WHY["strict-mode"], before: `${firstLeak.name} = ...`, after: `"use strict"; ${firstLeak.name} = ...` });
+  }
   if (rewrites.length === 0) return { naiveCode: code, rewrites };
   return { naiveCode: printProgram(parsed.ast, []).trim(), rewrites };
 }

@@ -729,6 +729,45 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
 .dna-head h2 { min-width: 0; }
 @media (max-width: 1440px) { .dna-drawer { width: min(680px, 100vw); } .studio-header { row-gap: 8px; } }
 @media (max-width: 720px) { .dna-drawer { width: 100vw; border-left: 0; } }
+/* ---- V18: 5-Pill Proof Strip, PR Preview drawer, Kiro Ecosystem Map ---------------------------- */
+.proof-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.proof-strip[hidden] { display: none; }
+.proof-pill { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid #334155; background: #0b1020; color: #cbd5e1; cursor: pointer; }
+.proof-pill b { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.proof-pill span { font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.proof-pill:hover { border-color: var(--violet); }
+.proof-pill[data-tone="ok"] { border-color: var(--emerald); background: rgba(16, 185, 129, 0.08); }
+.proof-pill[data-tone="ok"] span { color: #6ee7b7; }
+.proof-pill[data-tone="bad"] { border-color: var(--crimson); background: rgba(239, 68, 68, 0.1); }
+.proof-pill[data-tone="bad"] span { color: #fecaca; }
+.proof-pill[data-tone="warn"] { border-color: var(--amber); background: rgba(245, 158, 11, 0.08); }
+.proof-pill[data-tone="warn"] span { color: #fde68a; }
+.proof-pill[data-tone="idle"] span { color: var(--muted); font-weight: 600; }
+.purity-detail { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--violet); border-radius: 10px; background: #0b1020; font-size: 12px; line-height: 1.55; }
+.purity-detail[hidden] { display: none; }
+.purity-detail ul { margin: 6px 0 0; padding-left: 18px; }
+.purity-detail .yes { color: #6ee7b7; } .purity-detail .no { color: #fecaca; }
+@media (max-width: 1100px) { .proof-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pr-card { padding: 12px 14px; border: 1px solid #30363d; border-radius: 10px; background: #0d1117; margin: 0 0 12px; }
+.pr-card h4 { margin: 0 0 4px; font-size: 14px; color: #f0f6fc; }
+.pr-card .pr-meta { color: var(--muted); font-size: 11px; margin: 0 0 8px; }
+.pr-checks { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.pr-checks li { padding: 2px 0; }
+.pr-checks li::before { content: "\2610  "; color: var(--muted); }
+.pr-checks li.done::before { content: "\2611  "; color: var(--emerald); }
+.pr-tree { margin: 0; font: 11px/1.6 ui-monospace, Consolas, monospace; color: #c9d1d9; white-space: pre; overflow-x: auto; }
+.pr-diff { margin: 0; max-height: 280px; overflow: auto; font: 11px/1.5 ui-monospace, Consolas, monospace; background: #020617; border-radius: 8px; padding: 8px 0; }
+.pr-diff div { padding: 0 10px; white-space: pre-wrap; word-break: break-word; }
+.pr-diff .add { background: rgba(46, 160, 67, 0.18); color: #aff5b4; } .pr-diff .del { background: rgba(248, 81, 73, 0.18); color: #ffdcd7; } .pr-diff .hunk { color: #79c0ff; }
+.pr-cmd { display: flex; gap: 8px; align-items: flex-start; }
+.pr-cmd code { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; background: #020617; border: 1px solid #1e293b; color: #e2e8f0; font: 11px/1.5 ui-monospace, Consolas, monospace; word-break: break-all; }
+.pr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+#dnaMap { width: 100%; height: auto; display: block; margin: 0 0 6px; }
+#dnaMap .dm-node rect { fill: #111827; stroke: #334155; stroke-width: 1.2; }
+#dnaMap .dm-node.live rect { stroke: var(--violet); }
+#dnaMap .dm-title { fill: #e2e8f0; font: 700 12px system-ui, sans-serif; }
+#dnaMap .dm-sub { fill: #94a3b8; font: 10px ui-monospace, Consolas, monospace; }
+#dnaMap .dm-flow { fill: none; stroke: var(--violet); stroke-width: 1.6; }
 </style>
 </head>
 <body>
@@ -741,8 +780,8 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1209 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1263 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
@@ -899,6 +938,15 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
         <small>Self-healing diff, certificate, mutation audit, PR bundle and edge-case probes, at full width.</small>
       </div>
       <div class="deck-wide">
+        <!-- 5-Pill Proof Strip: one scannable row for the five proof pillars of the run, each pill opens its detail -->
+        <div id="proofStrip" class="proof-strip" role="group" aria-label="5-Pill Proof Strip" hidden>
+          <button type="button" class="proof-pill" id="pillParity" data-pill="parity" data-tone="idle" aria-controls="causalStrip"><b>Object.is Parity</b><span>-</span></button>
+          <button type="button" class="proof-pill" id="pillPurity" data-pill="purity" data-tone="idle" aria-controls="purityDetail" aria-expanded="false"><b>Purity / Zero Leaks</b><span>-</span></button>
+          <button type="button" class="proof-pill" id="pillMutants" data-pill="mutants" data-tone="idle" aria-controls="mutCard"><b>Mutants Killed</b><span>-</span></button>
+          <button type="button" class="proof-pill" id="pillEd" data-pill="ed25519" data-tone="idle" aria-controls="certCard"><b>Ed25519 Offline</b><span>-</span></button>
+          <button type="button" class="proof-pill" id="pillPerf" data-pill="perf" data-tone="idle" aria-controls="perfBadge"><b>Perf Parity</b><span>-</span></button>
+        </div>
+        <div id="purityDetail" class="purity-detail" role="region" aria-label="Purity proof details" hidden></div>
         <!-- Self-Healing Causal Strip: the real run pipeline in 4 nodes, shown once a resurrection succeeds -->
         <div id="causalStrip" class="causal-strip" role="list" aria-label="Self-Healing Causal Strip" hidden></div>
         <!-- Shrink Trace waterfall: opened from the Counterexample Caught node, collapsed by default -->
@@ -973,6 +1021,7 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
                 <button id="copyBundleBtn" type="button" style="background:#1e293b;color:#e2e8f0;border:1px solid #475569;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Copy File</button>
                 <button id="downloadFileBtn" type="button" style="background:#0284c7;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Download File</button>
                 <button id="downloadZipBtn" type="button" style="background:#10b981;color:#052e22;border:1px solid #10b981;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">Download .zip PR Archive</button>
+                <button id="prPreviewBtn" type="button" class="pr-preview-btn" aria-haspopup="dialog" aria-controls="prDrawer" aria-expanded="false" title="A GitHub-style preview of the pull request this bundle opens" style="background:#1e1b4b;color:#e9d5ff;border:1px solid #8b5cf6;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">PR Preview</button>
                 <button id="downloadBundleBtn" type="button" style="background:#0f172a;color:#38bdf8;border:1px solid #38bdf8;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">JSON</button>
               </div>
             </div>
@@ -1121,6 +1170,19 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     <div id="sarifList"></div>
   </div>
 </aside>
+<div class="dna-scrim" id="prScrim" hidden></div>
+<aside class="dna-drawer" id="prDrawer" role="dialog" aria-modal="true" aria-labelledby="prTitle" hidden>
+  <div class="dna-head">
+    <h2 id="prTitle">PR Preview<small>What the pull request will look like on GitHub, built from the verified bundle</small></h2>
+    <button type="button" class="hdr-btn" id="prClose" aria-label="Close PR Preview">Close</button>
+  </div>
+  <div class="dna-body">
+    <div class="pr-actions">
+      <button type="button" class="primary" id="prDownloadReport" disabled>Download Offline Report (.html)</button>
+    </div>
+    <div id="prBody" role="status" aria-live="polite">Building the PR preview from the current resurrection...</div>
+  </div>
+</aside>
 <div class="dna-scrim" id="dnaScrim" hidden></div>
 <div class="wake-pill" id="wakePill" role="status" aria-live="polite" hidden></div>
 <aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
@@ -1129,6 +1191,20 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     <button type="button" class="hdr-btn" id="dnaClose" aria-label="Close Kiro DNA">Close</button>
   </div>
   <div class="dna-body">
+    <h3>Kiro Ecosystem Architecture Map</h3>
+    <svg id="dnaMap" viewBox="0 0 700 214" role="img" aria-label="Kiro ecosystem: specs, crew agents, hooks, steering docs, the lazarus-sandbox MCP server, the power-lazarus Kiro Power and the lazarus-kiro-crew app">
+      <defs><marker id="dmArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8b5cf6"/></marker></defs>
+      <g class="dm-node live" data-node="specs" transform="translate(0 14)"><rect width="160" height="64" rx="10"/><text class="dm-title" id="dmSpecs" x="12" y="26">Specs</text><text class="dm-sub" x="12" y="46">.kiro/specs</text></g>
+      <g class="dm-node live" data-node="agents" transform="translate(180 14)"><rect width="160" height="64" rx="10"/><text class="dm-title" id="dmAgents" x="12" y="26">Crew Agents</text><text class="dm-sub" x="12" y="46">.kiro/agents</text></g>
+      <g class="dm-node live" data-node="hooks" transform="translate(360 14)"><rect width="160" height="64" rx="10"/><text class="dm-title" id="dmHooks" x="12" y="26">Hooks</text><text class="dm-sub" x="12" y="46">.kiro/hooks</text></g>
+      <g class="dm-node live" data-node="steering" transform="translate(540 14)"><rect width="160" height="64" rx="10"/><text class="dm-title" id="dmSteering" x="12" y="26">Steering Docs</text><text class="dm-sub" x="12" y="46">.kiro/steering</text></g>
+      <path class="dm-flow" d="M160 46 L178 46" marker-end="url(#dmArrow)"/><path class="dm-flow" d="M340 46 L358 46" marker-end="url(#dmArrow)"/><path class="dm-flow" d="M520 46 L538 46" marker-end="url(#dmArrow)"/>
+      <path class="dm-flow" d="M620 78 L620 106 L170 106 L170 134" marker-end="url(#dmArrow)"/>
+      <g class="dm-node" data-node="mcp" transform="translate(90 136)"><rect width="160" height="64" rx="10"/><text class="dm-title" x="12" y="26">lazarus-sandbox MCP</text><text class="dm-sub" x="12" y="46">src/mcp &#183; 2 tools</text></g>
+      <g class="dm-node live" data-node="power" transform="translate(270 136)"><rect width="160" height="64" rx="10"/><text class="dm-title" x="12" y="26">power-lazarus Kiro Power</text><text class="dm-sub" id="dmPower" x="12" y="46">power-lazarus/</text></g>
+      <g class="dm-node" data-node="crew" transform="translate(450 136)"><rect width="160" height="64" rx="10"/><text class="dm-title" x="12" y="26">lazarus-kiro-crew App</text><text class="dm-sub" x="12" y="46">Kiro Crew &#183; app.json</text></g>
+      <path class="dm-flow" d="M250 168 L268 168" marker-end="url(#dmArrow)"/><path class="dm-flow" d="M430 168 L448 168" marker-end="url(#dmArrow)"/>
+    </svg>
     <h3>The Chimera &middot; four organs, one proof</h3>
     <svg id="chimera" viewBox="0 0 700 330" role="group" aria-label="Four-organ Chimera architecture">
           <defs>
@@ -1550,6 +1626,14 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
     schema: '{"text": "string"}',
     bug: false
   });
+  extraPresets.push({
+    value: "legacyLeakyMutator",
+    label: "Preset 14: Leaky ES5 Mutator (undeclared global + input mutation -> let + Purity Proof)",
+    name: "legacyLeakyMutator",
+    code: "// ES5 reducer: leaks its accumulator onto the global object and mutates the array it was given\nfunction legacyLeakyMutator(list, factor) {\n  total = 0;\n  if (!Array.isArray(list)) return total;\n  for (var i = 0; i < list.length; i++) {\n    list[i] = list[i] * factor;\n    total = total + list[i];\n  }\n  return total;\n}\n\nmodule.exports = legacyLeakyMutator;",
+    schema: '{"list": "json", "factor": "integer"}',
+    bug: false
+  });
   if (presetSelect) {
     extraPresets.forEach((p) => {
       if (!presetSelect.querySelector('option[value="' + p.value + '"]')) {
@@ -1643,7 +1727,10 @@ button[aria-busy="true"]::after { content: ""; display: inline-block; width: 10p
         provenance: window.lazarusProvenance,
         attempts: window.lastAttempts,
         typeSignature: window.lastTypeSignature || undefined,
-        mutationAudit: window.lastMutationScore || undefined
+        mutationAudit: window.lastMutationScore || undefined,
+        perfParity: window.lastPerf || undefined,
+        mutants: window.lastMutants || undefined,
+        causal: window.lastCausal || undefined
     };
     lastBundleBody = JSON.stringify(payload);
     const res = await fetch("/api/export-bundle", { method: "POST", headers: { "Content-Type": "application/json" }, body: lastBundleBody });
@@ -3643,7 +3730,7 @@ function lzDecodeSpecimen(hash) {
     };
   }
   /* lz-drawers:end */
-  const ids = { dna: "dnaDrawer", verify: "verifyDrawer", sarif: "sarifDrawer" };
+  const ids = { dna: "dnaDrawer", verify: "verifyDrawer", sarif: "sarifDrawer", pr: "prDrawer" };
   const FOCUSABLE = 'button:not(:disabled), select:not(:disabled), input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
   const manager = lzMakeDrawers({
     expanded: () => Array.from(document.querySelectorAll('[aria-expanded="true"]')).filter((n) => !n.closest(".dna-drawer") && !n.classList.contains("hdr-btn") && n.getClientRects().length > 0),
@@ -3758,6 +3845,15 @@ function lzDecodeSpecimen(hash) {
       box.append(row);
     }
   }
+  /** The Kiro Ecosystem Architecture Map: counts read from disk by /api/kiro-dna. */
+  function fillDnaMap(dna) {
+    const set = (id, text) => { const n = $(id); if (n) n.textContent = text; };
+    set("dmSpecs", dna.specCount + " Specs");
+    set("dmAgents", dna.agents.length + " Crew Agents");
+    set("dmHooks", dna.hooks.length + " Hooks");
+    set("dmSteering", dna.steering.length + " Steering Docs");
+    set("dmPower", dna.power ? "power-lazarus/ \u00b7 v" + dna.power.version : "not installed");
+  }
   async function load() {
     if (loaded) return;
     try {
@@ -3766,6 +3862,7 @@ function lzDecodeSpecimen(hash) {
       loaded = true;
       $("dnaSub").textContent = "Live from " + dna.generatedFrom + " \u00b7 " + dna.specCount + " specs \u00b7 " + dna.agents.length + " agents \u00b7 " + dna.steering.length + " steering rules \u00b7 " + dna.hooks.length + " hooks" + (dna.power ? " \u00b7 Power " + dna.power.name + " v" + dna.power.version : "");
       $("dnaAgentsTitle").textContent = "Kiro Crew agents (" + dna.agents.length + ")";
+      fillDnaMap(dna);
       $("dnaSpecsTitle").textContent = "Specs (" + dna.specCount + ")";
       const order = ["archaeologist", "architect", "necromancer", "exorcist"];
       const agents = dna.agents.slice().sort((a, b) => (order.indexOf(a.name) + 99) % 99 - (order.indexOf(b.name) + 99) % 99);
@@ -4287,6 +4384,277 @@ function lzHealthGuard(deps) {
       if (ctl === controller) ctl = null;
     }
   });
+})();
+</script>
+<script>
+/* V18: 5-Pill Proof Strip and the PR Preview drawer. textContent only, no frameworks. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  /* lz-proof:start */
+  /**
+   * The five pills of the strip, from the result of a resurrection and what the follow-up checks reported so far.
+   * `ctx`: { mutation: {killed,total}|null, perf: object|null, perfText: string, sig: {valid,tamper,offline}|null }.
+   * A pillar that was not measured says so; nothing is shown as proven that the run did not prove.
+   */
+  function lzProofPills(r, ctx) {
+    var c = ctx || {};
+    var pills = [];
+    var proven = !!(r && r.success);
+    pills.push({ id: "parity", label: "Object.is Parity", tone: !r ? "idle" : proven ? "ok" : "bad",
+      value: !r ? "-" : proven ? "PROVEN \u00b7 " + r.fuzzReport.totalRuns + " runs" : "NOT PROVEN", title: "Exact Object.is parity over the fuzzed inputs. Click: Causal Strip and Shrink Trace." });
+    var p = r && r.purityProof;
+    var leaks = p ? p.globalLeaksDetected.length : 0;
+    pills.push({ id: "purity", label: "Purity / Zero Leaks", tone: !r ? "idle" : p ? (p.proven ? "ok" : "bad") : "idle",
+      value: !r ? "-" : p ? (p.proven ? (leaks > 0 ? "Fixed " + leaks + " leak" + (leaks === 1 ? "" : "s") : "Zero leaks") : "NOT PROVEN") : (r.asyncCallback || r.module ? "n/a (async / module)" : "not measured"),
+      title: "No global leak, untouched prototypes, identical input state. Click for details." });
+    var m = c.mutation;
+    pills.push({ id: "mutants", label: "Mutants Killed", tone: m ? (m.killed === m.total ? "ok" : "warn") : "idle",
+      value: m ? m.killed + "/" + m.total + " killed" : r ? "run the audit" : "-", title: "Click: the Mutant Autopsy." });
+    var s = c.sig;
+    pills.push({ id: "ed25519", label: "Ed25519 Offline", tone: !r ? "idle" : s ? (s.tamper ? "bad" : s.valid ? "ok" : "warn") : "idle",
+      value: !r ? "-" : s ? (s.tamper ? "TAMPER DETECTED" : s.valid ? (s.offline ? "Verified offline" : "Verified (Studio API)") : "unverified") : (r.certificate ? "verifying..." : "unsigned"), title: "Click: the certificate and Simulate 1-Byte Tamper." });
+    var f = c.perf;
+    var perfValue = f ? (f.skipped ? "skipped: " + f.skipped : f.ratio.toFixed(2) + "x " + f.verdict) : c.perfText ? c.perfText : !r ? "-" : (r.asyncCallback || r.module ? "skipped (async / module)" : "measuring...");
+    pills.push({ id: "perf", label: "Perf Parity", tone: f && !f.skipped ? (f.verdict === "slower" ? "warn" : "ok") : "idle", value: perfValue, title: "Live micro-benchmark ratio (resurrected vs legacy)." });
+    return pills;
+  }
+  /* lz-proof:end */
+  /* lz-pr:start */
+  /** A plain-text tree of the archive's paths: folders first as they sort, two spaces per level. */
+  function lzPrTree(names) {
+    var seen = {}, out = [];
+    names.slice().sort().forEach(function (n) {
+      var parts = n.split("/");
+      for (var i = 0; i < parts.length; i++) {
+        var key = parts.slice(0, i + 1).join("/");
+        if (seen[key]) continue;
+        seen[key] = true;
+        out.push(new Array(i + 1).join("  ") + (i < parts.length - 1 ? "\u25be " + parts[i] + "/" : "\u00b7 " + parts[i]));
+      }
+    });
+    return out.join("\n");
+  }
+  /** The one-liner that unpacks the downloaded archive and applies its patch (checked first, so a mismatch changes nothing). */
+  function lzGitApply(zipName) {
+    return "unzip -o " + zipName + " -d lazarus-pr && git apply --check lazarus-pr/resurrection.patch && git apply lazarus-pr/resurrection.patch";
+  }
+  /** The PR checklist from what the run really produced. `info`: { runs, tscErrors, mutation, purity, signed, report }. */
+  function lzPrChecks(info) {
+    return [
+      { text: "Exact Object.is parity over " + info.runs + " fuzz runs", done: info.runs > 0 },
+      { text: "tsc --strict: " + info.tscErrors + " error" + (info.tscErrors === 1 ? "" : "s"), done: info.tscErrors === 0 },
+      { text: info.mutation ? "Mutation audit: " + info.mutation.killed + "/" + info.mutation.total + " mutants killed" : "Mutation audit not run (run it to add it to the report)", done: !!info.mutation && info.mutation.killed === info.mutation.total },
+      { text: info.purity ? (info.purity.proven ? "Purity proven: no global leak, prototypes untouched, inputs identical" : "Purity NOT proven") : "Purity not measured for this specimen", done: !!info.purity && info.purity.proven },
+      { text: info.signed ? "Ed25519 certificate signed (certificate.json)" : "Not signed", done: !!info.signed },
+      { text: info.report ? "RESURRECTION_REPORT.html included (works offline)" : "No offline report", done: !!info.report }
+    ];
+  }
+  /** Class of one unified-diff line. */
+  function lzDiffClass(line) { return line.indexOf("@@") === 0 ? "hunk" : line.indexOf("+++") === 0 || line.indexOf("---") === 0 || line.indexOf("diff ") === 0 ? "hunk" : line.charAt(0) === "+" ? "add" : line.charAt(0) === "-" ? "del" : ""; }
+  /* lz-pr:end */
+  // -------------------------------------------------------------------------------------------------------------------
+  // 5-Pill Proof Strip
+  // -------------------------------------------------------------------------------------------------------------------
+  const strip = $("proofStrip");
+  const state = { r: null, mutation: null, perf: null };
+  const PILL_IDS = { parity: "pillParity", purity: "pillPurity", mutants: "pillMutants", ed25519: "pillEd", perf: "pillPerf" };
+  function sigCtx() {
+    const badge = $("certSigBadge");
+    if (!badge) return null;
+    const t = badge.textContent;
+    if (/VERIFYING|unreachable|no resurrected code/.test(t)) return null;
+    const off = $("certOfflinePill");
+    return { valid: /VERIFIED/.test(t) && !/TAMPER/.test(t), tamper: /TAMPER/.test(t), offline: !!off && !off.hidden && /Verified Offline/.test(off.textContent) };
+  }
+  function perfText() {
+    const chip = $("perfBadge");
+    return chip && !chip.hidden ? chip.textContent.trim().replace(/^Perf:\s*/, "") : "";
+  }
+  function render() {
+    if (!strip) return;
+    lzProofPills(state.r, { mutation: state.mutation, perf: state.perf, perfText: perfText(), sig: sigCtx() }).forEach((p) => {
+      const b = $(PILL_IDS[p.id]);
+      if (!b) return;
+      b.dataset.tone = p.tone;
+      b.title = p.title;
+      b.lastElementChild.textContent = p.value;
+    });
+  }
+  const trunc = (text, n) => { const s = String(text); return s.length > n ? s.slice(0, n - 1) + "\u2026" : s; };
+  /** What a rollback looked like, for RESURRECTION_REPORT.html: the counterexample and its shrink trace, as text. */
+  function causalOf(r) {
+    const ev = (r.events || []).find((e) => e.type === "counterexample_found" && e.payload && e.payload.counterexample);
+    if (!ev) return undefined;
+    const cx = ev.payload.counterexample, t = cx.shrinkTrace;
+    const out = (o) => (o && o.ok ? JSON.stringify(o.output) : o && o.errorMessage ? "throws " + o.errorMessage : "unknown");
+    const out2 = {};
+    if (t && t.finalMinimal) {
+      out2.counterexample = { input: trunc(t.finalMinimal.input, 300), legacyOutput: trunc(t.finalMinimal.legacyOutput, 120), modernOutput: trunc(t.finalMinimal.modernOutput, 120) };
+      out2.shrink = { steps: Math.max(0, t.totalShrinks | 0), from: trunc(t.initialFailure.input, 300), to: trunc(t.finalMinimal.input, 300) };
+    } else {
+      out2.counterexample = { input: trunc(JSON.stringify(cx.inputs), 300), legacyOutput: trunc(out(cx.legacy), 120), modernOutput: trunc(out(cx.modern), 120) };
+    }
+    return out2;
+  }
+  if (strip) {
+    document.addEventListener("lazarus:run-start", () => {
+      state.r = null; state.mutation = null; state.perf = null;
+      window.lastPerf = null; window.lastMutants = null; window.lastCausal = null;
+      strip.hidden = true;
+      $("purityDetail").hidden = true; $("pillPurity").setAttribute("aria-expanded", "false");
+      render();
+    });
+    document.addEventListener("lazarus:result", (e) => {
+      const r = e.detail || null;
+      state.r = r; state.mutation = null; state.perf = null;
+      window.lastPerf = null; window.lastMutants = null;
+      window.lastCausal = r && r.success ? causalOf(r) : undefined;
+      if (r && (r.asyncCallback || r.module)) { state.perf = { skipped: "async / module" }; window.lastPerf = { skipped: "Async and multi-export specimens are not micro-benchmarked." }; }
+      strip.hidden = !r;
+      render();
+    });
+    document.addEventListener("lazarus:mutation", (e) => {
+      const d = e.detail;
+      if (!d || !d.baselineVerified || !(d.totalMutants > 0)) { state.mutation = null; window.lastMutants = null; render(); return; }
+      state.mutation = { killed: d.killed, total: d.totalMutants };
+      window.lastMutants = (d.mutants || []).slice(0, 10).map((m) => {
+        const a = m.autopsy || {};
+        const o = { operator: trunc(a.operator || m.label || m.operator, 80), status: a.status === "survived" ? "survived" : "killed" };
+        if (a.originalLine) o.originalLine = trunc(a.originalLine, 200);
+        if (a.mutatedLine) o.mutatedLine = trunc(a.mutatedLine, 200);
+        if (a.killerInput && a.killerInput.display) o.killerInput = trunc(a.killerInput.display, 200);
+        if (a.legacyOutput) o.legacyOutput = trunc(a.legacyOutput, 120);
+        if (a.mutantOutput) o.mutantOutput = trunc(a.mutantOutput, 120);
+        if (a.divergence) o.divergence = trunc(a.divergence, 300);
+        return o;
+      });
+      render();
+    });
+    document.addEventListener("lazarus:perf", (e) => {
+      const d = e.detail;
+      if (!d || typeof d.ratio !== "number") return;
+      state.perf = d;
+      window.lastPerf = { ratio: d.ratio, legacyMedianUs: d.legacyMedianUs, resurrectedMedianUs: d.resurrectedMedianUs, verdict: d.verdict };
+      render();
+    });
+    ["certCard", "perfBadge"].forEach((id) => { const n = $(id); if (n) new MutationObserver(render).observe(n, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "class"] }); });
+    const reveal = (node) => { if (node && !node.hidden) node.scrollIntoView({ behavior: "smooth", block: "center" }); };
+    $("pillParity").addEventListener("click", () => {
+      const cs = $("causalStrip");
+      if (cs.hidden) return;
+      cs.setAttribute("tabindex", "-1");
+      reveal(cs);
+      (document.getElementById("shrinkToggle") || cs).focus();
+    });
+    $("pillPurity").addEventListener("click", () => {
+      const box = $("purityDetail"), open = box.hidden;
+      if (open) {
+        box.textContent = "";
+        const p = state.r && state.r.purityProof;
+        if (!p) { box.append(el("div", "", state.r && (state.r.asyncCallback || state.r.module) ? "The purity audit covers synchronous snippets; async and multi-export specimens were not audited." : "No purity proof was produced for this run.")); }
+        else {
+          box.append(el("b", "", "Purity proof \u00b7 " + p.samples + " sandboxed samples"));
+          const ul = el("ul");
+          [["globalLeaksDetected", p.globalLeaksDetected.length ? "Undeclared globals in the legacy code: " + p.globalLeaksDetected.join(", ") : "No undeclared global in the legacy code", p.globalLeaksDetected.length === 0 || p.globalLeaksEliminated],
+            ["globalLeaksEliminated", p.globalLeaksEliminated ? "Leaks eliminated: the resurrected code runs under \"use strict\" and adds nothing to globalThis" : "Leaks NOT eliminated", p.globalLeaksEliminated],
+            ["prototypeSafe", p.prototypeSafe ? "Object.prototype and Array.prototype are untouched" : "A built-in prototype was polluted", p.prototypeSafe],
+            ["inputMutationParity", p.inputMutationParity ? "Input mutation parity: identical post-call input state" + (p.legacyMutatesInput ? " (the legacy code mutates its input; so does the resurrected code, identically)" : "") : "Input state differs after the calls", p.inputMutationParity]
+          ].forEach((row) => ul.append(el("li", row[2] ? "yes" : "no", row[1])));
+          box.append(ul);
+        }
+      }
+      box.hidden = !open;
+      $("pillPurity").setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    $("pillMutants").addEventListener("click", () => {
+      const card = $("mutCard");
+      if (card.hidden) return;
+      reveal(card);
+      const s = $("mutScore");
+      if (s.getAttribute("role") === "button") { if (s.getAttribute("aria-expanded") !== "true") s.click(); s.focus(); } else { $("mutBtn").focus(); }
+    });
+    $("pillEd").addEventListener("click", () => {
+      const card = $("certCard");
+      reveal(card);
+      (document.getElementById("certTamperBtn") || card).focus();
+    });
+    $("pillPerf").addEventListener("click", () => { reveal($("perfBadge")); });
+  }
+  // -------------------------------------------------------------------------------------------------------------------
+  // PR Preview drawer
+  // -------------------------------------------------------------------------------------------------------------------
+  const prBtn = $("prPreviewBtn");
+  if (prBtn) {
+    const drawer = $("prDrawer"), scrim = $("prScrim"), closeBtn = $("prClose"), body = $("prBody"), dl = $("prDownloadReport");
+    const mgr = window.LazarusDrawers;
+    let report = "", token = 0;
+    function open() { if (mgr) mgr.opening("pr"); drawer.hidden = false; scrim.hidden = false; prBtn.setAttribute("aria-expanded", "true"); closeBtn.focus(); build(); }
+    function close(restore) { token++; drawer.hidden = true; scrim.hidden = true; prBtn.setAttribute("aria-expanded", "false"); if (restore !== false) prBtn.focus(); }
+    prBtn.addEventListener("click", () => (drawer.hidden ? open() : close()));
+    closeBtn.addEventListener("click", close);
+    scrim.addEventListener("click", close);
+    if (mgr) mgr.register("pr", { isOpen: () => !drawer.hidden, close: close });
+    else document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
+    dl.addEventListener("click", () => {
+      if (!report) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([report], { type: "text/html;charset=utf-8" }));
+      a.download = "RESURRECTION_REPORT.html";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    });
+    async function build() {
+      const mine = ++token;
+      report = ""; dl.disabled = true;
+      body.textContent = "Building the PR preview from the current resurrection...";
+      let bundle = null;
+      try { bundle = window.LazarusBundle ? await window.LazarusBundle.build() : null; } catch (err) { bundle = null; }
+      if (mine !== token) return;
+      if (!bundle) { body.textContent = "Run RESURRECT SPECIMEN first and keep the code unchanged: the PR preview is built from the verified bundle."; return; }
+      draw(bundle);
+    }
+    function draw(bundle) {
+      const name = bundle.specimenName || "specimen";
+      const tc = bundle.typecheck || { errorCount: 0 };
+      const info = { runs: window.lastFuzzRuns || 0, tscErrors: tc.errorCount, mutation: window.lastMutationScore || null, purity: state.r && state.r.purityProof ? state.r.purityProof : null, signed: !!bundle.signature, report: typeof bundle.reportHtml === "string" && bundle.reportHtml !== "" };
+      report = info.report ? bundle.reportHtml : "";
+      dl.disabled = !info.report;
+      body.textContent = "";
+      const card = el("div", "pr-card");
+      card.append(el("h4", "", "Resurrect " + name + ": ES5 \u2192 ES2022 + strict TypeScript (exact Object.is parity)"));
+      card.append(el("p", "pr-meta", "lazarus wants to merge 1 commit into main from lazarus/resurrect-" + name));
+      const pre = el("pre", "pr-tree", String(bundle.prSummary || "").slice(0, 2400));
+      pre.style.whiteSpace = "pre-wrap";
+      card.append(pre);
+      const ul = el("ul", "pr-checks");
+      lzPrChecks(info).forEach((c) => ul.append(el("li", c.done ? "done" : "", c.text)));
+      card.append(ul);
+      body.append(card);
+      const files = Object.keys(bundle.files || {}).concat(["resurrection.patch", ".github/workflows/lazarus-audit.yml", "certificate.json", "RESURRECTION_REPORT.html"]);
+      const tree = el("div", "pr-card");
+      tree.append(el("h4", "", "Files in the bundle (" + files.length + ")"), el("pre", "pr-tree", lzPrTree(files)));
+      body.append(tree);
+      const cmd = lzGitApply("lazarus-pr-bundle.zip");
+      const apply = el("div", "pr-card");
+      apply.append(el("h4", "", "Apply it locally"));
+      const row = el("div", "pr-cmd");
+      const copy = el("button", "hdr-btn", "Copy");
+      copy.type = "button";
+      copy.id = "prCopyApply";
+      copy.addEventListener("click", () => { Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(cmd)).then(() => { copy.textContent = "Copied!"; setTimeout(() => { copy.textContent = "Copy"; }, 1400); }, () => undefined); });
+      row.append(el("code", "", cmd), copy);
+      apply.append(row);
+      body.append(apply);
+      const diff = el("div", "pr-card");
+      diff.append(el("h4", "", "git diff"));
+      const box = el("div", "pr-diff");
+      String(bundle.prDiff || "").split("\n").slice(0, 400).forEach((line) => box.append(el("div", lzDiffClass(line), line === "" ? " " : line)));
+      diff.append(box);
+      body.append(diff);
+    }
+  }
 })();
 </script>
 <script>

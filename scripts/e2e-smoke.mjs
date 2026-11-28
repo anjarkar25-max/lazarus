@@ -447,6 +447,122 @@ async function main() {
       });
     }
 
+    // ---- 4b. V18: legacyLeakyMutator, the 5-Pill Proof Strip, SARIF LAZ008, the offline report and the PR Preview drawer ----
+    await step("Tab 1: legacyLeakyMutator repairs the leaked global (let total), proves parity + purity, tsc --strict: 0 errors", async () => {
+      await load(VIEWPORTS[1]);
+      await evaluate(`(() => { const s = document.getElementById("presetSelect"); s.value = "legacyLeakyMutator"; s.dispatchEvent(new Event("change")); document.getElementById("runBtn").click(); return true; })()`);
+      await waitFor(`window.__e2e.results.some((r) => r.name === "legacyLeakyMutator")`, "the legacyLeakyMutator result", 90_000);
+      const out = await evaluate(`({ ok: window.__e2e.results.find((r) => r.name === "legacyLeakyMutator").success, code: document.getElementById("modernOut").textContent, tsc: document.getElementById("tscBadge").textContent })`);
+      check(out.ok, "legacyLeakyMutator: parity was not proven");
+      check(/let total = 0;/.test(out.code), "the leaked accumulator was not declared with let");
+      check(!/^\s*total = 0;/m.test(out.code), "the resurrected code still assigns an undeclared total");
+      check(out.tsc === "tsc --strict: 0 errors", `legacyLeakyMutator: ${out.tsc}`);
+      const rb = await evaluate(`Array.from(document.querySelectorAll("#xrayChips button")).map((b) => b.textContent).join("|")`);
+      check(/global-leak-fix/.test(rb), `Rule Blame X-Ray has no global-leak-fix chip: ${rb}`);
+    });
+    await step("Tab 1: the 5-Pill Proof Strip shows the five pillars and each pill opens its detail", async () => {
+      const strip = await evaluate(`({ hidden: document.getElementById("proofStrip").hidden, ids: Array.from(document.querySelectorAll("#proofStrip .proof-pill")).map((b) => b.id) })`);
+      check(!strip.hidden, "the proof strip is hidden after a resurrection");
+      check(strip.ids.join() === "pillParity,pillPurity,pillMutants,pillEd,pillPerf", `pills: ${strip.ids}`);
+      const text = (id) => evaluate(`document.getElementById("${id}").lastElementChild.textContent`);
+      const tone = (id) => evaluate(`document.getElementById("${id}").dataset.tone`);
+      check(/^PROVEN/.test(await text("pillParity")) && (await tone("pillParity")) === "ok", "parity pill is not proven");
+      check(/^Fixed 1 leak$/.test(await text("pillPurity")) && (await tone("pillPurity")) === "ok", `purity pill: ${await text("pillPurity")}`);
+      // Purity pill reveals the purityProof, and Escape collapses it.
+      await evaluate(`document.getElementById("pillPurity").click(); true`);
+      const detail = await evaluate(`({ hidden: document.getElementById("purityDetail").hidden, text: document.getElementById("purityDetail").textContent })`);
+      check(!detail.hidden && /total/.test(detail.text) && /Input mutation parity/.test(detail.text) && /Object\.prototype/.test(detail.text), `purity detail: ${detail.text}`);
+      await key("Escape", "Escape", 27);
+      await waitFor(`document.getElementById("purityDetail").hidden`, "Escape to collapse the purity detail", 5_000);
+      // Parity pill focuses the Causal Strip.
+      await evaluate(`document.getElementById("pillParity").click(); true`);
+      check((await evaluate(`document.activeElement && document.activeElement.id`)) === "causalStrip", "the parity pill did not focus the Causal Strip");
+      // Mutants pill: run the audit, then the pill reports it and opens the Mutant Autopsy.
+      await evaluate(`document.getElementById("mutBtn").click(); true`);
+      await waitFor(`/\\d+\\/\\d+ killed/.test(document.getElementById("pillMutants").lastElementChild.textContent)`, "the Mutants Killed pill", 60_000);
+      await evaluate(`document.getElementById("pillMutants").click(); true`);
+      await waitFor(`!document.getElementById("mutAutopsy").hidden`, "the Mutant Autopsy via the pill", 10_000);
+      // Ed25519 pill: offline or API verification, and it focuses Simulate 1-Byte Tamper.
+      await waitFor(`/^Verified/.test(document.getElementById("pillEd").lastElementChild.textContent)`, "the Ed25519 pill", 30_000);
+      await evaluate(`document.getElementById("pillEd").click(); true`);
+      check((await evaluate(`document.activeElement && document.activeElement.id`)) === "certTamperBtn", "the Ed25519 pill did not focus Simulate 1-Byte Tamper");
+      // Perf Parity pill: a live ratio (this sync specimen) or an honest note.
+      await waitFor(`!/measuring/.test(document.getElementById("pillPerf").lastElementChild.textContent) && document.getElementById("pillPerf").lastElementChild.textContent !== "-"`, "the Perf Parity pill", 30_000);
+      const perf = await text("pillPerf");
+      check(/\d+\.\d+x (faster|parity|slower)|skipped|unavailable|not/.test(perf), `perf pill: ${perf}`);
+      const l = await evaluate(LAYOUT);
+      check(l.scrollWidth <= l.vw && l.offenders.length === 0, `overflow with the strip: ${l.scrollWidth}/${l.vw} ${l.offenders.join(", ")}`);
+    });
+    await step("Tab 1: Compare vs. Naive AI shows the naive strict-mode rewrite throwing a ReferenceError", async () => {
+      await waitFor(`!document.getElementById("naiveBtn").hidden`, "the Compare vs. Naive AI button", 10_000);
+      await evaluate(`document.getElementById("naiveBtn").click(); true`);
+      await waitFor(`!document.getElementById("trapCard").hidden && document.getElementById("trapCard").textContent.length > 20`, "the trap card", 40_000);
+      const trap = await evaluate(`document.getElementById("trapCard").textContent`);
+      check(/ReferenceError|not defined/.test(trap), `the trap card does not show the ReferenceError: ${trap.slice(0, 200)}`);
+    });
+    await step("SARIF Audit reports the leak as LAZ008 (8 rule chips) for the leaky specimen", async () => {
+      await evaluate(`document.getElementById("sarifBtn").click(); true`);
+      await waitFor(`!document.getElementById("sarifDrawer").hidden`, "the SARIF drawer", 5_000);
+      await evaluate(`document.getElementById("sarifRun").click(); true`);
+      await waitFor(`document.getElementById("sarifChips").children.length === 8 && document.getElementById("sarifRun").getAttribute("aria-busy") === null`, "8 rule chips (LAZ001-LAZ008)", 20_000);
+      const text = await evaluate(`document.getElementById("sarifChips").textContent + "|" + document.getElementById("sarifList").textContent`);
+      check(/LAZ008/.test(text) && /UndeclaredGlobalLeak|Undeclared global/.test(text), `no LAZ008 in the drawer: ${text.slice(0, 200)}`);
+      await key("Escape", "Escape", 27);
+      await waitFor(`document.getElementById("sarifDrawer").hidden`, "the SARIF drawer to close", 5_000);
+    });
+    await step("PR Preview: the report is in the bundle, and the drawer opens, stays single-active and closes on Escape", async () => {
+      await evaluate(`document.getElementById("exportBtn").click(); true`);
+      await waitFor(`document.getElementById("bundlePanel") && document.getElementById("bundlePanel").style.display === "block"`, "the PR bundle panel", 60_000);
+      const bundle = await evaluate(`window.LazarusBundle.build().then((b) => ({ report: b.reportHtml || "", files: Object.keys(b.files), signed: !!b.signature }))`);
+      check(/<h1>Resurrection Report: legacyLeakyMutator/.test(bundle.report), "the export has no RESURRECTION_REPORT.html for legacyLeakyMutator");
+      check(!/<script|https?:\/\//i.test(bundle.report), "the offline report loads or contains a script or URL");
+      check(/5-Pillar Proof Scorecard/.test(bundle.report) && /Purity \/ no global leaks/.test(bundle.report) && /PROVEN/.test(bundle.report), "the report lacks the scorecard");
+      check(bundle.signed, "the export is not signed");
+      const btn = await evaluate(`(() => { const b = document.getElementById("prPreviewBtn"); const r = b.getBoundingClientRect(); const z = document.getElementById("downloadZipBtn").getBoundingClientRect(); return { visible: r.width > 0, sameRow: Math.abs(r.top - z.top) < 40, after: r.left >= z.right - 1 }; })()`);
+      check(btn.visible && btn.sameRow, `PR Preview is not beside the .zip button: ${JSON.stringify(btn)}`);
+      await evaluate(`document.getElementById("prPreviewBtn").focus(); document.getElementById("prPreviewBtn").click(); true`);
+      await waitFor(`!document.getElementById("prDrawer").hidden`, "the PR Preview drawer", 5_000);
+      await waitFor(`document.querySelectorAll("#prBody .pr-card").length >= 4`, "the PR preview cards", 60_000);
+      await sleep(450);
+      const pr = await evaluate(`({ text: document.getElementById("prBody").textContent, dl: !document.getElementById("prDownloadReport").disabled })`);
+      for (const s of ["Resurrect legacyLeakyMutator", "RESURRECTION_REPORT.html", "lazarus-audit.yml", "lazarus-parity.yml", "resurrected.ts", "certificate.json", "git apply --check", "git diff", "tsc --strict: 0 errors"]) check(pr.text.includes(s), `PR Preview lacks "${s}"`);
+      check(pr.dl, "Download Offline Report (.html) is disabled");
+      let l = await evaluate(LAYOUT);
+      check(l.openDrawers.join() === "prDrawer" && l.openScrims.join() === "prScrim", `PR drawer stacking: ${l.openDrawers} / ${l.openScrims}`);
+      check(l.scrollWidth <= l.vw, `PR Preview overflows: ${l.scrollWidth}/${l.vw}`);
+      const box = l.drawerBox[0];
+      check(box.left >= 0 && box.right <= l.vw + 1 && box.bottom <= l.vh + 1, `PR drawer does not fit: ${JSON.stringify(box)}`);
+      // Single-active: the next drawer closes it; opening it again closes that one.
+      await evaluate(`document.getElementById("sarifBtn").click(); true`);
+      await waitFor(`!document.getElementById("sarifDrawer").hidden`, "SARIF Audit to open over PR Preview", 5_000);
+      l = await evaluate(LAYOUT);
+      check(l.openDrawers.join() === "sarifDrawer" && l.openScrims.join() === "sarifScrim", `drawers stacked after SARIF: ${l.openDrawers}`);
+      await evaluate(`document.getElementById("prPreviewBtn").click(); true`);
+      await waitFor(`!document.getElementById("prDrawer").hidden && document.getElementById("sarifDrawer").hidden`, "PR Preview to replace SARIF Audit", 5_000);
+      // Tab stays inside, Escape closes and returns focus to PR Preview.
+      for (let i = 0; i < 30; i++) await key("Tab", "Tab", 9);
+      check((await evaluate(`document.getElementById("prDrawer").contains(document.activeElement)`)) === true, "Tab left the PR Preview drawer");
+      await key("Escape", "Escape", 27);
+      await waitFor(`document.getElementById("prDrawer").hidden`, "PR Preview to close on Escape", 5_000);
+      check((await evaluate(`document.activeElement && document.activeElement.id`)) === "prPreviewBtn", "focus did not return to PR Preview");
+      l = await evaluate(LAYOUT);
+      check(l.openDrawers.length === 0 && l.openScrims.length === 0, "a drawer is still open after Escape");
+    });
+    await step("Kiro DNA: the Ecosystem Architecture Map shows the live counts from disk", async () => {
+      await load(VIEWPORTS[0]);
+      await evaluate(`document.getElementById("dnaBtn").click(); true`);
+      await waitFor(`/^\\d+ Specs$/.test(document.getElementById("dmSpecs").textContent)`, "the map to load the specs count", 20_000);
+      const m = await evaluate(`({ specs: document.getElementById("dmSpecs").textContent, agents: document.getElementById("dmAgents").textContent, hooks: document.getElementById("dmHooks").textContent, steering: document.getElementById("dmSteering").textContent, power: document.getElementById("dmPower").textContent, nodes: document.querySelectorAll("#dnaMap .dm-node").length, badge: document.getElementById("badgeSpecs").textContent })`);
+      check(m.nodes === 7, `the map has ${m.nodes} nodes`);
+      check(m.specs === "28 Specs" && m.badge === "28 Kiro Specs", `specs: ${m.specs} / ${m.badge}`);
+      check(m.agents === "4 Crew Agents" && m.hooks === "4 Hooks" && m.steering === "3 Steering Docs", `counts: ${m.agents}, ${m.hooks}, ${m.steering}`);
+      check(/power-lazarus\/ \u00b7 v/.test(m.power), `power node: ${m.power}`);
+      const l = await evaluate(LAYOUT);
+      check(l.scrollWidth <= l.vw, "the DNA drawer overflows");
+      await key("Escape", "Escape", 27);
+      await waitFor(`document.getElementById("dnaDrawer").hidden`, "Kiro DNA to close", 5_000);
+    });
+
     // ---- 5. Tab 2: circular ledger ----
     await step("Tab 2: legacy-circular-ledger resolves its cycle (amber edges, Cycle Resolved)", async () => {
       await load(VIEWPORTS[0]);

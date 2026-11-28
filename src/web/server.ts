@@ -12,6 +12,8 @@ import { buildGraphBundle, graphBundleZip, type GraphBundle } from "../exporter/
 import { validateVirtualFiles } from "../sandbox/virtual-fs.js";
 import { runMutationAudit } from "../crew/mutation-audit.js";
 import { naiveRefactor } from "../crew/naive-refactor.js";
+import { buildExportReport, parseReportExtras } from "../exporter/export-report.js";
+import { REPORT_FILE } from "../exporter/html-report.js";
 import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
 import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
 import { buildPromiseHarness, detectPromiseChain } from "../crew/es5-idioms.js";
@@ -279,6 +281,10 @@ export type ExportRequest = {
   attempts?: number;
   typeSignature?: unknown;
   mutationAudit?: unknown;
+  /** Optional summaries from the Studio session for RESURRECTION_REPORT.html (validated in export-report.ts). */
+  perfParity?: unknown;
+  mutants?: unknown;
+  causal?: unknown;
 };
 /**
  * Builds the PR bundle and verifies its TypeScript with the real compiler under --strict. The certificate and SPEC.md
@@ -385,7 +391,10 @@ async function buildUnsignedExportBundle(parsed: ExportRequest & { legacyCode: s
   };
 }
 /** The unsigned bundle plus the Ed25519 signature over its final `resurrected.ts` (see cert-crypto.ts). */
-export async function buildExportBundle(parsed: ExportRequest & { legacyCode: string; modernCode: string }): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string; certificateJson: string; signature: SignatureBlock }> {
+export async function buildExportBundle(
+  parsed: ExportRequest & { legacyCode: string; modernCode: string },
+  options: { readonly report?: boolean } = {}
+): Promise<VerifiedBundle & { prSummary: string; certificateSvg: string; certificateJson: string; signature: SignatureBlock; reportHtml?: string }> {
   const built = await buildUnsignedExportBundle(parsed);
   const checkedScore = parsed.mutationAudit === undefined ? undefined : MutationScoreSchema.safeParse(parsed.mutationAudit);
   const runs = parsed.fuzzRuns ?? DEFAULT_LIVE_FUZZ_RUNS;
@@ -397,7 +406,31 @@ export async function buildExportBundle(parsed: ExportRequest & { legacyCode: st
     mutantsKilled: checkedScore?.success === true ? checkedScore.data.killed : null,
     tscStrictErrors: built.typecheck.errorCount,
   });
-  return { ...built, certificateSvg: embedSignatureInSvg(built.certificateSvg, signature), certificateJson: buildCertificateJson(signature), signature };
+  const signed = { ...built, certificateSvg: embedSignatureInSvg(built.certificateSvg, signature), certificateJson: buildCertificateJson(signature), signature };
+  if (options.report !== true) return signed;
+  // RESURRECTION_REPORT.html joins the .zip next to the existing entries; the Ed25519 subject stays resurrected.ts.
+  const fnCount = (parsed.functions ?? []).filter((f) => typeof f.name === "string" && f.name.length > 0 && typeof f.modernCode === "string" && f.modernCode.length > 0).length;
+  const shape = asyncEntryOf(parsed.legacyCode, parsed.modernCode, parsed.specimenName) !== undefined ? "async" : fnCount > 0 ? "module" : "snippet";
+  const entryName = scanLegacyAst(parsed.legacyCode).primary?.exportedAs;
+  const schema = parsed.schema === undefined ? undefined : flatSchemaOf(parsed.schema as InputSchema, entryName);
+  const zipNames = [...bundleToZipEntries(built.bundle).map((e) => e.name), CERTIFICATE_JSON_FILE, REPORT_FILE].sort();
+  const reportHtml = await buildExportReport({
+    name: sanitizeIdentifier(parsed.specimenName ?? "resurrectedSpecimen"),
+    legacyCode: parsed.legacyCode,
+    postedModernCode: parsed.modernCode,
+    resurrectedTs: built.bundle.files[SIGNED_SUBJECT_FILE],
+    fuzzRuns: runs,
+    attempts,
+    healed: Boolean(parsed.healed) || attempts > 1,
+    typecheck: built.typecheck,
+    ...(checkedScore?.success === true ? { mutation: checkedScore.data } : {}),
+    signature,
+    ...(schema !== undefined ? { schema } : {}),
+    shape,
+    extras: parseReportExtras(parsed),
+    files: zipNames,
+  });
+  return { ...signed, bundle: { ...signed.bundle, report: reportHtml }, reportHtml };
 }export interface WebServerOptions {
   /** `fetch` used by POST /api/import/npm. Tests inject a mock so they never touch the network. */
   npmFetch?: FetchLike;
@@ -624,6 +657,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         maxHealingAttempts: 3,
         exact: true,
         collectObservations: true,
+        purityAudit: true,
         onEvent: (event: CrewEvent) => {
           res.write(`data: ${JSON.stringify({ kind: "event", event })}\n\n`);
         },
@@ -816,7 +850,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           res.end(JSON.stringify({ error: "legacyCode and modernCode are required" }));
           return;
         }
-        const { bundle, typecheck, prSummary, certificateSvg, certificateJson, signature } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode });
+        const { bundle, typecheck, prSummary, certificateSvg, certificateJson, signature, reportHtml } = await buildExportBundle({ ...parsed, legacyCode: parsed.legacyCode, modernCode: parsed.modernCode }, { report: true });
         if (routePath === "/api/export-zip") {
           const archive = createZip([...bundleToZipEntries(bundle), { name: CERTIFICATE_JSON_FILE, data: certificateJson }]);
           res.writeHead(200, {
@@ -829,7 +863,8 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...bundle, typecheck, prSummary, certificateSvg, certificateJson, signature }));
+        const { report: _report, ...bundleJson } = bundle;
+        res.end(JSON.stringify({ ...bundleJson, typecheck, prSummary, certificateSvg, certificateJson, signature, ...(reportHtml !== undefined ? { reportHtml } : {}) }));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -949,7 +984,7 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         let bundleId: string | undefined;
         if (result.success) {
           bundleId = randomUUID();
-          graphBundles.set(bundleId, buildGraphBundle(result, { runs: body.graphRuns ?? DEFAULT_LIVE_FUZZ_RUNS }));
+          graphBundles.set(bundleId, buildGraphBundle(result, { runs: body.graphRuns ?? DEFAULT_LIVE_FUZZ_RUNS, report: true }));
           while (graphBundles.size > GRAPH_BUNDLE_CACHE) {
             const oldest = graphBundles.keys().next().value;
             if (oldest === undefined) break;

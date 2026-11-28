@@ -1,4 +1,5 @@
 import type { CounterexampleReport, FuzzReport, FuzzTrace, InputSchema } from "../fuzzer/types.js";
+import type { PurityProof } from "./purity-audit.js";
 import type { RuleBlameEntry } from "./rule-blame.js";
 
 export type AgentRole = "archaeologist" | "architect" | "necromancer" | "exorcist";
@@ -34,6 +35,8 @@ export interface ResurrectionRequest {
   exact?: boolean;
   /** Record every input/legacy-output pair of the passing fuzz run (for the Type Alchemist). */
   collectObservations?: boolean;
+  /** Also run the purity audit (global leaks, prototype safety, input mutation) on a proven resurrection. Off unless asked. */
+  purityAudit?: boolean;
   onEvent?: (event: CrewEvent) => void;
 }
 
@@ -65,4 +68,6 @@ export interface ResurrectionResult {
   observations?: Array<{ inputs: Record<string, unknown>; ok: boolean; output?: unknown }>;
   /** Which AST rules rewrote (or were rolled back in) this resurrection, where, and why (Rule Blame X-Ray). */
   ruleBlame?: RuleBlameEntry[];
+  /** The fifth proof pillar, measured in the sandbox (only with `purityAudit` and a proven resurrection). */
+  purityProof?: PurityProof;
 }

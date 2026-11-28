@@ -350,7 +350,7 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
   });
@@ -421,4 +421,20 @@ describe("V16: the shared router resurrects the error-first preset (CLI, MCP and
     expect(r.success).toBe(true);
     expect(r.tscPassed).toBe(true);
   }, 60_000);
+});
+
+describe("V18: an async export carries RESURRECTION_REPORT.html and skips what does not apply", () => {
+  it("adds the offline report to the legacyReadConfigCb .zip with an honest purity and performance note", async () => {
+    const preset = BENCHMARK_PRESETS.find((x) => x.name === "legacyReadConfigCb");
+    if (preset === undefined) throw new Error("no preset");
+    const r = await resurrectAny({ name: preset.name, source: preset.code, schema: preset.schema as never, fuzzRuns: 30, seed: 6 });
+    expect(r.success).toBe(true);
+    const bundle = await buildExportBundle({ specimenName: preset.name, legacyCode: preset.code, modernCode: r.modernCode, schema: preset.schema, fuzzRuns: 30 }, { report: true });
+    expect(bundle.reportHtml).toContain("async/await conversion");
+    expect(bundle.reportHtml).toContain("The purity audit applies to synchronous snippets");
+    expect(bundle.reportHtml).toContain("Async specimens settle");
+    expect(bundle.reportHtml).not.toMatch(/<script|https?:\/\//i);
+    expect(Object.keys(bundle.bundle.files)).not.toContain("RESURRECTION_REPORT.html");
+    expect(bundle.bundle.report).toBe(bundle.reportHtml);
+  }, 90_000);
 });

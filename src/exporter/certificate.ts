@@ -86,6 +86,7 @@ const RULE_LABEL: Record<RuleId, string> = {
   "function-arrow": "function → arrow",
   "bitor0-trunc": "| 0 → Math.trunc(x) || 0",
   "loose-equality": "== → === (proven types)",
+  "global-leak-fix": "undeclared global -> let (no global leak)",
 };
 
 /** Debt points per rewrite site and the cap per rule. */
@@ -97,6 +98,7 @@ const WEIGHTS: Record<RuleId, { per: number; cap: number }> = {
   "function-arrow": { per: 1, cap: 5 },
   "bitor0-trunc": { per: 3, cap: 15 },
   "loose-equality": { per: 2, cap: 10 },
+  "global-leak-fix": { per: 3, cap: 9 },
 };
 const COMMONJS_POINTS = 5;
 const FLAGGED_POINTS = 2;

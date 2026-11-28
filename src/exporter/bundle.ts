@@ -1,6 +1,7 @@
 import type * as ESTree from 'estree';
 import { parseProgram, printProgram } from '../crew/ast-modernizer.js';
 import { usesOwnThisOrArguments } from '../crew/ast-scope.js';
+import { REPORT_FILE } from './html-report.js';
 import { renderDeclaration, renderJsDoc, renderType, type TypeSignature } from '../crew/type-alchemist.js';
 
 export interface ResurrectionBundleInput {
@@ -56,6 +57,8 @@ export interface ResurrectionBundle {
     'types.d.ts'?: string;
   };
   prDiff: string;
+  /** RESURRECTION_REPORT.html (html-report.ts). Kept beside `files`, not in it, so the CLI and MCP file lists stay as they are; `bundleToZipEntries` adds it to every .zip the Studio exports. */
+  report?: string;
 }
 
 export const WORKFLOW_PATH = '.github/workflows/lazarus-parity.yml';
@@ -131,7 +134,12 @@ export function renderAuditWorkflow(): string {
 /** Every bundle file, plus the PR diff as `resurrection.patch` and the Code Scanning workflow, in a stable order. */
 export function bundleToZipEntries(bundle: ResurrectionBundle): Array<{ name: string; data: string }> {
   const entries = Object.entries(bundle.files).flatMap(([name, data]) => (data === undefined ? [] : [{ name, data }]));
-  return [...entries, { name: 'resurrection.patch', data: `${bundle.prDiff}\n` }, { name: AUDIT_WORKFLOW_PATH, data: renderAuditWorkflow() }];
+  return [
+    ...entries,
+    { name: 'resurrection.patch', data: `${bundle.prDiff}\n` },
+    { name: AUDIT_WORKFLOW_PATH, data: renderAuditWorkflow() },
+    ...(bundle.report !== undefined ? [{ name: REPORT_FILE, data: bundle.report }] : []),
+  ];
 }
 export function sanitizeIdentifier(raw?: string): string {
   const cleaned = (raw || 'resurrectedSpecimen').replace(/[^a-zA-Z0-9_$]/g, '_');

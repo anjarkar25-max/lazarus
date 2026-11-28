@@ -6,6 +6,7 @@ import type { ProbeExecutor } from "../sandbox/types.js";
 import { modernize, summarizeForSpec } from "./ast-modernizer.js";
 import { DeterministicModernizer } from "./synthesizer.js";
 import { computeRuleBlame } from "./rule-blame.js";
+import { auditPurity } from "./purity-audit.js";
 import { resurrectPromiseChainWith } from "./es5-idioms.js";
 import { plural } from "../text/plural.js";
 import { resurrectErrorFirstWith, type ErrorFirstRequest, type ErrorFirstResult } from "./async-callback.js";
@@ -273,6 +274,11 @@ export class ResurrectionOrchestrator {
           emit("exorcist", "self_healed", `Behavioral parity verified after ${attempt} attempts`);
         }
         emit("exorcist", "completed", `Resurrection complete: 100% parity proven across ${lastReport.totalRuns} runs`);
+        // Purity pillar: measured in the same sandbox, silently (no event), and only when the caller asked for it.
+        const purityProof =
+          request.purityAudit === true
+            ? await auditPurity({ legacyCode: request.legacyCode, modernCode, schema: request.schema, executor: deps.runner, ...(request.seed !== undefined ? { seed: request.seed } : {}) })
+            : undefined;
         return {
           success: true,
           name: request.name,
@@ -283,6 +289,7 @@ export class ResurrectionOrchestrator {
           fuzzReport: lastReport,
           events,
           ...(request.collectObservations === true ? { observations: observed } : {}),
+          ...(purityProof !== undefined ? { purityProof } : {}),
           ...blame(),
         };
       }

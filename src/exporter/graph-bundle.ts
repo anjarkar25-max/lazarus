@@ -7,12 +7,15 @@ import { AUDIT_WORKFLOW_PATH, renderAuditWorkflow, renderWorkflow, sanitizeIdent
 import { createZip } from "./zip.js";
 import { plural } from "../text/plural.js";
 import { describeTypecheck, strictTsconfig } from "../crew/ts-verifier.js";
+import { REPORT_FILE, renderResurrectionReport } from "./html-report.js";
 
 export interface GraphBundle {
   readonly name: string;
   /** Archive path -> content. */
   readonly files: Record<string, string>;
   readonly patch: string;
+  /** RESURRECTION_REPORT.html for the project; present when `buildGraphBundle` was asked for it. It joins the .zip, not `files`. */
+  readonly report?: string;
 }
 
 const ARBITRARY: Record<ParamKind, string> = {
@@ -130,7 +133,26 @@ function renderSpec(result: GraphResurrectionResult): string {
 /** `money.ts` for a typed module, the ES module path otherwise. */
 const outputPath = (f: GraphResurrectionResult["files"][number]): string => (f.tsCode !== "" ? f.tsPath : f.esmPath);
 
-export function buildGraphBundle(result: GraphResurrectionResult, options: { readonly runs?: number } = {}): GraphBundle {
+/** The project report: each file's legacy text against its resurrected text, with the per-file attempts, rollbacks and cycles. */
+function renderProjectReport(result: GraphResurrectionResult, files: Record<string, string>): string {
+  const outputOf = (f: GraphResurrectionResult["files"][number]): string => `src/${outputPath(f)}`;
+  const legacy = result.files.map((f) => `// ==== ${f.path} ====\n${f.legacyCode.replace(/\r\n/g, "\n").trimEnd()}`).join("\n\n");
+  const modern = result.files.map((f) => `// ==== ${outputOf(f)} ====\n${(f.tsCode || f.esmCode).trimEnd()}`).join("\n\n");
+  const tc = result.typecheck;
+  return renderResurrectionReport({
+    name: result.name,
+    kind: "project",
+    legacyCode: legacy,
+    modernCode: modern,
+    fuzz: { runs: result.parity?.totalRuns ?? 0, attempts: Math.max(1, ...result.files.map((f) => f.attempts)), healed: result.files.some((f) => f.healed), exact: true },
+    ...(tc !== undefined ? { typecheck: { passed: tc.passed, errorCount: tc.errorCount, filesChecked: tc.filesChecked, tsVersion: tc.tsVersion, diagnostics: tc.diagnostics.map((d) => ({ file: d.file, line: d.line, code: d.code, message: d.message })) } } : {}),
+    causal: { rules: result.files.flatMap((f) => f.rolledBack.map((rule) => ({ rule: `${f.path}: ${rule}`, status: "rolled-back" as const, reason: "the Exorcist rolled this rewrite back after a counterexample" }))) },
+    projectFiles: result.files.map((f) => ({ path: f.path, output: outputOf(f), attempts: f.attempts, runs: f.fuzzRuns, rolledBack: f.rolledBack })),
+    cycles: result.graph.cycles,
+    files: [...Object.keys(files), AUDIT_WORKFLOW_PATH, REPORT_FILE].sort(),
+  });
+}
+export function buildGraphBundle(result: GraphResurrectionResult, options: { readonly runs?: number; readonly report?: boolean } = {}): GraphBundle {
   const runs = options.runs ?? 100;
   const files: Record<string, string> = {};
   for (const f of result.files) {
@@ -158,9 +180,9 @@ export function buildGraphBundle(result: GraphResurrectionResult, options: { rea
   files[WORKFLOW_PATH] = renderWorkflow();
   const patch = result.files.map((f) => unifiedFileDiff(f.path, `src/${outputPath(f)}`, f.legacyCode, f.tsCode || f.esmCode)).join("\n");
   files["resurrection.patch"] = `${patch}\n`;
-  return { name: result.name, files, patch };
+  return { name: result.name, files, patch, ...(options.report === true ? { report: renderProjectReport(result, files) } : {}) };
 }
 
 export function graphBundleZip(bundle: GraphBundle): Buffer {
-  return createZip([...Object.entries(bundle.files).map(([name, data]) => ({ name, data })), { name: AUDIT_WORKFLOW_PATH, data: renderAuditWorkflow() }]);
+  return createZip([...Object.entries(bundle.files).map(([name, data]) => ({ name, data })), { name: AUDIT_WORKFLOW_PATH, data: renderAuditWorkflow() }, ...(bundle.report !== undefined ? [{ name: REPORT_FILE, data: bundle.report }] : [])]);
 }

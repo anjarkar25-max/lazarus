@@ -1,0 +1,12 @@
+# Tasks: V18 Product Flagship
+- [x] 1. `src/crew/purity-audit.ts`: leak analysis, `detectGlobalLeaks`, `auditPurity`, `PurityProof`.
+- [x] 2. Necromancer rule `global-leak-fix` (ladders, order, header compatibility, certificate and blame entries).
+- [x] 3. Orchestrator and Studio: `purityProof` on a proven sync resurrection; naive `strict-mode` rewrite.
+- [x] 4. `LAZ008 UndeclaredGlobalLeak` in `cli-audit.ts` and the SARIF drawer.
+- [x] 5. Preset `legacyLeakyMutator` (Tab 1) with parity, purity and `tsc --strict: 0 errors`.
+- [x] 6. `src/exporter/html-report.ts`; report inside single-file, async and whole-project `.zip` bundles.
+- [x] 7. PR Preview drawer and **Download Offline Report (.html)**.
+- [x] 8. 5-Pill Proof Strip and the Kiro Ecosystem Architecture Map.
+- [x] 9. Tests: purity-audit, html-report, studio-ui, kiro-dna, kiro-power, async-callback; 28 Kiro Specs; Tab 3 hashes.
+- [x] 10. E2E: `legacyLeakyMutator`, the strip and the PR Preview drawer.
+- [x] 11. Verify: `npx tsc --noEmit`, `npx vitest run`, `npm run test:e2e`, badges, temp-file cleanup.

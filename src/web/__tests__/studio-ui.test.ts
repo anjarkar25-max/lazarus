@@ -981,10 +981,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 27-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 28-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1324,7 +1324,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(27);
+    expect(body["specs"]).toBe(28);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1357,8 +1357,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 27 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+  it("shows 28 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
   });
 });
 
@@ -1595,8 +1595,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 27 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    it("shows 28 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
     });
   });
 });
@@ -1784,14 +1784,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 27 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 28 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2104,7 +2104,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 27 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 28 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2116,7 +2116,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
   });
@@ -2443,7 +2443,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
-    it("keeps Tab 3 Red-Team byte-identical, shows 27 Kiro Specs and adds no dependency", () => {
+    it("keeps Tab 3 Red-Team byte-identical, shows 28 Kiro Specs and adds no dependency", () => {
       const between = (a: string, b: string): string => {
         const s = html.indexOf(a);
         const e = html.indexOf(b, s + a.length);
@@ -2455,7 +2455,7 @@ describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Exp
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
       const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
     });
@@ -2729,9 +2729,264 @@ describe("V17 UX polish: one drawer at a time, Escape, focus return, focus trap,
       expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
       const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
       expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">27 Kiro Specs</span>');
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
       const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
       expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
     });
   });
 });
+
+describe("V18 5-Pill Proof Strip, PR Preview drawer and Kiro Ecosystem Map (shipped scripts, minimal DOM)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  type Pill = { id: string; label: string; value: string; tone: string };
+  const pills = (r: unknown, ctx: Record<string, unknown> = {}): Pill[] => (runInlineScript(`${regionOf("lz-proof")}; lzProofPills`, {}) as (r: unknown, c: unknown) => Pill[])(r, ctx);
+  const byId = (list: Pill[], id: string): Pill => list.find((p) => p.id === id) ?? { id, label: "", value: "", tone: "" };
+  const PROVEN = { success: true, fuzzReport: { totalRuns: 80 }, certificate: { signature: {} }, purityProof: { globalLeaksDetected: ["total"], globalLeaksEliminated: true, prototypeSafe: true, inputMutationParity: true, legacyMutatesInput: true, samples: 6, proven: true } };
+
+  describe("lzProofPills (pure)", () => {
+    it("is five idle pills before a result, in the order parity, purity, mutants, Ed25519, perf", () => {
+      const list = pills(null);
+      expect(list.map((p) => p.id)).toEqual(["parity", "purity", "mutants", "ed25519", "perf"]);
+      expect(list.map((p) => p.label)).toEqual(["Object.is Parity", "Purity / Zero Leaks", "Mutants Killed", "Ed25519 Offline", "Perf Parity"]);
+      expect(list.every((p) => p.tone === "idle" && p.value === "-")).toBe(true);
+    });
+    it("shows proven parity with the run count and a purity pill that names how many leaks were fixed", () => {
+      const list = pills(PROVEN);
+      expect(byId(list, "parity")).toMatchObject({ tone: "ok", value: "PROVEN \u00b7 80 runs" });
+      expect(byId(list, "purity")).toMatchObject({ tone: "ok", value: "Fixed 1 leak" });
+      expect(byId(pills({ ...PROVEN, purityProof: { ...PROVEN.purityProof, globalLeaksDetected: [] } }), "purity").value).toBe("Zero leaks");
+      expect(byId(pills({ ...PROVEN, purityProof: { ...PROVEN.purityProof, globalLeaksDetected: ["a", "b"] } }), "purity").value).toBe("Fixed 2 leaks");
+    });
+    it("never shows a pillar as proven that was not: failed parity, failed purity, no purity proof, async", () => {
+      expect(byId(pills({ ...PROVEN, success: false }), "parity")).toMatchObject({ tone: "bad", value: "NOT PROVEN" });
+      expect(byId(pills({ ...PROVEN, purityProof: { ...PROVEN.purityProof, proven: false } }), "purity")).toMatchObject({ tone: "bad", value: "NOT PROVEN" });
+      expect(byId(pills({ success: true, fuzzReport: { totalRuns: 5 } }), "purity")).toMatchObject({ tone: "idle", value: "not measured" });
+      expect(byId(pills({ success: true, fuzzReport: { totalRuns: 5 }, asyncCallback: { kind: "promise-chain" } }), "purity").value).toBe("n/a (async / module)");
+    });
+    it("reports the mutation score, the Ed25519 state (offline, API, tamper, unsigned) and the performance ratio or skip", () => {
+      expect(byId(pills(PROVEN, { mutation: { killed: 5, total: 5 } }), "mutants")).toMatchObject({ tone: "ok", value: "5/5 killed" });
+      expect(byId(pills(PROVEN, { mutation: { killed: 4, total: 5 } }), "mutants").tone).toBe("warn");
+      expect(byId(pills(PROVEN), "mutants").value).toBe("run the audit");
+      expect(byId(pills(PROVEN, { sig: { valid: true, tamper: false, offline: true } }), "ed25519")).toMatchObject({ tone: "ok", value: "Verified offline" });
+      expect(byId(pills(PROVEN, { sig: { valid: true, tamper: false, offline: false } }), "ed25519").value).toBe("Verified (Studio API)");
+      expect(byId(pills(PROVEN, { sig: { valid: false, tamper: true, offline: true } }), "ed25519")).toMatchObject({ tone: "bad", value: "TAMPER DETECTED" });
+      expect(byId(pills(PROVEN), "ed25519").value).toBe("verifying...");
+      expect(byId(pills({ success: true, fuzzReport: { totalRuns: 5 } }), "ed25519").value).toBe("unsigned");
+      expect(byId(pills(PROVEN, { perf: { ratio: 1.123, verdict: "faster" } }), "perf")).toMatchObject({ tone: "ok", value: "1.12x faster" });
+      expect(byId(pills(PROVEN, { perf: { ratio: 0.8, verdict: "slower" } }), "perf").tone).toBe("warn");
+      expect(byId(pills(PROVEN, { perf: { skipped: "async / module" } }), "perf").value).toBe("skipped: async / module");
+      expect(byId(pills(PROVEN), "perf").value).toBe("measuring...");
+      expect(byId(pills(PROVEN, { perfText: "1.05x \u00b7 3.1\u00b5s vs 3.3\u00b5s" }), "perf").value).toContain("1.05x");
+      expect(byId(pills({ ...PROVEN, asyncCallback: { kind: "error-first" } }), "perf").value).toBe("skipped (async / module)");
+    });
+  });
+
+  describe("PR Preview helpers (pure)", () => {
+    const lib = (): { tree: (n: string[]) => string; apply: (z: string) => string; checks: (i: Record<string, unknown>) => Array<{ text: string; done: boolean }>; cls: (l: string) => string } => {
+      const o = runInlineScript(`${regionOf("lz-pr")}; ({ tree: lzPrTree, apply: lzGitApply, checks: lzPrChecks, cls: lzDiffClass })`, {}) as ReturnType<typeof lib>;
+      return o;
+    };
+    it("draws the archive tree with folders once, sorted, including the report and the audit workflow", () => {
+      const tree = lib().tree(["resurrected.ts", ".github/workflows/lazarus-audit.yml", "RESURRECTION_REPORT.html", ".github/workflows/lazarus-parity.yml", "SPEC.md"]);
+      expect(tree.split("\n")).toEqual(["\u25be .github/", "  \u25be workflows/", "    \u00b7 lazarus-audit.yml", "    \u00b7 lazarus-parity.yml", "\u00b7 RESURRECTION_REPORT.html", "\u00b7 SPEC.md", "\u00b7 resurrected.ts"]);
+    });
+    it("builds a git apply one-liner that checks before it applies", () => {
+      expect(lib().apply("lazarus-pr-bundle.zip")).toBe("unzip -o lazarus-pr-bundle.zip -d lazarus-pr && git apply --check lazarus-pr/resurrection.patch && git apply lazarus-pr/resurrection.patch");
+    });
+    it("ticks only what the run produced", () => {
+      const done = lib().checks({ runs: 100, tscErrors: 0, mutation: { killed: 5, total: 5 }, purity: { proven: true }, signed: true, report: true });
+      expect(done.map((c) => c.done)).toEqual([true, true, true, true, true, true]);
+      const bare = lib().checks({ runs: 100, tscErrors: 2, mutation: null, purity: null, signed: false, report: false });
+      expect(bare.map((c) => c.done)).toEqual([true, false, false, false, false, false]);
+      expect(bare[1]?.text).toBe("tsc --strict: 2 errors");
+      expect(bare[2]?.text).toContain("not run");
+    });
+    it("classes unified diff lines", () => {
+      const cls = lib().cls;
+      expect(["+a", "-a", "@@ -1 +1 @@", "+++ b/x", "--- a/x", "diff --git a/x b/x", " same"].map(cls)).toEqual(["add", "del", "hunk", "hunk", "hunk", "hunk", ""]);
+    });
+  });
+
+  describe("the PR Preview drawer under the single-active-drawer manager", () => {
+    type El = FakeElement & { focus: () => void; focused: number };
+    const BUNDLE = {
+      specimenName: "half",
+      files: { "resurrected.ts": "export const x = 1;", "SPEC.md": "# spec", "resurrected.test.ts": "// t", ".github/workflows/lazarus-parity.yml": "name: p" },
+      prDiff: "diff --git a/legacy.cjs b/resurrected.ts\n--- a/legacy.cjs\n+++ b/resurrected.ts\n@@ -1,1 +1,1 @@\n-var x;\n+export const x = 1;",
+      prSummary: "## Resurrect half\n- parity proven",
+      typecheck: { errorCount: 0 },
+      signature: { keyId: "k1" },
+      reportHtml: "<!DOCTYPE html><html><body>report</body></html>",
+    };
+    const rig = (build: () => Promise<unknown>) => {
+      const doc = new FakeDocument();
+      const els: Record<string, El> = {};
+      const mk = (tag: string, id: string): El => {
+        const e = doc.element(tag, id) as El;
+        e.focused = 0;
+        e.focus = () => { e.focused++; };
+        els[id] = e;
+        return e;
+      };
+      for (const [tag, id] of [["button", "verifyBtn"], ["aside", "verifyDrawer"], ["div", "verifyScrim"], ["button", "verifyClose"], ["label", "verifyDrop"], ["input", "verifyFiles"], ["div", "verifyResult"], ["button", "sarifBtn"], ["aside", "sarifDrawer"], ["div", "sarifScrim"], ["button", "sarifClose"], ["select", "sarifSource"], ["button", "sarifRun"], ["button", "sarifDownload"], ["div", "sarifSummary"], ["div", "sarifChips"], ["div", "sarifList"], ["textarea", "legacyCode"], ["button", "prPreviewBtn"], ["aside", "prDrawer"], ["div", "prScrim"], ["button", "prClose"], ["div", "prBody"], ["button", "prDownloadReport"]] as const) mk(tag, id);
+      for (const id of ["verifyDrawer", "verifyScrim", "sarifDrawer", "sarifScrim", "prDrawer", "prScrim"]) els[id]!.hidden = true;
+      const made: Array<{ href: string; download: string; clicked: boolean }> = [];
+      const create = doc.createElement.bind(doc);
+      doc.createElement = (tag: string): FakeElement => {
+        const e = create(tag);
+        if (tag === "a") {
+          const rec = { href: "", download: "", clicked: false };
+          made.push(rec);
+          Object.defineProperty(e, "href", { get: () => rec.href, set: (v: string) => { rec.href = v; } });
+          Object.defineProperty(e, "download", { get: () => rec.download, set: (v: string) => { rec.download = v; } });
+          e.click = () => { rec.clicked = true; };
+        }
+        return e;
+      };
+      const blobs: Blob[] = [];
+      const win: Record<string, unknown> = { lastFuzzRuns: 80, LazarusBundle: { build } };
+      const globals = { document: doc, window: win, fetch: () => new Promise<Response>(() => undefined), Blob, URL: { createObjectURL: (b: Blob) => { blobs.push(b); return "blob:fake"; }, revokeObjectURL: () => undefined }, Array, Uint8Array, Promise, Object, navigator: {} };
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-drawers:start")) ?? "", globals);
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-bundle:start")) ?? "", globals);
+      runInlineScript(inlineScripts.find((s) => s.includes("lz-proof:start")) ?? "", globals);
+      const key = (k: string): boolean => {
+        let prevented = false;
+        doc.dispatchEvent({ type: "keydown", key: k, preventDefault: () => { prevented = true; } });
+        return prevented;
+      };
+      return { els, key, made, blobs };
+    };
+    const settle = async (): Promise<void> => {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+    };
+    const textOf = (e: FakeElement): string => e.textContent;
+    it("opens beside the zip button, builds the preview from the verified bundle, and offers the offline report", async () => {
+      const r = rig(() => Promise.resolve(BUNDLE));
+      r.els["prPreviewBtn"]!.click();
+      expect([r.els["prDrawer"]!.hidden, r.els["prScrim"]!.hidden]).toEqual([false, false]);
+      expect(r.els["prPreviewBtn"]!.getAttribute("aria-expanded")).toBe("true");
+      expect(r.els["prClose"]!.focused).toBe(1);
+      await settle();
+      const body = textOf(r.els["prBody"]!);
+      for (const s of ["Resurrect half: ES5 \u2192 ES2022 + strict TypeScript", "tsc --strict: 0 errors", "Files in the bundle (8)", "RESURRECTION_REPORT.html", "lazarus-audit.yml", "certificate.json", "unzip -o lazarus-pr-bundle.zip -d lazarus-pr && git apply --check lazarus-pr/resurrection.patch && git apply lazarus-pr/resurrection.patch", "git diff", "+export const x = 1;", "-var x;", "Ed25519 certificate signed", "RESURRECTION_REPORT.html included"]) expect(body, s).toContain(s);
+      expect(r.els["prDownloadReport"]!.disabled).toBe(false);
+      r.els["prDownloadReport"]!.click();
+      expect(r.made[0]).toMatchObject({ download: "RESURRECTION_REPORT.html", clicked: true, href: "blob:fake" });
+      expect(await r.blobs[0]!.text()).toBe(BUNDLE.reportHtml);
+    });
+    it("explains what to do first when there is no verified bundle, and keeps the report button disabled", async () => {
+      const r = rig(() => Promise.resolve(null));
+      r.els["prPreviewBtn"]!.click();
+      await settle();
+      expect(textOf(r.els["prBody"]!)).toContain("Run RESURRECT SPECIMEN first");
+      expect(r.els["prDownloadReport"]!.disabled).toBe(true);
+    });
+    it("disables the report button when the server sent none (an older export)", async () => {
+      const r = rig(() => Promise.resolve({ ...BUNDLE, reportHtml: undefined }));
+      r.els["prPreviewBtn"]!.click();
+      await settle();
+      expect(r.els["prDownloadReport"]!.disabled).toBe(true);
+      expect(textOf(r.els["prBody"]!)).toContain("No offline report");
+    });
+    it("closes the other drawers when it opens, and is closed by them (never two at once)", async () => {
+      const r = rig(() => Promise.resolve(BUNDLE));
+      r.els["sarifBtn"]!.click();
+      expect(r.els["sarifDrawer"]!.hidden).toBe(false);
+      r.els["prPreviewBtn"]!.click();
+      expect([r.els["sarifDrawer"]!.hidden, r.els["sarifScrim"]!.hidden, r.els["prDrawer"]!.hidden, r.els["prScrim"]!.hidden]).toEqual([true, true, false, false]);
+      expect(r.els["sarifBtn"]!.focused).toBe(0);
+      r.els["verifyBtn"]!.click();
+      expect([r.els["prDrawer"]!.hidden, r.els["prScrim"]!.hidden, r.els["verifyDrawer"]!.hidden]).toEqual([true, true, false]);
+      expect(r.els["prPreviewBtn"]!.getAttribute("aria-expanded")).toBe("false");
+      expect(r.els["prPreviewBtn"]!.focused).toBe(0);
+      await settle();
+    });
+    it("Escape closes it, returns focus to PR Preview and is consumed once; the scrim and Close work too", async () => {
+      const r = rig(() => Promise.resolve(BUNDLE));
+      r.els["prPreviewBtn"]!.click();
+      await settle();
+      expect(r.key("Escape")).toBe(true);
+      expect([r.els["prDrawer"]!.hidden, r.els["prScrim"]!.hidden]).toEqual([true, true]);
+      expect(r.els["prPreviewBtn"]!.focused).toBe(1);
+      expect(r.key("Escape")).toBe(false);
+      r.els["prPreviewBtn"]!.click();
+      r.els["prScrim"]!.click();
+      expect(r.els["prDrawer"]!.hidden).toBe(true);
+      r.els["prPreviewBtn"]!.click();
+      r.els["prClose"]!.click();
+      expect(r.els["prDrawer"]!.hidden).toBe(true);
+      r.els["prPreviewBtn"]!.click();
+      r.els["prPreviewBtn"]!.click();
+      expect(r.els["prDrawer"]!.hidden).toBe(true);
+    });
+  });
+
+  describe("markup, export payload and CSS", () => {
+    it("has the proof strip above the causal strip and the diff, with five keyboard-operable pills and a purity detail region", () => {
+      const strip = html.slice(html.indexOf('<div id="proofStrip"'), html.indexOf('<div id="purityDetail"'));
+      expect([...strip.matchAll(/<button type="button" class="proof-pill" id="(\w+)"/g)].map((m) => m[1])).toEqual(["pillParity", "pillPurity", "pillMutants", "pillEd", "pillPerf"]);
+      expect(strip).toContain('role="group" aria-label="5-Pill Proof Strip" hidden');
+      expect(html).toContain('id="purityDetail" class="purity-detail" role="region"');
+      const deck = html.indexOf('id="verifyDeck"');
+      expect(html.indexOf('id="proofStrip"')).toBeGreaterThan(deck);
+      expect(html.indexOf('id="proofStrip"')).toBeLessThan(html.indexOf('id="causalStrip"'));
+      expect(html.indexOf('id="proofStrip"')).toBeLessThan(html.indexOf('id="legacyDiffBlock"'));
+      expect(html).toContain("(document.getElementById(\"shrinkToggle\") || cs).focus();");
+      expect(html).toContain('$("pillMutants").addEventListener("click"');
+      expect(html).toContain('(document.getElementById("certTamperBtn") || card).focus();');
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+    });
+    it("puts PR Preview right after the .zip button, and its drawer is hidden, modal and labelled", () => {
+      expect(html).toMatch(/id="downloadZipBtn"[^\n]*Download \.zip PR Archive<\/button>\n\s*<button id="prPreviewBtn" type="button"[^\n]*>PR Preview<\/button>/);
+      expect(html).toMatch(/id="prDrawer" role="dialog" aria-modal="true" aria-labelledby="prTitle" hidden>/);
+      expect(html).toContain('id="prDownloadReport"');
+      expect(html).toContain("Download Offline Report (.html)");
+      expect(html).toContain('mgr.register("pr"');
+      expect(html).toContain('pr: "prDrawer"');
+      expect(html).toContain('a.download = "RESURRECTION_REPORT.html";');
+    });
+    it("sends the session's Performance Parity, Mutant Autopsy and rollback summaries with the export", () => {
+      expect(html).toContain("mutationAudit: window.lastMutationScore || undefined,");
+      for (const s of ["perfParity: window.lastPerf || undefined,", "mutants: window.lastMutants || undefined,", "causal: window.lastCausal || undefined"]) expect(html, s).toContain(s);
+    });
+    it("adds the Kiro Ecosystem Architecture Map to the Kiro DNA drawer, in pillar order, filled from /api/kiro-dna", () => {
+      const map = html.slice(html.indexOf('<svg id="dnaMap"'), html.indexOf("</svg>", html.indexOf('<svg id="dnaMap"')));
+      const titles = [...map.matchAll(/class="dm-title"[^>]*>([^<]+)</g)].map((m) => m[1]);
+      expect(titles).toEqual(["Specs", "Crew Agents", "Hooks", "Steering Docs", "lazarus-sandbox MCP", "power-lazarus Kiro Power", "lazarus-kiro-crew App"]);
+      expect(map).not.toMatch(LOADS_IN_SVG);
+      expect(html.indexOf('id="dnaMap"')).toBeGreaterThan(html.indexOf('id="dnaDrawer"'));
+      expect(html.indexOf('id="dnaMap"')).toBeLessThan(html.indexOf('id="chimera"'));
+      for (const s of ['set("dmSpecs", dna.specCount + " Specs");', 'set("dmAgents", dna.agents.length + " Crew Agents");', 'set("dmHooks", dna.hooks.length + " Hooks");', 'set("dmSteering", dna.steering.length + " Steering Docs");', "fillDnaMap(dna);"]) expect(html, s).toContain(s);
+      expect(html).toContain("Kiro Ecosystem Architecture Map");
+    });
+    it("ships the legacyLeakyMutator preset (leak + input mutation) and the V18 CSS outside the Red-Team region", () => {
+      expect(html).toContain('value: "legacyLeakyMutator"');
+      expect(html).toContain("total = 0;\\n  if (!Array.isArray(list)) return total;");
+      expect(html).toContain("list[i] = list[i] * factor;");
+      const css = html.slice(html.indexOf("/* ---- V18:"), html.indexOf("</style>"));
+      for (const s of [".proof-strip", ".proof-pill", '.proof-pill[data-tone="ok"]', ".pr-card", ".pr-diff", "#dnaMap"]) expect(css, s).toContain(s);
+      expect(css).not.toMatch(/redteam|\.rt-|Red-Team/i);
+      expect(html.indexOf("/* ---- V18:")).toBeGreaterThan(html.indexOf("/* ---- Red-Team Lab"));
+    });
+    it("keeps the three Tab 3 SHA-256 invariants, 3 tabs, unique ids and 28 Kiro Specs", () => {
+      const sha = (t: string): string => createHash("sha256").update(t).digest("hex");
+      const between = (a: string, b: string): string => html.slice(html.indexOf(a), html.indexOf(b, html.indexOf(a) + a.length));
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">28 Kiro Specs</span>');
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+      const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+      expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    });
+  });
+});
+const LOADS_IN_SVG = /<script|<image|<foreignObject|xlink:href|\shref\s*=|https?:\/\//i;

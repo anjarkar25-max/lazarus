@@ -11,6 +11,7 @@ import { areOutputsEquivalent } from "../fuzzer/differential.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import { decodeTagged } from "../sandbox/tagged.js";
 import { inheritanceParentOf, scopeGuardOf, superCallOf, type SuperCall } from "./es5-idioms.js";
+import { leakSites } from "./purity-audit.js";
 import {
   analyze,
   inferType,
@@ -37,6 +38,8 @@ export const RULE_LADDERS = {
   "arguments-rest": ["rest", "off"],
   "apply-spread": ["spread", "spread-proven", "off"],
   "loose-equality": ["strict-proven", "off"],
+  /** V18 purity pillar: an undeclared global that a function assigns becomes a `let` of that function. */
+  "global-leak-fix": ["declare", "off"],
 } as const;
 
 export type RuleId = keyof typeof RULE_LADDERS;
@@ -51,6 +54,7 @@ export const RULE_ORDER: readonly RuleId[] = [
   "function-arrow",
   "bitor0-trunc",
   "loose-equality",
+  "global-leak-fix",
 ];
 
 /** Refinement blames riskier rules first. */
@@ -61,6 +65,7 @@ export const RISK_ORDER: readonly RuleId[] = [
   "arguments-rest",
   "function-arrow",
   "prototype-class",
+  "global-leak-fix",
   "var-scoping",
 ];
 
@@ -73,6 +78,7 @@ export function defaultLevels(): RuleLevels {
     "arguments-rest": 0,
     "apply-spread": 0,
     "loose-equality": 0,
+    "global-leak-fix": 0,
   };
 }
 
@@ -134,7 +140,7 @@ export interface AppliedRewrite {
 }
 
 export interface FlaggedSite {
-  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope" | "prototype-kept";
+  readonly kind: "loose-equality" | "var-kept" | "dynamic-scope" | "prototype-kept" | "global-leak";
   readonly line: number;
   readonly text: string;
   readonly reason: string;
@@ -142,6 +148,8 @@ export interface FlaggedSite {
 
 export interface ModernizeOptions {
   readonly levels?: RuleLevels;
+  /** Names the sandbox supplies as inputs (the fuzz schema): assignments to them are not global leaks. */
+  readonly inputs?: readonly string[];
   /** Set false to leave `| 0` untouched (the only rewrite that is not provably equivalent). */
   readonly speculativeTruncation?: boolean;
 }
@@ -810,6 +818,42 @@ function ruleBitOr0(a: Analysis, applied: AppliedRewrite[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Rule: global-leak-fix (V18 purity pillar)
+// ---------------------------------------------------------------------------
+/**
+ * `total = 0;` inside a function, with no declaration anywhere, creates a global in sloppy ES5 and throws a ReferenceError in
+ * strict ES2022. When the name is private to one function and its first use is that plain assignment, the statement becomes
+ * `let total = 0;`. Shared or order-dependent leaks are kept as they are and flagged: the Exorcist decides, never a guess.
+ */
+function ruleGlobalLeakFix(a: Analysis, fix: boolean, inputs: readonly string[], applied: AppliedRewrite[], flagged: FlaggedSite[]): void {
+  for (const site of leakSites(a, inputs)) {
+    if (!fix || site.fix === undefined) {
+      flagged.push({ kind: "global-leak", line: site.line, text: site.name, reason: site.keptBecause ?? "the rule is rolled back for this specimen" });
+      continue;
+    }
+    const { statement, assignment, target } = site.fix;
+    const before = gen(statement).replace(/;\s*$/, "");
+    const record = statement as unknown as Record<string, unknown>;
+    delete record["expression"];
+    delete record["directive"];
+    Object.assign(record, { type: "VariableDeclaration", kind: "let", declarations: [{ type: "VariableDeclarator", id: target, init: assignment.right }] });
+    applied.push(
+      track(
+        {
+          rule: "global-leak-fix",
+          variant: "declare",
+          line: site.line,
+          before,
+          after: gen(statement).replace(/;\s*$/, ""),
+          speculative: false,
+          note: `${site.name} leaked onto the global object in sloppy mode and throws a ReferenceError in strict mode; it is now a let of ${site.functionName}`,
+        },
+        statement as unknown as Node
+      )
+    );
+  }
+}
+// ---------------------------------------------------------------------------
 // Rule: loose-equality
 // ---------------------------------------------------------------------------
 
@@ -1283,6 +1327,9 @@ export function modernize(source: string, options: ModernizeOptions = {}): Moder
       if (!rulePrototypeClass(analyze(ast), applied, flagged)) break;
     }
   }
+  // After prototype-class (which keeps refusing a constructor that leaks, a strict-mode hazard) and before the rest: it changes
+  // one statement and keeps every other node, and its position, as parsed. A site whose nodes lost their position is kept.
+  ruleGlobalLeakFix(analyze(ast), on("global-leak-fix"), options.inputs ?? [], applied, flagged);
   if (on("arguments-rest")) ruleArgumentsRest(analyze(ast), applied);
   if (on("apply-spread")) ruleApplySpread(analyze(ast), levels["apply-spread"], applied);
   if (on("function-arrow")) ruleFunctionArrow(analyze(ast), applied);

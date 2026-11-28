@@ -1,4 +1,4 @@
-﻿import { PooledProbeRunner } from "../sandbox/pool.js";
+import { PooledProbeRunner } from "../sandbox/pool.js";
 import type { ProbeExecutor } from "../sandbox/types.js";
 import {
   defaultLevels,
@@ -50,6 +50,7 @@ export class DeterministicModernizer implements CodeSynthesizer {
 
     const result = modernize(ctx.legacyCode, {
       levels,
+      inputs: Object.keys(ctx.schema),
       ...(this.options.speculativeTruncation !== undefined ? { speculativeTruncation: this.options.speculativeTruncation } : {}),
     });
     if (!result.parsed) {
