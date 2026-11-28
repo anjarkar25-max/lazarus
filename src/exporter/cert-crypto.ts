@@ -8,7 +8,7 @@
 // was not altered after signing, not who signed it. Set LAZARUS_ED25519_EPHEMERAL=1 for a fresh random key per process.
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
 import { z } from "zod";
-import { readZip } from "./zip.js";
+import { readZip, type ReadZipLimits } from "./zip.js";
 import { sha256Hex } from "./certificate.js";
 
 export const CERTIFICATE_JSON_FILE = "certificate.json";
@@ -196,36 +196,39 @@ const CertificateJsonSchema = z
 
 export interface BundleVerification extends VerifyResult {
   readonly subjectFile: string;
+  /** Names of the archive entries that were read (empty when the archive could not be read). */
+  readonly entries: string[];
 }
 
-/** Verifies an exported `.zip`: certificate.json against the file it names. */
-export function verifyBundleZip(zip: Buffer): BundleVerification {
-  const missing = (reason: string): BundleVerification => ({ valid: false, reason, expectedDigest: "unknown", actualDigest: "unknown", keyId: "unknown", trustedKey: false, subjectFile: SIGNED_SUBJECT_FILE });
+/** Verifies an exported `.zip`: certificate.json against the file it names. `limits` caps an untrusted upload. */
+export function verifyBundleZip(zip: Buffer, limits?: ReadZipLimits): BundleVerification {
+  const missing = (reason: string): BundleVerification => ({ valid: false, reason, expectedDigest: "unknown", actualDigest: "unknown", keyId: "unknown", trustedKey: false, subjectFile: SIGNED_SUBJECT_FILE, entries: [] });
   let entries;
   try {
-    entries = readZip(zip);
+    entries = readZip(zip, limits);
   } catch (err: unknown) {
     return missing(`Not a readable zip archive: ${err instanceof Error ? err.message : String(err)}`);
   }
+  const names = entries.map((e) => e.name);
   const certEntry = entries.find((e) => e.name === CERTIFICATE_JSON_FILE);
-  if (certEntry === undefined) return missing(`${CERTIFICATE_JSON_FILE} is missing from the archive`);
+  if (certEntry === undefined) return { ...missing(`${CERTIFICATE_JSON_FILE} is missing from the archive`), entries: names };
   let json: unknown;
   try {
     json = JSON.parse(certEntry.data.toString("utf8"));
   } catch {
-    return missing(`${CERTIFICATE_JSON_FILE} is not valid JSON`);
+    return { ...missing(`${CERTIFICATE_JSON_FILE} is not valid JSON`), entries: names };
   }
   const checked = CertificateJsonSchema.safeParse(json);
-  if (!checked.success) return missing(`${CERTIFICATE_JSON_FILE} is malformed`);
+  if (!checked.success) return { ...missing(`${CERTIFICATE_JSON_FILE} is malformed`), entries: names };
   const subject = entries.find((e) => e.name === checked.data.subjectFile);
-  if (subject === undefined) return { ...missing(`${checked.data.subjectFile} is missing from the archive`), subjectFile: checked.data.subjectFile };
+  if (subject === undefined) return { ...missing(`${checked.data.subjectFile} is missing from the archive`), subjectFile: checked.data.subjectFile, entries: names };
   const result = verifyCertificate({
     payload: checked.data.payload,
     signatureB64: checked.data.signatureB64,
     publicKeyPem: checked.data.publicKeyPem,
     resurrectedCode: subject.data.toString("utf8"),
   });
-  return { ...result, subjectFile: checked.data.subjectFile };
+  return { ...result, subjectFile: checked.data.subjectFile, entries: names };
 }
 
 /** Markdown footer for a signed certificate. */

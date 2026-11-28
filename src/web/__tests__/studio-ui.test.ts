@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, webcrypto } from "node:crypto";
 import * as fs from "node:fs";
 import type { AddressInfo } from "node:net";
 import * as nodePath from "node:path";
@@ -9,7 +9,9 @@ import * as fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MAX_LCS_CELLS, diffLines, diffStats, splitLines, type DiffLine } from "../line-diff.js";
 import { analyzeGraph } from "../../crew/graph-resurrector.js";
-import { FakeDocument, runInlineScript, type FakeElement } from "./fake-dom.js";
+import { FakeDocument, FakeElement, runInlineScript } from "./fake-dom.js";
+import { signCertificate, verifyCertificate, type SignatureBlock } from "../../exporter/cert-crypto.js";
+import { createZip, readZip } from "../../exporter/zip.js";
 import { createWebServer } from "../server.js";
 
 const root = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -979,10 +981,10 @@ describe("repo intake and lab link (shipped lz-intake helpers and link script, m
     expect(studio).toContain('close.textContent = "Close"; close.addEventListener("click", () => { hud.hidden = true; });');
   });
 
-  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 25-spec badge", () => {
+  it("shows the hooks and the Kiro Power in the Kiro DNA drawer, and the 26-spec badge", () => {
     expect(pageHtml).toContain('<div class="dna-grid" id="dnaHooks"></div>');
     expect(pageHtml).toContain('"Agent hooks (" + dna.hooks.length + ")"');
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
     expect(pageHtml).toContain('<div class="dna-power" id="dnaPower"></div>');
     expect(pageHtml).toContain('"Installable Kiro Power (" + power.name + ")"');
     expect(pageHtml).toContain('copy.id = "dnaPowerCopy";');
@@ -1322,7 +1324,7 @@ describe("V12 GET /api/health", () => {
     const badge = Number(/id="badgeTests">(\d+) Verified Tests</.exec(pageHtml)?.[1]);
     expect(body["tests"]).toBe(badge);
     expect(body["specs"]).toBe(fs.readdirSync(nodePath.join(root, ".kiro", "specs"), { withFileTypes: true }).filter((d) => d.isDirectory()).length);
-    expect(body["specs"]).toBe(25);
+    expect(body["specs"]).toBe(26);
   });
 
   it("leaves the existing /health route unchanged", async () => {
@@ -1355,8 +1357,8 @@ describe("V12 leaves Tab 3 (Red-Team) untouched", () => {
     }
   });
 
-  it("shows 25 Kiro Specs", () => {
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+  it("shows 26 Kiro Specs", () => {
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
   });
 });
 
@@ -1593,8 +1595,8 @@ describe("V13 Grand Prize Finisher (shipped scripts, minimal DOM, live server)",
       expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
       expect(pkg.scripts["verify"]).toBe("tsx src/cli.ts verify");
     });
-    it("shows 25 Kiro Specs", () => {
-      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    it("shows 26 Kiro Specs", () => {
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
     });
   });
 });
@@ -1782,14 +1784,14 @@ describe("V14 Final Boss (shipped scripts, minimal DOM)", () => {
     });
   });
 
-  it("adds no tab, keeps Tab 3 byte-identical, shows 25 Kiro Specs and needs no new dependency", () => {
+  it("adds no tab, keeps Tab 3 byte-identical, shows 26 Kiro Specs and needs no new dependency", () => {
     expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
     const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
     const start = html.indexOf('/* ---- Red-Team Lab');
     expect(sha(html.slice(start, html.indexOf("\n/* ----", start + 5)))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
     const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
     expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
   });
@@ -2102,7 +2104,7 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(pane).toContain('id="shrinkWaterfall"');
   });
 
-  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 25 Kiro Specs", () => {
+  it("keeps Tab 3 Red-Team byte-identical (the three SHA-256 invariants) and shows 26 Kiro Specs", () => {
     const between = (a: string, b: string): string => {
       const s = html.indexOf(a);
       const e = html.indexOf(b, s + a.length);
@@ -2114,8 +2116,348 @@ describe("V15 Compiler Depth: Shrink Trace waterfall and Rule Blame X-Ray (shipp
     expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
     const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
     expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
-    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
     const tab3 = between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"');
     expect(tab3).not.toMatch(/xray|shrink|ruleBlame|legacySubclassMeter|legacyPromiseChain/i);
+  });
+});
+
+describe("V16 Zero-Trust offline verify, Verify Bundle drawer and SARIF Risk Explorer (shipped scripts, minimal DOM)", () => {
+  const html = pageHtml.replace(/\r\n/g, "\n");
+  const regionOf = (name: string): string => {
+    const start = html.indexOf(`/* ${name}:start */`);
+    const end = html.indexOf(`/* ${name}:end */`);
+    expect(start, name).toBeGreaterThan(0);
+    expect(end, name).toBeGreaterThan(start);
+    return html.slice(start, end);
+  };
+  const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+  const server = createWebServer();
+  let baseUrl = "";
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  });
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 40; i++) await new Promise((r) => setTimeout(r, 10));
+  };
+  const LEGACY = "function half(n) { return (n / 2) | 0; }";
+  const MODERN = "export function half(n: number): number {\n  return Math.trunc(n / 2) || 0;\n}\n";
+  const sign = (): SignatureBlock => signCertificate({ legacySource: LEGACY, resurrectedSource: MODERN, paritySummary: "100/100 identical", mutantsKilled: 5, tscStrictErrors: 0, issuedAt: "2025-01-01T00:00:00.000Z" });
+  const flipFirst = (text: string): string => `${text.slice(0, 7)}${text[7] === "a" ? "b" : "a"}${text.slice(8)}`;
+  type Verdict = { supported: boolean; valid?: boolean; reason?: string; expectedDigest?: string; actualDigest?: string; keyId?: string };
+  const offline = (subtle: unknown): ((sig: unknown, code: string) => Promise<Verdict>) => {
+    const fn = runInlineScript(`${regionOf("lz-sig")}; lzOfflineVerify`, { window: {}, document: new FakeDocument() }) as (s: unknown, sig: unknown, code: string) => Promise<Verdict>;
+    return (sig, code) => fn(subtle, sig, code);
+  };
+  const asSig = (b: SignatureBlock): Record<string, unknown> => ({ payload: b.payload, signatureB64: b.signatureB64, publicKeyPem: b.publicKeyPem, keyId: b.keyId });
+
+  describe("lz-sig offline verification (node WebCrypto Ed25519, same verdicts as the server)", () => {
+    it("accepts the signed code and agrees with the server verifier", async () => {
+      const block = sign();
+      const v = await offline(webcrypto.subtle)(asSig(block), MODERN);
+      expect(v).toMatchObject({ supported: true, valid: true, keyId: block.keyId, expectedDigest: block.payload.resurrectedSha256, actualDigest: block.payload.resurrectedSha256 });
+      expect(verifyCertificate({ payload: block.payload, signatureB64: block.signatureB64, publicKeyPem: block.publicKeyPem, resurrectedCode: MODERN }).valid).toBe(true);
+    });
+    it("verifies CRLF text as the LF text that was signed", async () => {
+      expect((await offline(webcrypto.subtle)(asSig(sign()), MODERN.replace(/\n/g, "\r\n"))).valid).toBe(true);
+    });
+    it("rejects a 1-byte change with the server's reason and digests", async () => {
+      const block = sign();
+      const tampered = flipFirst(MODERN);
+      const v = await offline(webcrypto.subtle)(asSig(block), tampered);
+      const server = verifyCertificate({ payload: block.payload, signatureB64: block.signatureB64, publicKeyPem: block.publicKeyPem, resurrectedCode: tampered });
+      expect(v).toMatchObject({ supported: true, valid: false, expectedDigest: server.expectedDigest, actualDigest: server.actualDigest });
+      expect(v.reason).toMatch(/^Digest mismatch/);
+      expect(server.valid).toBe(false);
+    });
+    it("rejects an altered signature, a rewritten payload digest, a foreign key and malformed input", async () => {
+      const block = sign();
+      const run = offline(webcrypto.subtle);
+      const sigBytes = Buffer.from(block.signatureB64, "base64");
+      sigBytes[0] = (sigBytes[0] ?? 0) ^ 1;
+      expect((await run({ ...asSig(block), signatureB64: sigBytes.toString("base64") }, MODERN)).reason).toMatch(/^Signature mismatch/);
+      const rewritten = { ...block.payload, resurrectedSha256: sha(flipFirst(MODERN)) };
+      expect((await run({ ...asSig(block), payload: rewritten }, flipFirst(MODERN))).reason).toMatch(/^Signature mismatch/);
+      const foreign = generateKeyPairSync("ed25519").publicKey.export({ type: "spki", format: "pem" }).toString();
+      expect((await run({ ...asSig(block), publicKeyPem: foreign }, MODERN)).valid).toBe(false);
+      expect(await run({ ...asSig(block), payload: { nope: 1 } }, MODERN)).toMatchObject({ supported: true, valid: false, reason: "Invalid certificate payload" });
+      expect(await run({ ...asSig(block), publicKeyPem: "not a pem" }, MODERN)).toMatchObject({ supported: true, valid: false, reason: "Invalid Ed25519 public key" });
+    });
+    it("reports supported:false when WebCrypto is missing or has no Ed25519, so the caller can fall back", async () => {
+      const block = asSig(sign());
+      expect((await offline(undefined)(block, MODERN)).supported).toBe(false);
+      expect((await offline({})(block, MODERN)).supported).toBe(false);
+      const noEd = {
+        digest: (a: string, d: Uint8Array<ArrayBuffer>) => webcrypto.subtle.digest(a, d),
+        verify: () => Promise.resolve(true),
+        importKey: () => Promise.reject(Object.assign(new Error("Unrecognized name"), { name: "NotSupportedError" })),
+      };
+      expect((await offline(noEd)(block, MODERN)).supported).toBe(false);
+    });
+  });
+
+  describe("signatureRow: the Verified Offline pill and the API fallback", () => {
+    type Rig = { row: FakeElement; find: (id: string) => FakeElement; calls: string[]; window: Record<string, unknown> };
+    const rig = (window: Record<string, unknown>, block: SignatureBlock = sign(), fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>): Rig => {
+      const calls: string[] = [];
+      const doc = new FakeDocument();
+      const f = (url: string, init?: RequestInit): Promise<Response> => {
+        calls.push(url);
+        return (fetchImpl ?? ((u: string, i?: RequestInit) => fetch(`${baseUrl}${u}`, i)))(url, init);
+      };
+      const signatureRow = runInlineScript(`${regionOf("lz-sig")}; signatureRow`, { document: doc, window, fetch: f, Uint8Array }) as (sig: unknown) => FakeElement;
+      const row = signatureRow(asSig(block));
+      const find = (id: string): FakeElement => {
+        const walk = (el: FakeElement): FakeElement | undefined => (el.id === id ? el : el.children.map(walk).find((x) => x !== undefined));
+        const hit = walk(row);
+        if (hit === undefined) throw new Error(`no #${id}`);
+        return hit;
+      };
+      return { row, find, calls, window };
+    };
+    it("verifies in the browser with no request, shows the pill, and fails cleanly on a 1-byte tamper", async () => {
+      const r = rig({ crypto: webcrypto, lastResurrectedCode: MODERN });
+      await settle();
+      expect(r.find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(r.find("certOfflinePill").hidden).toBe(false);
+      expect(r.find("certOfflinePill").textContent).toBe("Verified Offline (Browser WebCrypto)");
+      r.find("certTamperBtn").click();
+      await settle();
+      expect(r.find("certSigBadge").textContent).toBe("TAMPER DETECTED (Digest / Signature Mismatch)");
+      expect(r.find("certOfflinePill").textContent).toBe("Offline check failed (Browser WebCrypto)");
+      expect(r.find("certOfflinePill").className).toContain("tamper");
+      expect(r.find("certRestoreBtn").hidden).toBe(false);
+      r.find("certRestoreBtn").click();
+      await settle();
+      expect(r.find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(r.find("certOfflinePill").textContent).toBe("Verified Offline (Browser WebCrypto)");
+      expect(r.calls).toEqual([]);
+    });
+    it("falls back to POST /api/verify-certificate when there is no WebCrypto, with no offline pill", async () => {
+      const r = rig({ lastResurrectedCode: MODERN });
+      await settle();
+      expect(r.calls).toEqual(["/api/verify-certificate"]);
+      expect(r.find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(r.find("certOfflinePill").hidden).toBe(true);
+    });
+    it("falls back to the API when this WebCrypto has no Ed25519", async () => {
+      const noEd = { subtle: { digest: webcrypto.subtle.digest.bind(webcrypto.subtle), verify: () => Promise.resolve(false), importKey: () => Promise.reject(Object.assign(new Error("x"), { name: "NotSupportedError" })) } };
+      const r = rig({ crypto: noEd, lastResurrectedCode: MODERN });
+      await settle();
+      expect(r.calls).toEqual(["/api/verify-certificate"]);
+      expect(r.find("certSigBadge").textContent).toBe("Ed25519 Signed \u00b7 VERIFIED");
+      expect(r.find("certOfflinePill").hidden).toBe(true);
+    });
+    it("never retries a real offline failure on the server", async () => {
+      const r = rig({ crypto: webcrypto, lastResurrectedCode: flipFirst(MODERN) });
+      await settle();
+      expect(r.calls).toEqual([]);
+      expect(r.find("certSigBadge").textContent).toBe("TAMPER DETECTED (Digest / Signature Mismatch)");
+    });
+    it("tamper with no WebCrypto fails through the API too", async () => {
+      const r = rig({ lastResurrectedCode: MODERN });
+      await settle();
+      r.find("certTamperBtn").click();
+      await settle();
+      expect(r.calls).toEqual(["/api/verify-certificate", "/api/verify-certificate"]);
+      expect(r.find("certSigBadge").textContent).toBe("TAMPER DETECTED (Digest / Signature Mismatch)");
+    });
+  });
+
+  describe("Verify Bundle drawer", () => {
+    type Bundle = { classify: (f: Array<{ name: string }>) => Record<string, unknown>; read: (t: string) => Record<string, unknown>; pick: (c: Array<{ name: string }>, s: string) => { name: string } | undefined };
+    const pure = (): Bundle => {
+      const o = runInlineScript(`${regionOf("lz-bundle")}; ({ classify: lzClassifyBundleFiles, read: lzReadCertificateJson, pick: lzPickSubject })`, {}) as Bundle;
+      return o;
+    };
+    it("classifies a lone zip, certificate.json + code, and rejects everything else with a reason", () => {
+      const { classify } = pure();
+      expect(classify([{ name: "half.zip" }])).toMatchObject({ kind: "zip" });
+      expect(classify([{ name: "certificate.json" }, { name: "resurrected.ts" }])).toMatchObject({ kind: "files" });
+      expect(classify([{ name: "x.zip" }, { name: "y.zip" }]).error).toMatch(/one \.zip on its own/);
+      expect(classify([{ name: "resurrected.ts" }]).error).toMatch(/certificate\.json/);
+      expect(classify([{ name: "certificate.json" }]).error).toMatch(/resurrected \.ts/);
+      expect(classify([]).error).toBe("Nothing was selected.");
+    });
+    it("reads certificate.json and picks the file it names", () => {
+      const { read, pick } = pure();
+      const block = sign();
+      const text = JSON.stringify({ format: "lazarus-certificate/v1", algorithm: "Ed25519", ...asSig(block), subjectFile: "resurrected.ts" });
+      expect(read(text)).toMatchObject({ subjectFile: "resurrected.ts" });
+      expect(read("{")).toEqual({ error: "certificate.json is not valid JSON." });
+      expect(read(JSON.stringify({ format: "other" })).error).toMatch(/not a Lazarus certificate/);
+      expect(read(JSON.stringify({ format: "lazarus-certificate/v1", algorithm: "Ed25519" })).error).toMatch(/missing/);
+      expect(pick([{ name: "a.ts" }, { name: "dir/resurrected.ts" }], "resurrected.ts")?.name).toBe("dir/resurrected.ts");
+      expect(pick([{ name: "only.ts" }], "resurrected.ts")?.name).toBe("only.ts");
+      expect(pick([{ name: "a.ts" }, { name: "b.ts" }], "resurrected.ts")).toBeUndefined();
+    });
+    type FakeFile = { name: string; size: number; text: () => Promise<string>; arrayBuffer: () => Promise<ArrayBuffer> };
+    const file = (name: string, data: string | Buffer): FakeFile => {
+      const buf = Buffer.from(data);
+      return { name, size: buf.length, text: () => Promise.resolve(buf.toString("utf8")), arrayBuffer: () => Promise.resolve(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length)) };
+    };
+    const drawer = (win: Record<string, unknown>) => {
+      const doc = new FakeDocument();
+      const els: Record<string, FakeElement & { focus?: () => void }> = {};
+      for (const [tag, id] of [["button", "verifyBtn"], ["aside", "verifyDrawer"], ["div", "verifyScrim"], ["button", "verifyClose"], ["label", "verifyDrop"], ["input", "verifyFiles"], ["div", "verifyResult"]] as const) {
+        const e = doc.element(tag, id) as FakeElement & { focus?: () => void };
+        e.focus = () => undefined;
+        els[id] = e;
+      }
+      els["verifyDrawer"]!.hidden = true;
+      els["verifyScrim"]!.hidden = true;
+      const script = inlineScripts.find((s) => s.includes("lz-bundle:start")) ?? "";
+      runInlineScript(script, { document: doc, window: win, fetch: (u: string, i?: RequestInit) => fetch(`${baseUrl}${u}`, i), Blob, URL, Array, Uint8Array });
+      const verify = (win["LazarusVerifyBundle"] as { verifyFiles: (f: FakeFile[]) => Promise<void> }).verifyFiles;
+      return { els, verify, doc };
+    };
+    const winWithCrypto = (): Record<string, unknown> => {
+      const win: Record<string, unknown> = { crypto: webcrypto };
+      runInlineScript(`${regionOf("lz-sig")}; 0`, { document: new FakeDocument(), window: win, fetch: () => Promise.reject(new Error("no")), Uint8Array });
+      return win;
+    };
+    it("opens from the header button, closes on the scrim and Escape, and is not a tab", () => {
+      const { els, doc } = drawer({});
+      els["verifyBtn"]!.click();
+      expect(els["verifyDrawer"]!.hidden).toBe(false);
+      els["verifyScrim"]!.click();
+      expect(els["verifyDrawer"]!.hidden).toBe(true);
+      els["verifyBtn"]!.click();
+      doc.dispatchEvent({ type: "keydown", key: "Escape" });
+      expect(els["verifyDrawer"]!.hidden).toBe(true);
+    });
+    it("reports VERIFIED then TAMPER DETECTED for a real export zip, through the server", async () => {
+      const res = await fetch(`${baseUrl}/api/export-zip`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ specimenName: "half", legacyCode: LEGACY, modernCode: "Math.trunc(n / 2) || 0", schema: { n: "integer" }, fuzzRuns: 50 }) });
+      const zip = Buffer.from(await res.arrayBuffer());
+      const { els, verify } = drawer({});
+      await verify([file("half.zip", zip)]);
+      expect(els["verifyResult"]!.textContent).toContain("VERIFIED");
+      expect(els["verifyResult"]!.className).toContain("pass");
+      expect(els["verifyResult"]!.textContent).toContain("resurrected.ts");
+      const tampered = createZip(readZip(zip).map((e) => ({ name: e.name, data: e.name === "resurrected.ts" ? Buffer.from(e.data.toString("utf8").replace("trunc", "truns")) : e.data })));
+      await verify([file("half.zip", tampered)]);
+      expect(els["verifyResult"]!.textContent).toContain("TAMPER DETECTED");
+      expect(els["verifyResult"]!.className).toContain("fail");
+      expect(els["verifyResult"]!.textContent).toContain("Digest mismatch");
+    }, 60_000);
+    it("verifies certificate.json + resurrected.ts offline, and flags a changed byte", async () => {
+      const block = sign();
+      const cert = JSON.stringify({ format: "lazarus-certificate/v1", algorithm: "Ed25519", ...asSig(block), subjectFile: "resurrected.ts" });
+      const { els, verify } = drawer(winWithCrypto());
+      await verify([file("certificate.json", cert), file("resurrected.ts", MODERN)]);
+      expect(els["verifyResult"]!.textContent).toContain("VERIFIED");
+      expect(els["verifyResult"]!.textContent).toContain("Verified Offline (Browser WebCrypto): no request was made");
+      await verify([file("certificate.json", cert), file("resurrected.ts", flipFirst(MODERN))]);
+      expect(els["verifyResult"]!.textContent).toContain("TAMPER DETECTED");
+      expect(els["verifyResult"]!.textContent).toContain("Digest mismatch");
+    });
+    it("explains what is missing instead of guessing", async () => {
+      const { els, verify } = drawer(winWithCrypto());
+      await verify([file("resurrected.ts", MODERN)]);
+      expect(els["verifyResult"]!.textContent).toContain("CANNOT VERIFY");
+      await verify([file("certificate.json", "{"), file("resurrected.ts", MODERN)]);
+      expect(els["verifyResult"]!.textContent).toContain("not valid JSON");
+    });
+  });
+
+  describe("SARIF Risk Explorer drawer", () => {
+    it("groups findings by severity then rule id, and builds the request and file name", () => {
+      const lib = runInlineScript(`${regionOf("lz-sarif")}; ({ group: lzGroupFindings, request: lzAuditRequest, file: LZ_SARIF_FILE, text: lzSarifText })`, {}) as { group: (f: unknown[]) => Array<{ severity: string; count: number; rules: Array<{ ruleId: string; findings: Array<{ line: number }> }> }>; request: (v: string, c: string) => unknown; file: string; text: (s: unknown) => string };
+      const f = (ruleId: string, severity: string, uri: string, line: number): Record<string, unknown> => ({ ruleId, ruleName: ruleId, severity, uri, line });
+      const groups = lib.group([f("LAZ003", "medium", "a.js", 2), f("LAZ002", "high", "b.js", 9), f("LAZ001", "high", "b.js", 3), f("LAZ001", "high", "a.js", 7)]);
+      expect(groups.map((g) => [g.severity, g.count])).toEqual([["high", 3], ["medium", 1]]);
+      expect(groups[0]?.rules.map((r) => r.ruleId)).toEqual(["LAZ001", "LAZ002"]);
+      expect(groups[0]?.rules[0]?.findings.map((x) => x.line)).toEqual([7, 3]);
+      expect(lib.group([])).toEqual([]);
+      expect(lib.request("example:legacy-circular-ledger", "ignored")).toEqual({ example: "legacy-circular-ledger" });
+      expect(lib.request("code", "var a;")).toEqual({ code: "var a;" });
+      expect(lib.file).toBe("lazarus-report.sarif");
+      expect(lib.text({ a: 1 })).toBe('{\n  "a": 1\n}\n');
+    });
+    it("runs an example audit, shows 7 rule chips and grouped findings, expands a snippet and downloads lazarus-report.sarif", async () => {
+      const doc = new FakeDocument();
+      const els: Record<string, FakeElement & { focus?: () => void }> = {};
+      for (const [tag, id] of [["button", "sarifBtn"], ["aside", "sarifDrawer"], ["div", "sarifScrim"], ["button", "sarifClose"], ["select", "sarifSource"], ["button", "sarifRun"], ["button", "sarifDownload"], ["div", "sarifSummary"], ["div", "sarifChips"], ["div", "sarifList"], ["textarea", "legacyCode"]] as const) {
+        const e = doc.element(tag, id) as FakeElement & { focus?: () => void };
+        e.focus = () => undefined;
+        els[id] = e;
+      }
+      els["sarifDrawer"]!.hidden = true;
+      els["sarifScrim"]!.hidden = true;
+      els["sarifDownload"]!.disabled = true;
+      els["sarifSource"]!.value = "example:legacy-circular-ledger";
+      const blobs: Blob[] = [];
+      const made: Array<{ href: string; download: string; clicked: boolean }> = [];
+      doc.createElement = (tag: string): FakeElement => {
+        const e = new FakeElement(tag);
+        if (tag === "a") {
+          const rec = { href: "", download: "", clicked: false };
+          made.push(rec);
+          Object.defineProperty(e, "href", { get: () => rec.href, set: (v: string) => { rec.href = v; } });
+          Object.defineProperty(e, "download", { get: () => rec.download, set: (v: string) => { rec.download = v; } });
+          e.click = () => { rec.clicked = true; };
+        }
+        return e;
+      };
+      const win: Record<string, unknown> = {};
+      const url = { createObjectURL: (b: Blob) => { blobs.push(b); return "blob:fake"; }, revokeObjectURL: () => undefined };
+      const script = inlineScripts.find((s) => s.includes("lz-sarif:start")) ?? "";
+      runInlineScript(script, { document: doc, window: win, fetch: (u: string, i?: RequestInit) => fetch(`${baseUrl}${u}`, i), Blob, URL: url, Array, Uint8Array });
+      els["sarifBtn"]!.click();
+      expect(els["sarifDrawer"]!.hidden).toBe(false);
+      els["sarifRun"]!.click();
+      for (let i = 0; i < 200 && els["sarifRun"]!.disabled; i++) await new Promise((r) => setTimeout(r, 25));
+      expect(els["sarifSummary"]!.textContent).toMatch(/^legacy-circular-ledger: \d+ findings?/);
+      expect(els["sarifChips"]!.children).toHaveLength(7);
+      expect(els["sarifChips"]!.textContent).toContain("LAZ001");
+      expect(els["sarifList"]!.textContent).toContain("High");
+      expect(els["sarifDownload"]!.disabled).toBe(false);
+      const button = els["sarifList"]!.querySelector(".sarif-finding");
+      expect(button).not.toBeNull();
+      const detail = button!.parent!.children[button!.parent!.children.indexOf(button!) + 1]!;
+      expect(detail.hidden).toBe(true);
+      button!.click();
+      expect(detail.hidden).toBe(false);
+      expect(detail.textContent).toContain("Fix: ");
+      els["sarifDownload"]!.click();
+      expect(made[0]).toMatchObject({ download: "lazarus-report.sarif", clicked: true, href: "blob:fake" });
+      const sarif = JSON.parse(await blobs[0]!.text()) as { version: string; runs: unknown[] };
+      expect(sarif.version).toBe("2.1.0");
+      expect(sarif.runs).toHaveLength(1);
+    }, 30_000);
+  });
+
+  describe("page structure and scope", () => {
+    it("adds two header buttons and two hidden drawers, no 4th tab, and unique ids", () => {
+      expect(html.match(/data-studio-tab="/g)).toHaveLength(3);
+      for (const id of ["verifyBtn", "sarifBtn", "verifyDrawer", "sarifDrawer", "verifyDrop", "sarifRun", "sarifDownload"]) expect(html).toContain(`id="${id}"`);
+      expect(html).toContain('offline.id = "certOfflinePill"');
+      expect(html.indexOf('id="sarifBtn"')).toBeLessThan(html.indexOf('id="dnaBtn"'));
+      expect(html).toMatch(/id="verifyDrawer"[^>]*\shidden>/);
+      expect(html).toMatch(/id="sarifDrawer"[^>]*\shidden>/);
+      expect(html).toContain("Download .sarif");
+      const ids = [...html.slice(0, html.indexOf("<script>")).matchAll(/\sid="([^"]+)"/g)].map((m) => m[1] ?? "");
+      expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    });
+    it("keeps Tab 3 Red-Team byte-identical, shows 26 Kiro Specs and adds no dependency", () => {
+      const between = (a: string, b: string): string => {
+        const s = html.indexOf(a);
+        const e = html.indexOf(b, s + a.length);
+        expect(s).toBeGreaterThan(0);
+        expect(e).toBeGreaterThan(s);
+        return html.slice(s, e);
+      };
+      expect(sha(between("/* ---- Red-Team Lab", "\n/* ----"))).toBe("e294212e10b8b7a7bff5c10b9f0b09868be7413a98da83c3a1ad5f665433553f");
+      expect(sha(between('<div class="studio-pane" id="pane-redteam"', '<div class="dna-scrim"'))).toBe("31457f48198687cc71b80f53a110ac4a47aa1302edea87b783cf3f19a021fee1");
+      const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1] ?? "").find((x) => x.includes("Red-Team the Sandbox: one-click containment proofs")) ?? "";
+      expect(sha(script)).toBe("3d9381eebc0c47c143dfe25746d5510ef519f9fda66fe0243e4bc6f36be7e633");
+      expect(html).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
+      const pkg = JSON.parse(fs.readFileSync(nodePath.join(root, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+      expect(Object.keys(pkg.dependencies).sort()).toEqual(["@modelcontextprotocol/sdk", "acorn", "astring", "typescript", "zod"]);
+    });
   });
 });

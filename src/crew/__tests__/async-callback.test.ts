@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { parse } from "acorn";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { auditDirectory } from "../../cli-audit.js";
+import { BENCHMARK_PRESETS } from "../../benchmark-presets.js";
+import { resurrectAny } from "../../resurrect-any.js";
 import { DifferentialFuzzer } from "../../fuzzer/differential.js";
 import { PooledProbeRunner } from "../../sandbox/pool.js";
 import { SandboxError } from "../../sandbox/errors.js";
@@ -348,7 +350,7 @@ describe("Studio and CLI integration", () => {
     expect(pageHtml).toContain('schema: \'{"text": "string"}\'');
     expect(pageHtml).toContain('<div class="async-note" id="asyncNote" role="status" hidden></div>');
     expect(pageHtml).toContain("if (!r || !r.success || r.module || r.asyncCallback) { reset(); return; }");
-    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>');
+    expect(pageHtml).toContain('<span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>');
     const tab3 = pageHtml.slice(pageHtml.indexOf('<div class="studio-pane" id="pane-redteam"'), pageHtml.indexOf('<div class="dna-scrim"'));
     expect(tab3).not.toMatch(/async|legacyReadConfigCb/i);
   });
@@ -409,4 +411,14 @@ describe("Studio and CLI integration", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+describe("V16: the shared router resurrects the error-first preset (CLI, MCP and benchmark use it)", () => {
+  it("routes legacyReadConfigCb to the error-first lifter with proven parity", async () => {
+    const preset = BENCHMARK_PRESETS.find((x) => x.name === "legacyReadConfigCb");
+    if (preset === undefined) throw new Error("no preset");
+    const r = await resurrectAny({ name: preset.name, source: preset.code, schema: preset.schema as never, fuzzRuns: 40, seed: 5 });
+    expect(r.kind).toBe("error-first");
+    expect(r.success).toBe(true);
+    expect(r.tscPassed).toBe(true);
+  }, 60_000);
 });

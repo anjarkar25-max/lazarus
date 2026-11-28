@@ -173,7 +173,13 @@ function scanProgram(ast: ESTree.Program): Scan {
   return { findings, requires };
 }
 
-export function auditDirectory(dir: string): AuditReport {
+/** The audited files of a folder (relative path -> text) and what was skipped. Reads only; nothing is executed. */
+export interface AuditInput {
+  readonly sources: Map<string, string>;
+  readonly skipped: Array<{ file: string; reason: string }>;
+}
+
+export function readAuditSources(dir: string): AuditInput {
   const root = nodePath.resolve(dir);
   const stat = fs.statSync(root);
   if (!stat.isDirectory()) throw new Error(`${dir} is not a directory`);
@@ -189,6 +195,20 @@ export function auditDirectory(dir: string): AuditReport {
     }
     sources.set(rel, fs.readFileSync(full, "utf8"));
   }
+  return { sources, skipped };
+}
+
+/** `displayName` is the folder as it is shown in the report and its commands (default: `dir`). */
+export function auditDirectory(dir: string, displayName?: string): AuditReport {
+  const { sources, skipped } = readAuditSources(dir);
+  return auditSources(sources, skipped, displayName ?? dir);
+}
+
+/**
+ * The audit itself, on files already in memory (relative path -> text): the same rules for a folder on disk and for pasted code.
+ * Files are parsed with acorn and never executed.
+ */
+export function auditSources(sources: ReadonlyMap<string, string>, skipped: Array<{ file: string; reason: string }>, directory: string): AuditReport {
   const known = new Set(sources.keys());
   const scans = new Map<string, Scan>();
   const edges: Array<{ from: string; to: string }> = [];
@@ -284,7 +304,7 @@ export function auditDirectory(dir: string): AuditReport {
   for (const f of files) for (const s of ["high", "medium", "info"] as const) totals[s] += f.counts[s];
   const readiness = files.length === 0 ? 100 : Math.round(files.reduce((sum, f) => sum + f.readiness, 0) / files.length);
   const entry = files.length > 0 ? (analyzeGraph(Object.fromEntries(sources)).entry ?? null) : null;
-  const shownDir = dir.replace(/\\/g, "/").replace(/\/$/, "");
+  const shownDir = directory.replace(/\\/g, "/").replace(/\/$/, "");
   const notes: string[] = [];
   // Independent require graphs (connected components) are resurrected separately: directory mode treats every file
   // under the folder as one graph.

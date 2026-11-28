@@ -20,6 +20,8 @@ import { listModuleFunctions, resurrectModule } from "./crew/module-resurrection
 import { describeValue } from "./sandbox/tagged.js";
 import { runAuditCli } from "./cli-audit.js";
 import { verifyBundleZip } from "./exporter/cert-crypto.js";
+import { classifySpecimen, type SpecimenClass } from "./crew/async-specimen.js";
+import { resurrectAny } from "./resurrect-any.js";
 
 export interface CliIo {
   stdout: (text: string) => void;
@@ -47,6 +49,8 @@ Options:
   --name <identifier>  name of the generated function (default: the function's name)
   --help, -h           show this help
 
+An error-first Node.js callback (fn(a, cb)) or a .then().catch() Promise chain becomes async/await: both
+settlements (resolved value and rejection) are fuzzed, and the typed bundle is checked with tsc --strict.
 Writes resurrected.ts, resurrected.test.ts, SPEC.md and resurrection.patch (plus resurrected.mjs,
 legacy.cjs and resurrected.esm.test.ts when the CommonJS -> ESM conversion is exact).
 Directory mode: every .js/.cjs file under the directory (node_modules skipped) is resurrected as one
@@ -175,6 +179,10 @@ export async function main(argv: readonly string[], io: CliIo = defaultIo()): Pr
     return 2;
   }
 
+  // ---- error-first callback or Promise chain: the same async passes as the Web Studio, the MCP server and the benchmark ----
+  const klass = classifySpecimen(source, args.fn);
+  if (klass.kind !== "sync") return runAsync(klass, source, args, inputPath, io);
+
   // ---- multi-export module: resurrect every exported function -------------------
   if (args.fn === undefined) {
     const moduleFunctions = listModuleFunctions(source).functions;
@@ -296,6 +304,79 @@ export function runVerifyCli(argv: readonly string[], io: CliIo): number {
   io.stdout(`${result.valid ? "VERIFIED" : "INVALID"}: ${result.reason}\n`);
   io.stdout(`  file:     ${result.subjectFile}\n  key id:   ${result.keyId}${result.trustedKey ? " (this installation's signing key)" : " (not this installation's key)"}\n  expected: ${result.expectedDigest}\n  actual:   ${result.actualDigest}\n`);
   return result.valid ? 0 : 1;
+}
+
+/** `--schema` for a single function: flat `{param: kind}`; prints the problem and returns undefined when it is invalid. */
+function readSchemaArg(raw: string, io: CliIo): InputSchema | undefined {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    io.stderr("error: --schema is not valid JSON\n");
+    return undefined;
+  }
+  const checked = SchemaArg.safeParse(json);
+  if (!checked.success) {
+    io.stderr(`error: invalid --schema: ${checked.error.issues.map((i) => `${i.path.join(".") || "schema"} ${i.message}`).join("; ")}\n`);
+    return undefined;
+  }
+  return checked.data;
+}
+
+/** An error-first callback or a Promise chain: lifted to async/await, both settlements fuzzed, tsc --strict checked, bundle written. */
+async function runAsync(klass: SpecimenClass, source: string, args: ParsedArgs, inputPath: string, io: CliIo): Promise<number> {
+  const entry = klass.entry;
+  if (entry === undefined) return 1;
+  let schema: InputSchema | undefined;
+  if (args.schema !== undefined) {
+    schema = readSchemaArg(args.schema, io);
+    if (schema === undefined) return 2;
+  }
+  const name = sanitizeIdentifier(args.name ?? entry.name);
+  const label = klass.kind === "promise-chain" ? "Promise chain (.then/.catch)" : `error-first callback (${entry.callback})`;
+  io.stdout(`Lazarus: resurrecting ${name} from ${args.file ?? inputPath} as async/await (${label})\n`);
+  io.stdout(`  inputs: ${entry.params.join(", ") || "none"}${schema !== undefined ? " (from --schema)" : " (inferred)"}\n`);
+  const result = await resurrectAny({
+    name,
+    source,
+    ...(schema !== undefined ? { schema } : {}),
+    fuzzRuns: args.runs,
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    ...(args.fn !== undefined ? { functionName: args.fn } : {}),
+    onEvent: (event) => {
+      if (PROGRESS_TYPES.has(event.type)) io.stdout(`  [${event.agent}] ${event.message}\n`);
+    },
+  });
+  if (!result.success || result.exported === undefined) {
+    io.stderr(`\nNOT resurrected: async parity could not be proven after ${result.attempts} attempt(s). No files written.\n`);
+    const cx = result.counterexample;
+    if (cx !== undefined) {
+      io.stderr(`  counterexample inputs: ${cx.input}\n  legacy:  ${cx.legacyOutput}\n  modern:  ${cx.modernOutput}\n  reason:  ${cx.reason}\n`);
+    }
+    return 1;
+  }
+  const outDir = nodePath.resolve(io.cwd, args.out);
+  const bundle = result.exported.bundle;
+  const files: Array<[string, string]> = [
+    ...Object.entries(bundle.files).flatMap(([file, content]) => (content === undefined ? [] : [[file, content] as [string, string]])),
+    ["resurrection.patch", `${bundle.prDiff}\n`],
+  ];
+  try {
+    for (const [file, content] of files) {
+      fs.mkdirSync(nodePath.dirname(nodePath.join(outDir, file)), { recursive: true });
+      fs.writeFileSync(nodePath.join(outDir, file), content, "utf8");
+    }
+  } catch (err: unknown) {
+    io.stderr(`error: cannot write to ${args.out}: ${err instanceof Error ? err.message : String(err)}\n`);
+    return 1;
+  }
+  const summary = result.asyncSummary;
+  io.stdout(`\nAsync parity proven: ${result.fuzzRuns} fuzz runs, ${result.attempts} attempt(s)${result.attempts > 1 ? " (self-healed)" : ""}${summary !== undefined ? `; ${summary.resolved} resolved and ${summary.rejected} rejected inputs matched (${summary.strategy})` : ""}.\n`);
+  io.stdout(`${result.tsc}\n`);
+  if (!result.tscPassed) io.stdout("  warning: the exported TypeScript does not pass tsc --strict; see SPEC.md\n");
+  io.stdout(`Wrote ${files.length} files to ${outDir}:\n`);
+  for (const [file, content] of files) io.stdout(`  ${file} (${Buffer.byteLength(content, "utf8")} bytes)\n`);
+  return 0;
 }
 
 async function runModule(source: string, idioms: string[], args: ParsedArgs, inputPath: string, io: CliIo): Promise<number> {

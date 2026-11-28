@@ -464,6 +464,44 @@ body.tour-docked { padding-bottom: 64px; }
 .causal-node.bad { border-color: var(--crimson); color: #fca5a5; background: rgba(239, 68, 68, 0.08); }
 .causal-node.heal { border-color: var(--violet); color: #c4b5fd; background: rgba(139, 92, 246, 0.1); }
 .causal-arrow { align-self: center; color: var(--muted); font-size: 14px; }
+/* ---- V16: Verify Bundle and SARIF Risk Explorer drawers (the Kiro DNA drawer pattern) ---------- */
+.tour-controls { flex-wrap: wrap; }
+.zt-note { margin: 0 0 10px; font-size: 11px; color: var(--muted); line-height: 1.55; }
+.zt-drop { display: block; padding: 22px 14px; border: 2px dashed #334155; border-radius: 10px; text-align: center; color: #cbd5e1; font-size: 12px; cursor: pointer; background: #0b1020; }
+.zt-drop:hover, .zt-drop.over, .zt-drop:focus-visible { border-color: var(--violet); color: #ede9fe; outline: none; }
+.zt-drop small { display: block; margin-top: 4px; color: var(--muted); }
+.zt-result { margin-top: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0b1020; font-size: 12px; line-height: 1.6; }
+.zt-result[hidden] { display: none; }
+.zt-result.pass { border-color: var(--emerald); background: rgba(16, 185, 129, 0.08); }
+.zt-result.fail { border-color: var(--crimson); background: rgba(239, 68, 68, 0.1); }
+.zt-verdict { font-size: 14px; font-weight: 800; letter-spacing: .6px; }
+.zt-result.pass .zt-verdict { color: #6ee7b7; }
+.zt-result.fail .zt-verdict { color: #fecaca; }
+.zt-result dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin: 8px 0 0; }
+.zt-result dt { color: var(--muted); }
+.zt-result dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 11px; word-break: break-all; color: #e2e8f0; }
+.zt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+.zt-actions select { padding: 6px 8px; font-size: 12px; background: #111827; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; }
+.sarif-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.sarif-chip { font-size: 10px; padding: 3px 9px; border-radius: 999px; border: 1px solid #334155; color: #cbd5e1; background: #111827; }
+.sarif-chip.error { border-color: var(--crimson); color: #fecaca; }
+.sarif-chip.warning { border-color: var(--amber); color: #fde68a; }
+.sarif-chip.zero { opacity: .45; }
+.sarif-summary { font-size: 12px; color: #cbd5e1; }
+.sarif-sev h4 { margin: 14px 0 6px; font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; }
+.sarif-sev.high h4 { color: #fca5a5; }
+.sarif-sev.medium h4 { color: #fcd34d; }
+.sarif-sev.info h4 { color: #93c5fd; }
+.sarif-rule { margin: 0 0 10px; }
+.sarif-rule h5 { margin: 0 0 4px; font-size: 11px; color: #e2e8f0; font-weight: 700; }
+button.sarif-finding { display: block; width: 100%; text-align: left; margin: 0 0 4px; padding: 6px 9px; border: 1px solid #1e293b; border-radius: 8px; background: #0b1020; color: #cbd5e1; font: 11px/1.5 ui-monospace, Consolas, monospace; cursor: pointer; word-break: break-word; }
+button.sarif-finding:hover, button.sarif-finding[aria-expanded="true"] { border-color: var(--violet); color: #fff; }
+.sarif-detail { margin: -2px 0 8px; padding: 8px 10px; border: 1px solid #1e293b; border-top: 0; border-radius: 0 0 8px 8px; background: #060a14; font-size: 11px; }
+.sarif-detail[hidden] { display: none; }
+.sarif-detail pre { margin: 0 0 6px; padding: 6px 8px; background: #020617; border-radius: 6px; overflow: auto; font: 11px/1.5 ui-monospace, Consolas, monospace; }
+.sarif-detail code { display: block; white-space: pre; }
+.sarif-detail .hit { color: #fecaca; background: rgba(239, 68, 68, 0.16); }
+.sarif-detail .fix { color: #a7f3d0; }
 /* ---- V15: Shrink Trace waterfall + Rule Blame X-Ray ----------------------------- */
 .shrink-toggle { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--crimson); background: rgba(239, 68, 68, 0.1); color: #fecaca; font-size: 10px; font-weight: 800; letter-spacing: .3px; cursor: pointer; }
 .shrink-toggle:hover, .shrink-toggle[aria-expanded="true"] { background: rgba(239, 68, 68, 0.22); }
@@ -499,6 +537,8 @@ button.xray-chip[aria-pressed="true"] { box-shadow: 0 0 0 2px currentColor; font
 .sig-badge { font-size: 11px; font-weight: 800; letter-spacing: .5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--emerald); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
 .sig-badge.tamper { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
 .sig-badge.pending { border-color: #334155; color: var(--muted); background: transparent; }
+.sig-badge.offline { border-color: var(--violet); color: #ddd6fe; background: rgba(139, 92, 246, 0.14); }
+.sig-badge.offline.tamper { border-color: var(--crimson); color: #fecaca; background: rgba(239, 68, 68, 0.14); }
 .sig-row button { font-size: 11px; padding: 4px 10px; }
 .sig-meta { flex-basis: 100%; font-size: 10px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
 .probe-side.naive-diverges { border-color: var(--crimson); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.35); }
@@ -686,14 +726,16 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       </div>
     </div>
     <div class="proof-badges" aria-label="Live proof badges">
-      <span class="proof-badge" id="badgeTests">1147 Verified Tests</span>
-      <span class="proof-badge" id="badgeSpecs">25 Kiro Specs</span>
+      <span class="proof-badge" id="badgeTests">1194 Verified Tests</span>
+      <span class="proof-badge" id="badgeSpecs">26 Kiro Specs</span>
       <span class="proof-badge emerald">Exact Object.is</span>
       <span class="proof-badge violet">tsc --strict</span>
     </div>
     <div class="tour-controls">
       <button type="button" class="tour-btn" id="tourBtn">&#9654; Run 20s Guided Judge Tour</button>
       <button type="button" class="tour-cancel" id="tourCancel" hidden>Cancel Tour</button>
+      <button type="button" class="hdr-btn" id="sarifBtn" aria-haspopup="dialog" aria-controls="sarifDrawer" aria-expanded="false" title="Legacy Risk Audit as SARIF 2.1.0 (GitHub Code Scanning)">SARIF Audit</button>
+      <button type="button" class="hdr-btn" id="verifyBtn" aria-haspopup="dialog" aria-controls="verifyDrawer" aria-expanded="false" title="Check a downloaded Lazarus .zip or certificate.json: SHA-256 and Ed25519">Verify Bundle</button>
       <button type="button" class="hdr-btn" id="dnaBtn" aria-haspopup="dialog" aria-controls="dnaDrawer" aria-expanded="false">Kiro DNA</button>
       <button type="button" class="hdr-btn" id="audioBtn" aria-pressed="false" title="Soft lab tones on parity proven / counterexample caught (muted by default)">Audio: OFF</button>
     </div>
@@ -1025,7 +1067,46 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
 
 
 
-  <div class="dna-scrim" id="dnaScrim" hidden></div>
+  <div class="dna-scrim" id="verifyScrim" hidden></div>
+<aside class="dna-drawer" id="verifyDrawer" role="dialog" aria-modal="true" aria-labelledby="verifyTitle" hidden>
+  <div class="dna-head">
+    <h2 id="verifyTitle">Verify Bundle<small>Zero trust: SHA-256 + Ed25519, checked in your browser when it can</small></h2>
+    <button type="button" class="hdr-btn" id="verifyClose" aria-label="Close Verify Bundle">Close</button>
+  </div>
+  <div class="dna-body">
+    <p class="zt-note">Drop a downloaded Lazarus <code>.zip</code> PR archive, or <code>certificate.json</code> together with the resurrected <code>.ts</code> file. A <code>certificate.json</code> and code are verified here with <code>window.crypto.subtle</code>; a <code>.zip</code> is read by <code>POST /api/verify-bundle</code>. The signature proves the files were not changed after signing; with the public demo key it does not prove who signed them.</p>
+    <label class="zt-drop" id="verifyDrop" tabindex="0" role="button" aria-label="Choose or drop a Lazarus .zip, or certificate.json with the resurrected file">
+      Drag &amp; drop a <b>.zip</b> or <b>certificate.json</b> + <b>resurrected.ts</b> here, or click to choose
+      <small>up to 4 MB</small>
+      <input type="file" id="verifyFiles" multiple accept=".zip,.json,.ts,.mts,.js,.mjs,.cjs" hidden>
+    </label>
+    <div class="zt-result" id="verifyResult" role="status" aria-live="polite" hidden></div>
+  </div>
+</aside>
+<div class="dna-scrim" id="sarifScrim" hidden></div>
+<aside class="dna-drawer" id="sarifDrawer" role="dialog" aria-modal="true" aria-labelledby="sarifTitle" hidden>
+  <div class="dna-head">
+    <h2 id="sarifTitle">SARIF 2.1.0 Risk Explorer<small>The Legacy Risk Audit (LAZ001 to LAZ007), ready for GitHub Code Scanning</small></h2>
+    <button type="button" class="hdr-btn" id="sarifClose" aria-label="Close SARIF Risk Explorer">Close</button>
+  </div>
+  <div class="dna-body">
+    <div class="zt-actions">
+      <label for="sarifSource" class="zt-note" style="margin:0">Audit</label>
+      <select id="sarifSource" aria-label="What to audit">
+        <option value="code">The code in the Tab 1 editor</option>
+        <option value="example:legacy-circular-ledger">examples/legacy-circular-ledger</option>
+        <option value="example:legacy-invoice-engine">examples/legacy-invoice-engine</option>
+        <option value="example:legacy-text-pipeline">examples/legacy-text-pipeline</option>
+      </select>
+      <button type="button" class="primary" id="sarifRun">Run audit</button>
+      <button type="button" class="hdr-btn" id="sarifDownload" disabled>Download .sarif</button>
+    </div>
+    <div class="sarif-summary" id="sarifSummary" role="status" aria-live="polite">Pick what to audit and run it. Files are parsed, never executed.</div>
+    <div class="sarif-chips" id="sarifChips"></div>
+    <div id="sarifList"></div>
+  </div>
+</aside>
+<div class="dna-scrim" id="dnaScrim" hidden></div>
 <div class="wake-pill" id="wakePill" role="status" aria-live="polite" hidden></div>
 <aside class="dna-drawer" id="dnaDrawer" role="dialog" aria-modal="true" aria-labelledby="dnaTitle" hidden>
   <div class="dna-head">
@@ -2201,6 +2282,73 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     const next = ch === "z" ? "a" : ch === "Z" ? "A" : ch === "9" ? "0" : String.fromCharCode(ch.charCodeAt(0) + 1);
     return code.slice(0, i) + next + code.slice(i + 1);
   }
+  // ---- Zero-trust offline verification: Ed25519 + SHA-256 with the browser's own WebCrypto (no request) ----
+  var LZ_B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  /** Base64 -> bytes, written out so it needs nothing but the language (no atob). */
+  function lzBase64ToBytes(b64) {
+    var clean = String(b64).replace(/[^A-Za-z0-9+\/]/g, ""), out = [], buf = 0, bits = 0;
+    for (var i = 0; i < clean.length; i++) {
+      buf = (buf << 6) | LZ_B64.indexOf(clean.charAt(i));
+      bits += 6;
+      if (bits >= 8) { bits -= 8; out.push((buf >> bits) & 255); buf &= (1 << bits) - 1; }
+    }
+    return new Uint8Array(out);
+  }
+  /** The DER bytes of a `-----BEGIN PUBLIC KEY-----` PEM, or null. */
+  function lzPemToDer(pem) {
+    var m = /-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----/.exec(String(pem || ""));
+    return m ? lzBase64ToBytes(m[1]) : null;
+  }
+  function lzHex(bytes) { var s = ""; for (var i = 0; i < bytes.length; i++) s += (bytes[i] < 16 ? "0" : "") + bytes[i].toString(16); return s; }
+  /** SHA-256 hex of the text with CRLF -> LF and UTF-8: exactly the digest the Studio signs. */
+  async function lzSha256Hex(subtle, text) {
+    var data = new TextEncoder().encode(String(text).replace(/\r\n/g, "\n"));
+    return lzHex(new Uint8Array(await subtle.digest("SHA-256", data)));
+  }
+  /** The signed bytes: the payload as JSON in the fixed key order of cert-crypto.ts. */
+  function lzCanonicalPayload(p) {
+    return JSON.stringify({ legacySha256: p.legacySha256, resurrectedSha256: p.resurrectedSha256, paritySummary: p.paritySummary, mutantsKilled: p.mutantsKilled, tscStrictErrors: p.tscStrictErrors, issuedAt: p.issuedAt });
+  }
+  /** The payload shape the Studio signs (same rules as the server's schema). */
+  function lzPayloadOk(p) {
+    if (p === null || typeof p !== "object" || Array.isArray(p)) return false;
+    var keys = Object.keys(p).sort().join(",");
+    if (keys !== "issuedAt,legacySha256,mutantsKilled,paritySummary,resurrectedSha256,tscStrictErrors") return false;
+    var hex = /^[0-9a-f]{64}$/;
+    var count = function (n) { return n === null || (typeof n === "number" && n >= 0 && n % 1 === 0); };
+    return hex.test(p.legacySha256) && hex.test(p.resurrectedSha256) && typeof p.paritySummary === "string" && p.paritySummary.length >= 1 && p.paritySummary.length <= 300 &&
+      count(p.mutantsKilled) && count(p.tscStrictErrors) && typeof p.issuedAt === "string" && p.issuedAt.length >= 1 && p.issuedAt.length <= 40;
+  }
+  /**
+   * Verifies a signature block against `code` with `subtle` (window.crypto.subtle). `{ supported: false }` when WebCrypto, or its
+   * Ed25519 algorithm, is not there (the caller falls back to the Studio API). Otherwise a real verdict with the server's reasons:
+   * payload shape, key, Ed25519 signature, then the SHA-256 digest of the code.
+   */
+  async function lzOfflineVerify(subtle, sig, code) {
+    if (!subtle || typeof subtle.importKey !== "function" || typeof subtle.verify !== "function" || typeof subtle.digest !== "function") return { supported: false, why: "WebCrypto is not available here" };
+    var payload = sig && sig.payload;
+    var actualDigest = await lzSha256Hex(subtle, code);
+    var expectedDigest = lzPayloadOk(payload) ? payload.resurrectedSha256 : "invalid";
+    var der = lzPemToDer(sig && sig.publicKeyPem);
+    var keyId = "invalid", key = null;
+    if (der !== null) {
+      keyId = lzHex(new Uint8Array(await subtle.digest("SHA-256", der))).slice(0, 16);
+      try {
+        key = await subtle.importKey("spki", der, { name: "Ed25519" }, false, ["verify"]);
+      } catch (e) {
+        if (e && e.name === "NotSupportedError") return { supported: false, why: "this WebCrypto has no Ed25519" };
+        key = null; keyId = "invalid";
+      }
+    }
+    var fail = function (reason) { return { supported: true, valid: false, reason: reason, expectedDigest: expectedDigest, actualDigest: actualDigest, keyId: keyId }; };
+    if (expectedDigest === "invalid") return fail("Invalid certificate payload");
+    if (key === null) return fail("Invalid Ed25519 public key");
+    var signed = false;
+    try { signed = await subtle.verify({ name: "Ed25519" }, key, lzBase64ToBytes(sig.signatureB64), new TextEncoder().encode(lzCanonicalPayload(payload))); } catch (e) { signed = false; }
+    if (signed !== true) return fail("Signature mismatch: the Ed25519 signature does not match the certificate payload");
+    if (actualDigest !== expectedDigest) return fail("Digest mismatch: the code differs from the signed SHA-256");
+    return { supported: true, valid: true, reason: "Ed25519 signature and SHA-256 digest verified", expectedDigest: expectedDigest, actualDigest: actualDigest, keyId: keyId };
+  }
   async function verifySignature(sig, code) {
     const res = await fetch("/api/verify-certificate", {
       method: "POST",
@@ -2210,23 +2358,48 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
   }
+  /**
+   * Browser first, Studio API second. A verification FAILURE from the browser is final (never retried on the server); only "not
+   * supported" (or an unexpected WebCrypto error) falls back to POST /api/verify-certificate.
+   */
+  async function verifyPreferOffline(sig, code) {
+    const subtle = window.crypto && window.crypto.subtle;
+    if (subtle) {
+      try {
+        const offline = await lzOfflineVerify(subtle, sig, code);
+        if (offline.supported) return { verdict: offline, method: "browser" };
+      } catch (e) { /* an unexpected WebCrypto problem: use the Studio API */ }
+    }
+    return { verdict: await verifySignature(sig, code), method: "api" };
+  }
+  window.LazarusWebCrypto = { verify: verifyPreferOffline, offlineVerify: lzOfflineVerify, sha256Hex: lzSha256Hex, canonicalPayload: lzCanonicalPayload };
   function signatureRow(sig) {
     const wrap = document.createElement("div"); wrap.className = "sig-row"; wrap.id = "certSigRow";
     const badge = document.createElement("span"); badge.id = "certSigBadge"; badge.className = "sig-badge pending"; badge.textContent = "Ed25519 Signed \u00b7 VERIFYING...";
+    const offline = document.createElement("span"); offline.id = "certOfflinePill"; offline.className = "sig-badge offline"; offline.hidden = true;
     const tamperBtn = document.createElement("button"); tamperBtn.type = "button"; tamperBtn.className = "cert-copy"; tamperBtn.id = "certTamperBtn"; tamperBtn.textContent = "Simulate 1-Byte Tamper";
     const restoreBtn = document.createElement("button"); restoreBtn.type = "button"; restoreBtn.className = "cert-copy"; restoreBtn.id = "certRestoreBtn"; restoreBtn.textContent = "Restore Verified"; restoreBtn.hidden = true;
     const meta = document.createElement("div"); meta.className = "sig-meta";
     meta.textContent = "key " + sig.keyId + " \u00b7 signed SHA-256 of the resurrected code " + sig.payload.resurrectedSha256.slice(0, 16) + "... \u00b7 issued " + sig.payload.issuedAt;
     let seq = 0;
     function show(kind, text, title) { badge.className = "sig-badge" + (kind ? " " + kind : ""); badge.textContent = text; badge.title = title || ""; }
+    function showOffline(method, valid) {
+      if (method !== "browser") { offline.hidden = true; return; }
+      offline.hidden = false;
+      offline.className = "sig-badge offline" + (valid ? "" : " tamper");
+      offline.textContent = valid ? "Verified Offline (Browser WebCrypto)" : "Offline check failed (Browser WebCrypto)";
+      offline.title = "Ed25519 signature and SHA-256 digest checked by this browser with window.crypto.subtle; no request was made.";
+    }
     async function check(code, tampered) {
       const mine = ++seq;
       show("pending", "Ed25519 Signed \u00b7 VERIFYING...");
+      offline.hidden = true;
       try {
-        const v = await verifySignature(sig, code);
+        const { verdict: v, method } = await verifyPreferOffline(sig, code);
         if (mine !== seq) return;
         if (v.valid) show("", "Ed25519 Signed \u00b7 VERIFIED", v.reason);
         else show("tamper", "TAMPER DETECTED (Digest / Signature Mismatch)", v.reason + " (expected " + v.expectedDigest.slice(0, 12) + ", got " + v.actualDigest.slice(0, 12) + ")");
+        showOffline(method, !!v.valid);
         tamperBtn.disabled = tampered;
         restoreBtn.hidden = !tampered;
       } catch (err) {
@@ -2242,7 +2415,7 @@ button.lz-stale-off { cursor: not-allowed !important; opacity: 0.45; }
       check(flipOneChar(code), true);
     });
     restoreBtn.addEventListener("click", () => { restoreBtn.hidden = true; check(String(window.lastResurrectedCode || ""), false); });
-    wrap.append(badge, tamperBtn, restoreBtn, meta);
+    wrap.append(badge, offline, tamperBtn, restoreBtn, meta);
     check(String(window.lastResurrectedCode || ""), false);
     return wrap;
   }
@@ -4033,6 +4206,219 @@ function lzHealthGuard(deps) {
       if (ctl === controller) ctl = null;
     }
   });
+})();
+</script>
+<script>
+/* Verify Bundle drawer (header button, not a tab) and SARIF 2.1.0 Risk Explorer drawer. textContent only, no frameworks. */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+
+  /** Opens/closes a drawer like the Kiro DNA one: scrim, Escape, focus in and back out. */
+  function wireDrawer(btn, drawer, scrim, closeBtn, onOpen) {
+    function open() { drawer.hidden = false; scrim.hidden = false; btn.setAttribute("aria-expanded", "true"); closeBtn.focus(); if (onOpen) onOpen(); }
+    function close() { drawer.hidden = true; scrim.hidden = true; btn.setAttribute("aria-expanded", "false"); btn.focus(); }
+    btn.addEventListener("click", () => (drawer.hidden ? open() : close()));
+    closeBtn.addEventListener("click", close);
+    scrim.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) close(); });
+    return { open: open, close: close };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Verify Bundle
+  // ---------------------------------------------------------------------------------------------------------------
+  const verifyBtn = $("verifyBtn");
+  if (verifyBtn) {
+    const drop = $("verifyDrop"), picker = $("verifyFiles"), out = $("verifyResult");
+    const MAX_ZIP = 4 * 1024 * 1024, MAX_FILE = 2 * 1024 * 1024;
+    /* lz-bundle:start */
+    function lzBase(name) { return String(name || "").split(/[\\/]/).pop(); }
+    /**
+     * What a judge dropped: one `.zip`, or `certificate.json` plus the resurrected code files. Returns `{ kind: "zip", zip }`,
+     * `{ kind: "files", cert, code: [...] }` or `{ error }`. Files only need a `name` here.
+     */
+    function lzClassifyBundleFiles(files) {
+      var list = Array.prototype.slice.call(files || []);
+      if (list.length === 0) return { error: "Nothing was selected." };
+      var zips = list.filter(function (f) { return /\.zip$/i.test(f.name); });
+      if (zips.length > 0) {
+        return zips.length === 1 && list.length === 1 ? { kind: "zip", zip: zips[0] } : { error: "Drop one .zip on its own, or certificate.json together with the resurrected .ts file." };
+      }
+      var jsons = list.filter(function (f) { return /\.json$/i.test(f.name); });
+      var cert = jsons.filter(function (f) { return /^certificate\.json$/i.test(lzBase(f.name)); })[0] || (jsons.length === 1 ? jsons[0] : undefined);
+      if (cert === undefined) return { error: "Include certificate.json (the signature) next to the resurrected file." };
+      var code = list.filter(function (f) { return f !== cert && /\.(ts|mts|js|mjs|cjs)$/i.test(f.name); });
+      if (code.length === 0) return { error: "Include the resurrected .ts file that certificate.json signs (resurrected.ts)." };
+      return { kind: "files", cert: cert, code: code };
+    }
+    /** The signature block of a certificate.json text, or an error message. */
+    function lzReadCertificateJson(text) {
+      var data;
+      try { data = JSON.parse(text); } catch (e) { return { error: "certificate.json is not valid JSON." }; }
+      if (data === null || typeof data !== "object" || data.format !== "lazarus-certificate/v1" || data.algorithm !== "Ed25519") return { error: "This is not a Lazarus certificate.json (format lazarus-certificate/v1, Ed25519)." };
+      if (typeof data.signatureB64 !== "string" || typeof data.publicKeyPem !== "string" || data.payload === null || typeof data.payload !== "object") return { error: "certificate.json is missing its payload, signature or public key." };
+      return { sig: { payload: data.payload, signatureB64: data.signatureB64, publicKeyPem: data.publicKeyPem, keyId: typeof data.keyId === "string" ? data.keyId : "" }, subjectFile: typeof data.subjectFile === "string" ? data.subjectFile : "resurrected.ts" };
+    }
+    /** Which dropped code file is the one the certificate names. */
+    function lzPickSubject(code, subjectFile) {
+      var want = lzBase(subjectFile).toLowerCase();
+      var exact = code.filter(function (f) { return lzBase(f.name).toLowerCase() === want; })[0];
+      return exact || (code.length === 1 ? code[0] : undefined);
+    }
+    /* lz-bundle:end */
+    function show(result) {
+      out.hidden = false;
+      out.textContent = "";
+      out.className = "zt-result " + (result.valid === true ? "pass" : "fail");
+      out.append(el("div", "zt-verdict", result.valid === true ? "VERIFIED" : "TAMPER DETECTED"));
+      out.append(el("div", "", result.reason));
+      const dl = el("dl");
+      const row = (k, v) => { if (v === undefined || v === "") return; dl.append(el("dt", "", k), el("dd", "", v)); };
+      row("Checked", result.checked);
+      row("Method", result.method);
+      row("Signed SHA-256", result.expectedDigest);
+      row("Actual SHA-256", result.actualDigest);
+      row("Key id", result.keyId);
+      row("Signing key", result.trustedKey === undefined ? undefined : result.trustedKey ? "this Studio's key" : "not this Studio's key (the signature is self-contained: it proves the files are unchanged, not who signed them)");
+      row("Archive", result.entries && result.entries.length ? result.entries.join(", ") : undefined);
+      out.append(dl);
+    }
+    function showError(text) { out.hidden = false; out.className = "zt-result fail"; out.textContent = ""; out.append(el("div", "zt-verdict", "CANNOT VERIFY"), el("div", "", text)); }
+    async function verifyFiles(files) {
+      const plan = lzClassifyBundleFiles(files);
+      if (plan.error) { showError(plan.error); return; }
+      out.hidden = false; out.className = "zt-result"; out.textContent = "Verifying...";
+      try {
+        if (plan.kind === "zip") {
+          if (plan.zip.size > MAX_ZIP) { showError(plan.zip.name + " is " + plan.zip.size + " bytes; the limit is " + MAX_ZIP + "."); return; }
+          const res = await fetch("/api/verify-bundle", { method: "POST", headers: { "Content-Type": "application/zip" }, body: await plan.zip.arrayBuffer() });
+          const data = await res.json();
+          if (!res.ok) { showError(data && data.error ? data.error : "HTTP " + res.status); return; }
+          show({ valid: data.valid, reason: data.reason, checked: plan.zip.name + " \u2192 " + data.subjectFile, method: "Studio API: POST /api/verify-bundle (reads the archive)", expectedDigest: data.expectedDigest, actualDigest: data.actualDigest, keyId: data.keyId, trustedKey: data.trustedKey, entries: data.entries });
+          return;
+        }
+        if (plan.cert.size > MAX_FILE || plan.code.some((f) => f.size > MAX_FILE)) { showError("Each file may be at most " + MAX_FILE + " bytes."); return; }
+        const parsed = lzReadCertificateJson(await plan.cert.text());
+        if (parsed.error) { showError(parsed.error); return; }
+        const subject = lzPickSubject(plan.code, parsed.subjectFile);
+        if (!subject) { showError("certificate.json signs " + parsed.subjectFile + "; drop that file (or only the one file to check)."); return; }
+        const wc = window.LazarusWebCrypto;
+        if (!wc) { showError("The certificate verifier is not loaded."); return; }
+        const { verdict, method } = await wc.verify(parsed.sig, await subject.text());
+        show({
+          valid: verdict.valid, reason: verdict.reason, checked: plan.cert.name + " \u2192 " + subject.name,
+          method: method === "browser" ? "Verified Offline (Browser WebCrypto): no request was made" : "Studio API: POST /api/verify-certificate (this browser has no WebCrypto Ed25519)",
+          expectedDigest: verdict.expectedDigest, actualDigest: verdict.actualDigest, keyId: verdict.keyId, trustedKey: verdict.trustedKey
+        });
+      } catch (err) {
+        showError("Could not verify: " + (err && err.message ? err.message : err));
+      }
+    }
+    wireDrawer(verifyBtn, $("verifyDrawer"), $("verifyScrim"), $("verifyClose"));
+    picker.addEventListener("change", () => { const list = Array.from(picker.files || []); picker.value = ""; verifyFiles(list); });
+    drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } });
+    ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; drop.classList.add("over"); }));
+    ["dragleave", "dragend"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("over")));
+    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); verifyFiles(Array.from((e.dataTransfer && e.dataTransfer.files) || [])); });
+    window.LazarusVerifyBundle = { verifyFiles: verifyFiles };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // SARIF 2.1.0 Risk Explorer
+  // ---------------------------------------------------------------------------------------------------------------
+  const sarifBtn = $("sarifBtn");
+  if (sarifBtn) {
+    const sourceSel = $("sarifSource"), runBtn = $("sarifRun"), dlBtn = $("sarifDownload"), summary = $("sarifSummary"), chips = $("sarifChips"), list = $("sarifList");
+    /* lz-sarif:start */
+    var LZ_SEVERITIES = [["high", "High \u00b7 error"], ["medium", "Medium \u00b7 warning"], ["info", "Info \u00b7 note"]];
+    /** Findings grouped by severity, then by rule id (both in a fixed order), empty groups left out. */
+    function lzGroupFindings(findings) {
+      var groups = [];
+      LZ_SEVERITIES.forEach(function (s) {
+        var inSeverity = (findings || []).filter(function (f) { return f.severity === s[0]; });
+        if (inSeverity.length === 0) return;
+        var ids = [];
+        inSeverity.forEach(function (f) { if (ids.indexOf(f.ruleId) < 0) ids.push(f.ruleId); });
+        ids.sort();
+        groups.push({ severity: s[0], label: s[1], count: inSeverity.length, rules: ids.map(function (id) {
+          var items = inSeverity.filter(function (f) { return f.ruleId === id; }).sort(function (a, b) { return a.uri < b.uri ? -1 : a.uri > b.uri ? 1 : a.line - b.line; });
+          return { ruleId: id, ruleName: items[0].ruleName, findings: items };
+        }) });
+      });
+      return groups;
+    }
+    /** The request body for a selector value: `code` (the editor) or `example:<dir>`. */
+    function lzAuditRequest(value, code) { return String(value).indexOf("example:") === 0 ? { example: String(value).slice(8) } : { code: code }; }
+    var LZ_SARIF_FILE = "lazarus-report.sarif";
+    function lzSarifText(sarif) { return JSON.stringify(sarif, null, 2) + "\n"; }
+    /* lz-sarif:end */
+    let report = null, token = 0;
+    function renderFinding(parent, f) {
+      const open = el("button", "sarif-finding", f.uri + ":" + f.line + "  " + f.message);
+      open.type = "button";
+      open.setAttribute("aria-expanded", "false");
+      const detail = el("div", "sarif-detail"); detail.hidden = true;
+      const pre = el("pre");
+      f.snippet.lines.forEach((text, i) => {
+        const n = f.snippet.startLine + i;
+        pre.append(el("code", n === f.line ? "hit" : "", String(n).padStart(4, " ") + "  " + text));
+      });
+      detail.append(pre, el("div", "fix", "Fix: " + f.fix));
+      open.addEventListener("click", () => { detail.hidden = !detail.hidden; open.setAttribute("aria-expanded", detail.hidden ? "false" : "true"); });
+      parent.append(open, detail);
+    }
+    function render(data) {
+      report = data;
+      const s = data.summary;
+      summary.textContent = data.source.name + ": " + s.total + " finding" + (s.total === 1 ? "" : "s") + " (" + s.totals.high + " high, " + s.totals.medium + " medium, " + s.totals.info + " info) \u00b7 " + s.files + " file" + (s.files === 1 ? "" : "s") + " \u00b7 migration readiness " + s.readiness + "/100 (grade " + s.grade + ")" + (s.cycles.length ? " \u00b7 " + s.cycles.length + " require cycle" + (s.cycles.length === 1 ? "" : "s") : "");
+      chips.textContent = "";
+      s.byRule.forEach((r) => { const chip = el("span", "sarif-chip " + r.level + (r.count === 0 ? " zero" : ""), r.id + " \u00b7 " + r.title + " \u00b7 " + r.count); chip.title = r.name; chips.append(chip); });
+      list.textContent = "";
+      const groups = lzGroupFindings(data.findings);
+      if (groups.length === 0) list.append(el("p", "zt-note", "No risky patterns found."));
+      groups.forEach((g) => {
+        const section = el("section", "sarif-sev " + g.severity);
+        section.append(el("h4", "", g.label + " (" + g.count + ")"));
+        g.rules.forEach((r) => {
+          const box = el("div", "sarif-rule");
+          box.append(el("h5", "", r.ruleId + " \u00b7 " + r.ruleName + " (" + r.findings.length + ")"));
+          r.findings.forEach((f) => renderFinding(box, f));
+          section.append(box);
+        });
+        list.append(section);
+      });
+      dlBtn.disabled = false;
+    }
+    async function run() {
+      const mine = ++token;
+      runBtn.disabled = true; dlBtn.disabled = true;
+      summary.textContent = "Auditing...";
+      try {
+        const res = await fetch("/api/audit-sarif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lzAuditRequest(sourceSel.value, $("legacyCode") ? $("legacyCode").value : "")) });
+        const data = await res.json();
+        if (mine !== token) return;
+        if (!res.ok) { summary.textContent = "Audit rejected: " + (data && data.error ? data.error : "HTTP " + res.status); return; }
+        render(data);
+      } catch (err) {
+        if (mine === token) summary.textContent = "Audit failed: " + (err && err.message ? err.message : err);
+      } finally {
+        if (mine === token) runBtn.disabled = false;
+      }
+    }
+    runBtn.addEventListener("click", run);
+    dlBtn.addEventListener("click", () => {
+      if (!report) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([lzSarifText(report.sarif)], { type: "application/sarif+json" }));
+      a.download = LZ_SARIF_FILE;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    });
+    wireDrawer(sarifBtn, $("sarifDrawer"), $("sarifScrim"), $("sarifClose"));
+    window.LazarusSarif = { run: run, report: () => report };
+  }
 })();
 </script>
 <script>

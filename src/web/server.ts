@@ -15,13 +15,14 @@ import { naiveRefactor } from "../crew/naive-refactor.js";
 import { PERF_PROBE_TIMEOUT_MS, PerfParityBodySchema, PerfParityError, runPerfParity } from "../crew/perf-parity.js";
 import { buildLegacyHarness, buildModernHarness, detectErrorFirst, literalExamples, stripAsyncTypes, type ErrorFirstFunction } from "../crew/async-callback.js";
 import { buildPromiseHarness, detectPromiseChain } from "../crew/es5-idioms.js";
+import { AuditSarifBodySchema, AuditSarifError, runAuditSarif } from "./audit-sarif.js";
 import { generateAsyncVerifiedBundle } from "../exporter/async-bundle.js";
 import { renderType, type TypeSignature } from "../crew/type-alchemist.js";
 import { formatInputs, formatOutcome } from "../crew/exact-format.js";
 import { DifferentialFuzzer } from "../fuzzer/differential.js";
 import { inferSignature, parseSignature, renderSignature, widenReturn } from "../crew/type-alchemist.js";
 import { scanLegacyAst } from "../sandbox/ast-scanner.js";
-import { buildCertificateJson, embedSignatureInSvg, SIGNED_SUBJECT_FILE, signCertificate, verifyCertificate, CERTIFICATE_JSON_FILE, type SignatureBlock } from "../exporter/cert-crypto.js";
+import { buildCertificateJson, embedSignatureInSvg, SIGNED_SUBJECT_FILE, signCertificate, verifyCertificate, verifyBundleZip, CERTIFICATE_JSON_FILE, type SignatureBlock } from "../exporter/cert-crypto.js";
 import { generateCertificate, renderCertificateSvg, sanitizeProvenance, sha256Hex, type CertificateInput } from "../exporter/certificate.js";
 import { readKiroDna, resolveKiroDocument, SPEC_DOCUMENTS } from "./kiro-dna.js";
 import { describePaste } from "./smart-paste.js";
@@ -49,6 +50,10 @@ import type { InputSchema } from "../fuzzer/types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = nodePath.dirname(__filename);
 const publicDir = nodePath.resolve(__dirname, "../../public");
+const examplesDir = nodePath.resolve(__dirname, "../../examples");
+/** Largest `.zip` POST /api/verify-bundle reads, and the caps on what it inflates. */
+export const VERIFY_BUNDLE_MAX_BYTES = 4 * 1024 * 1024;
+export const VERIFY_BUNDLE_LIMITS = { maxEntryBytes: 2 * 1024 * 1024, maxTotalBytes: 8 * 1024 * 1024, maxEntries: 64 } as const;
 
 /** Warm sandbox workers make deep live fuzzing cheap; a full resurrection stays well under 3 s. */
 export const DEFAULT_LIVE_FUZZ_RUNS = 100;
@@ -170,6 +175,29 @@ export function compareProbeSides(legacy: { side: ProbeSide; value: unknown }, m
 }
 
 class PayloadTooLarge extends Error {}
+/** The raw request body, refused as soon as it passes `limit` bytes. */
+function readBuffer(req: http.IncomingMessage, limit: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (chunk: Buffer) => {
+      if (tooLarge) return;
+      size += chunk.length;
+      if (size > limit) {
+        tooLarge = true;
+        chunks.length = 0;
+        reject(new PayloadTooLarge("Payload too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (!tooLarge) resolve(Buffer.concat(chunks));
+    });
+    req.on("error", reject);
+  });
+}
 
 function readJsonUnknown(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -1223,7 +1251,54 @@ export function createWebServer(options: WebServerOptions = {}): http.Server {
         perfBusy = false;
       }
       return;
-    }    if (req.method === "POST" && routePath === "/api/probe") {
+    }    if (req.method === "POST" && routePath === "/api/verify-bundle") {
+      // The raw bytes of a Lazarus .zip PR archive: certificate.json is checked against the file it names (SHA-256 + Ed25519).
+      let archive: Buffer;
+      try {
+        archive = await readBuffer(req, VERIFY_BUNDLE_MAX_BYTES);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        res.writeHead(tooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: tooLarge ? `Archive too large (the limit is ${VERIFY_BUNDLE_MAX_BYTES} bytes)` : "Could not read the request body" }));
+        return;
+      }
+      if (archive.length === 0) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Send the .zip archive as the request body" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      res.end(JSON.stringify({ ...verifyBundleZip(archive, VERIFY_BUNDLE_LIMITS), bytes: archive.length }));
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/audit-sarif") {
+      let rawBody: unknown;
+      try {
+        rawBody = await readJsonUnknown(req);
+      } catch (err: unknown) {
+        const tooLarge = err instanceof PayloadTooLarge;
+        res.writeHead(tooLarge ? 413 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: tooLarge ? "Payload too large" : "Invalid JSON body" }));
+        return;
+      }
+      const checkedAudit = AuditSarifBodySchema.safeParse(rawBody);
+      if (!checkedAudit.success) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Invalid audit request: ${checkedAudit.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}` }));
+        return;
+      }
+      try {
+        const audit = runAuditSarif(checkedAudit.data, examplesDir);
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify(audit));
+      } catch (err: unknown) {
+        const known = err instanceof AuditSarifError;
+        res.writeHead(known ? err.status : 500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Audit failed" }));
+      }
+      return;
+    }
+    if (req.method === "POST" && routePath === "/api/probe") {
       let raw: unknown;
       try {
         raw = await readJsonUnknown(req);

@@ -6,13 +6,8 @@
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { BENCHMARK_PRESETS, type BenchmarkPreset } from "./benchmark-presets.js";
-import { resurrectModule } from "./crew/module-resurrection.js";
-import { ResurrectionOrchestrator } from "./crew/orchestrator.js";
-import { closeSharedTsVerifier, describeTypecheck } from "./crew/ts-verifier.js";
-import { inferSignature } from "./crew/type-alchemist.js";
-import type { InputSchema } from "./fuzzer/types.js";
-import { scanLegacyAst } from "./sandbox/ast-scanner.js";
-import { buildExportBundle } from "./web/server.js";
+import { closeSharedTsVerifier } from "./crew/ts-verifier.js";
+import { resurrectAny } from "./resurrect-any.js";
 
 export interface BenchmarkRow {
   readonly specimen: string;
@@ -33,84 +28,19 @@ export interface BenchmarkOptions {
 
 async function runPreset(preset: BenchmarkPreset, fuzzRuns: number, seed: number): Promise<BenchmarkRow> {
   const started = performance.now();
-  if (preset.module === true) {
-    const schemas = preset.schema as Record<string, InputSchema>;
-    const merged = await resurrectModule(preset.code, { name: preset.name, fuzzRuns, seed, maxHealingAttempts: 3, schemas });
-    const verified = merged.success
-      ? await buildExportBundle({
-          specimenName: preset.name,
-          legacyCode: preset.code,
-          modernCode: merged.modernCode,
-          fuzzRuns: merged.fuzzReport.totalRuns,
-          attempts: merged.attempts,
-          functions: merged.functions.map((f) => ({ name: f.exportedAs, schema: f.schema, modernCode: f.modernCode })),
-        })
-      : undefined;
-    return {
-      specimen: preset.name,
-      success: merged.success,
-      attempts: merged.attempts,
-      fuzzRuns: merged.fuzzReport.totalRuns,
-      tscPassed: verified?.typecheck.passed === true,
-      tsc: verified !== undefined ? describeTypecheck(verified.typecheck) : "not checked (no parity)",
-      durationMs: Math.round(performance.now() - started),
-    };
-  }
-  if (preset.async === true) {
-    // The same path as POST /api/resurrect for an error-first callback module.
-    const asyncRequest = { name: preset.name, source: preset.code, schema: preset.schema as InputSchema, fuzzRuns, seed };
-    const orchestrator = new ResurrectionOrchestrator();
-    const asyncResult = preset.promiseChain === true ? await orchestrator.resurrectPromiseChain(asyncRequest) : await orchestrator.resurrectErrorFirst(asyncRequest);
-    const asyncVerified = asyncResult.success
-      ? await buildExportBundle({ specimenName: preset.name, legacyCode: preset.code, modernCode: asyncResult.modernCode, fuzzRuns: asyncResult.fuzzReport.totalRuns, attempts: asyncResult.attempts, schema: preset.schema as InputSchema })
-      : undefined;
-    return {
-      specimen: preset.name,
-      success: asyncResult.success,
-      attempts: asyncResult.attempts,
-      fuzzRuns: asyncResult.fuzzReport.totalRuns,
-      tscPassed: asyncVerified?.typecheck.passed === true,
-      tsc: asyncVerified !== undefined ? describeTypecheck(asyncVerified.typecheck) : "not checked (no parity)",
-      durationMs: Math.round(performance.now() - started),
-    };
-  }
-  const schema = preset.schema as InputSchema;
-  // The same path as POST /api/resurrect: extracted specimen, exact Object.is, observed types, verified bundle.
-  const result = await new ResurrectionOrchestrator().resurrect({
-    name: preset.name,
-    legacyCode: scanLegacyAst(preset.code).primaryExpression,
-    schema,
-    fuzzRuns,
-    seed,
-    maxHealingAttempts: 3,
-    exact: true,
-    collectObservations: true,
-  });
-  const observed = result.success && result.observations !== undefined && result.observations.length > 0 ? inferSignature(result.observations, schema) : undefined;
-  const verified = result.success
-    ? await buildExportBundle({
-        specimenName: preset.name.replace(/[^\w$]/g, "_"),
-        legacyCode: preset.code,
-        modernCode: result.modernCode,
-        fuzzRuns: result.fuzzReport.totalRuns,
-        attempts: result.attempts,
-        healed: result.attempts > 1,
-        schema,
-        ...(observed !== undefined ? { typeSignature: observed } : {}),
-      })
-    : undefined;
+  // The same router as the Web Studio, the CLI and the MCP server: error-first callbacks and Promise chains take the async
+  // passes, multi-export modules the module pass, everything else the synchronous modernizer; each is checked with tsc --strict.
+  const result = await resurrectAny({ name: preset.name, source: preset.code, schema: preset.schema, fuzzRuns, seed });
   return {
     specimen: preset.name,
     success: result.success,
     attempts: result.attempts,
-    fuzzRuns: result.fuzzReport.totalRuns,
-    tscPassed: verified?.typecheck.passed === true,
-    tsc: verified !== undefined ? describeTypecheck(verified.typecheck) : "not checked (no parity)",
+    fuzzRuns: result.fuzzRuns,
+    tscPassed: result.tscPassed,
+    tsc: result.tsc,
     durationMs: Math.round(performance.now() - started),
   };
-}
-
-/** Runs the presets one after another. Always closes the warm compiler, even when a preset throws. */
+}/** Runs the presets one after another. Always closes the warm compiler, even when a preset throws. */
 export async function runBenchmark(options: BenchmarkOptions = {}): Promise<BenchmarkRow[]> {
   const rows: BenchmarkRow[] = [];
   try {

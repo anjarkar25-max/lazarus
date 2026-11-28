@@ -134,8 +134,17 @@ export function createZip(entries: readonly ZipEntry[]): Buffer {
   return Buffer.concat([...locals, centralBytes, eocd]);
 }
 
+/** Optional caps for archives that come from an untrusted upload (no caps when omitted: the old behaviour). */
+export interface ReadZipLimits {
+  /** Largest uncompressed size of one entry. */
+  readonly maxEntryBytes?: number;
+  /** Largest total uncompressed size of all entries. */
+  readonly maxTotalBytes?: number;
+  readonly maxEntries?: number;
+}
+
 /** Parses and fully verifies an archive produced by `createZip` (or any ZIP without ZIP64/encryption). */
-export function readZip(buffer: Buffer): ExtractedEntry[] {
+export function readZip(buffer: Buffer, limits?: ReadZipLimits): ExtractedEntry[] {
   if (buffer.length < 22) throw new ZipError("archive is too small");
   let eocd = -1;
   for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 22 - 0xffff); i--) {
@@ -146,6 +155,8 @@ export function readZip(buffer: Buffer): ExtractedEntry[] {
   }
   if (eocd < 0) throw new ZipError("end of central directory not found");
   const count = buffer.readUInt16LE(eocd + 10);
+  if (limits?.maxEntries !== undefined && count > limits.maxEntries) throw new ZipError(`too many entries (${count}); the limit is ${limits.maxEntries}`);
+  let totalBytes = 0;
   const centralSize = buffer.readUInt32LE(eocd + 12);
   const centralOffset = buffer.readUInt32LE(eocd + 16);
   if (centralOffset + centralSize > eocd) throw new ZipError("central directory is out of range");
@@ -167,9 +178,20 @@ export function readZip(buffer: Buffer): ExtractedEntry[] {
     const start = localOffset + 30 + buffer.readUInt16LE(localOffset + 26) + buffer.readUInt16LE(localOffset + 28);
     if (start + compressedSize > centralOffset) throw new ZipError(`data of ${name} overlaps the central directory`);
     const stored = buffer.subarray(start, start + compressedSize);
+    if (limits?.maxEntryBytes !== undefined && size > limits.maxEntryBytes) throw new ZipError(`${name} is ${size} bytes uncompressed; the limit is ${limits.maxEntryBytes}`);
+    totalBytes += size;
+    if (limits?.maxTotalBytes !== undefined && totalBytes > limits.maxTotalBytes) throw new ZipError(`the archive is larger than ${limits.maxTotalBytes} bytes uncompressed`);
     let data: Buffer;
     if (method === 0) data = Buffer.from(stored);
-    else if (method === 8) data = inflateRawSync(stored);
+    else if (method === 8) {
+      try {
+        // With caps, never inflate past the declared size (a lying header cannot expand into memory).
+        data = limits === undefined ? inflateRawSync(stored) : inflateRawSync(stored, { maxOutputLength: Math.max(size, 1) });
+      } catch (err: unknown) {
+        if (limits === undefined) throw err;
+        throw new ZipError(`${name} does not inflate to its declared size: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     else throw new ZipError(`unsupported compression method ${method} for ${name}`);
     if (data.length !== size) throw new ZipError(`size mismatch for ${name}`);
     if (crc32(data) !== crc) throw new ZipError(`CRC-32 mismatch for ${name}`);

@@ -1,0 +1,11 @@
+# Tasks: V16 Zero-Trust and SARIF
+- [x] 1. `cli-audit.ts`: `readAuditSources` / `auditSources` refactor; `readZip` limits; `verifyBundleZip` limits and entries.
+- [x] 2. `POST /api/verify-bundle` and `POST /api/audit-sarif` (`src/web/audit-sarif.ts`).
+- [x] 3. Tab 1: offline WebCrypto Ed25519 verification, `Verified Offline` pill, tamper path, API fallback.
+- [x] 4. Header `Verify Bundle` drawer (zip via the API, `certificate.json` + code in the browser).
+- [x] 5. Header `SARIF Audit` drawer: risk explorer and `Download .sarif`.
+- [x] 6. `src/crew/async-specimen.ts` router; CLI routes error-first and Promise-chain files.
+- [x] 7. MCP `resurrect_legacy` tool; benchmark uses the router.
+- [x] 8. `npm run benchmark` end to end on every preset.
+- [x] 9. Tests: `verify-bundle-and-sarif`, extended UI, DNA, Power, async-callback, audit and CLI suites; Tab 3 untouched.
+- [x] 10. Verify: `tsc --noEmit`, full `vitest run`, leak check, temp files removed, `#badgeSpecs` 26, `#badgeTests` final.
